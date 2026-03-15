@@ -1580,7 +1580,9 @@ hr.div  {
 </head>
 <body>
 <!-- hidden form anchors password fields to satisfy browser accessibility rules -->
-<form id="pw-form" onsubmit="return false" autocomplete="off" style="display:none" aria-hidden="true"></form>
+<form id="pw-form" onsubmit="return false" autocomplete="off" style="display:none" aria-hidden="true">
+  <input type="text" name="username" autocomplete="username" tabindex="-1">
+</form>
 <div id="app">
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -1635,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.32</span>
+    <span class="sb-label">v2.12.33</span>
   </div>
 </div>
 
@@ -2153,34 +2155,48 @@ hr.div  {
         <label>NAME</label>
         <input type="text" id="bcn-name" placeholder="Hourly ID" style="flex:1">
       </div>
-      <div style="padding:var(--s3) var(--s4);border-bottom:var(--b1)">
+      <!-- Message (hidden when CLIP mode) -->
+      <div id="bcn-msg-row" style="padding:var(--s3) var(--s4);border-bottom:var(--b1)">
         <div class="field">
           <label>MESSAGE</label>
           <textarea id="bcn-msg" placeholder="Beacon message..." rows="3"></textarea>
         </div>
       </div>
+      <!-- Clip file picker (shown when SOURCE=clip) -->
+      <div id="bcn-clip-row" style="padding:var(--s3) var(--s4);border-bottom:var(--b1);display:none">
+        <div class="field">
+          <label>CLIP FILE</label>
+          <div style="display:flex;gap:var(--s2)">
+            <select id="bcn-clip-sel" style="flex:1;font-size:var(--fz-xs)">
+              <option value="">(click &#8634; to load clips)</option>
+            </select>
+            <button class="btn sm" onclick="bcnRefreshClips()" title="Refresh clip list">&#8634;</button>
+          </div>
+        </div>
+      </div>
       <div class="form-row">
-        <label>ENGINE</label>
+        <label>SOURCE/MODE</label>
         <select id="bcn-engine" style="flex:1" onchange="bcnEngineChange()">
-          <option value="espeak">eSpeak</option>
-          <option value="piper">Piper</option>
-          <option value="edge">Edge TTS</option>
-          <option value="gtts">Google TTS</option>
-          <option value="pyttsx3">System TTS</option>
-          <option value="elevenlabs">ElevenLabs</option>
-          <option value="speechify">Speechify</option>
-          <option value="openai">OpenAI TTS</option>
-          <option value="fastkoko">FastKoko (Local)</option>
+          <option value="espeak">&#128172; eSpeak TTS</option>
+          <option value="piper">&#128172; Piper TTS</option>
+          <option value="edge">&#128172; Edge TTS</option>
+          <option value="gtts">&#128172; Google TTS</option>
+          <option value="pyttsx3">&#128172; System TTS</option>
+          <option value="elevenlabs">&#128172; ElevenLabs</option>
+          <option value="speechify">&#128172; Speechify</option>
+          <option value="openai">&#128172; OpenAI TTS</option>
+          <option value="fastkoko">&#128172; FastKoko (Local)</option>
           <option value="cw">&#9671; CW (Morse Code)</option>
+          <option value="clip">&#128444; Clip File</option>
         </select>
       </div>
-      <!-- CW options (shown only when engine=cw) -->
+      <!-- CW options (shown only when SOURCE=cw) -->
       <div class="form-row" id="bcn-cw-row" style="display:none">
         <label>WPM</label>
         <input type="number" id="bcn-cw-wpm" value="20" min="5" max="60" style="flex:1">
         <span style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap;padding:0 var(--s2)">wpm</span>
       </div>
-      <!-- Voice (hidden when CW) -->
+      <!-- Voice (hidden when CW or CLIP) -->
       <div class="form-row" id="bcn-voice-row">
         <label>VOICE</label>
         <input type="text" id="bcn-voice" placeholder="default" style="flex:1">
@@ -2264,10 +2280,6 @@ hr.div  {
         <input type="range" id="wf-contrast" min="0.5" max="3" step="0.1" value="1.5" style="flex:1">
         <span id="wf-contrast-val" style="width:30px;font-size:var(--fz-xs);color:var(--cyan);text-align:right">1.5</span>
       </div>
-      <div class="form-row">
-        <label>CALLSIGN</label>
-        <input type="text" id="wf-callsign" value="KD9ABC" placeholder="CALLSIGN" style="flex:1">
-      </div>
       <div style="margin-top:auto;border-top:var(--b1)">
         <div class="sec-head">CANNED TX</div>
         <div class="btn-row">
@@ -2346,12 +2358,7 @@ hr.div  {
       <input type="file" id="sstv-file-inp" style="display:none" accept="image/*" onchange="sstvLoadFile(this.files[0])">
 
       <!-- Params -->
-      <div class="form-row">
-        <label>CALLSIGN</label>
-        <input type="text" id="sstv-callsign" value="KD9ABC" placeholder="CALLSIGN" style="flex:1">
-      </div>
-      <div style="display:flex;gap:var(--s4);padding:var(--s3) var(--s4);border-bottom:var(--b1)">
-        <label class="toggle-row"><input type="checkbox" id="sstv-overlay"> CALL OVERLAY</label>
+      <div style="padding:var(--s3) var(--s4);border-bottom:var(--b1)">
         <label class="toggle-row"><input type="checkbox" id="sstv-vox" checked> VOX TONES</label>
       </div>
 
@@ -5364,39 +5371,81 @@ async function loadBeacons() {
     lst.innerHTML = '<div style="padding:var(--s7) var(--s4);color:var(--text3);font-size:var(--fz-sm)">No beacons configured.</div>';
     return;
   }
-  lst.innerHTML = beacons.map(b => `
-    <div class="beacon-item">
-      <div class="bcn-state ${b.active ? '' : 'off'}"></div>
-      <div class="bcn-name">${escHtml(b.name||'Unnamed')}</div>
-      <div class="bcn-sched">${escHtml(b.engine||'')}</div>
+  lst.innerHTML = beacons.map(b => {
+    const on = !!(b.active ?? b.enabled ?? true);
+    const eng = b.engine === 'clip' ? ('\uD83D\uDCFC ' + (b.sound_file||'clip')) :
+                b.engine === 'cw'   ? ('\u29BF CW ' + (b.cw_wpm||20) + 'wpm') :
+                (b.engine||'');
+    return `<div class="beacon-item">
+      <div class="bcn-state ${on ? '' : 'off'}"></div>
+      <div class="bcn-name">${escHtml(b.name||b.text||'Beacon')}</div>
+      <div class="bcn-sched">${escHtml(eng)}</div>
       <div class="bcn-sched">${b.interval_minutes ? b.interval_minutes+'m' : ''}</div>
       <div class="bcn-actions">
-        <button class="btn sm ${b.active?'warn':'ok'}" onclick="pauseBeacon(${b.id},${b.active})">${b.active?'PAUSE':'RUN'}</button>
-        <button class="btn sm primary" onclick="fireBeacon(${b.id})">FIRE</button>
-        <button class="btn sm tx" onclick="deleteBeacon(${b.id})">✕</button>
+        <button class="btn sm ${on?'warn':'ok'}" onclick="pauseBeacon('${b.id}',${on})">${on?'PAUSE':'RUN'}</button>
+        <button class="btn sm primary" onclick="fireBeacon('${b.id}')">FIRE</button>
+        <button class="btn sm tx" onclick="deleteBeacon('${b.id}')">✕</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function bcnEngineChange() {
-  const eng = document.getElementById('bcn-engine')?.value;
-  const cwRow  = document.getElementById('bcn-cw-row');
-  const vxRow  = document.getElementById('bcn-voice-row');
-  if (cwRow)  cwRow.style.display  = eng === 'cw' ? '' : 'none';
-  if (vxRow)  vxRow.style.display  = eng === 'cw' ? 'none' : '';
+  const eng      = document.getElementById('bcn-engine')?.value;
+  const cwRow    = document.getElementById('bcn-cw-row');
+  const vxRow    = document.getElementById('bcn-voice-row');
+  const msgRow   = document.getElementById('bcn-msg-row');
+  const clipRow  = document.getElementById('bcn-clip-row');
+  if (cwRow)    cwRow.style.display   = eng === 'cw'   ? '' : 'none';
+  if (vxRow)    vxRow.style.display   = (eng === 'cw' || eng === 'clip') ? 'none' : '';
+  if (msgRow)   msgRow.style.display  = eng === 'clip' ? 'none' : '';
+  if (clipRow)  clipRow.style.display = eng === 'clip' ? '' : 'none';
+  if (eng === 'clip') bcnRefreshClips();
+}
+
+async function bcnRefreshClips() {
+  const sel = document.getElementById('bcn-clip-sel');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">(loading...)</option>';
+  try {
+    const r = await fetch('/api/clips/list');
+    const d = await r.json();
+    const files = d.files || [];
+    if (!files.length) {
+      sel.innerHTML = '<option value="">(no clips — scan in Clips tab first)</option>';
+      return;
+    }
+    sel.innerHTML = files.map(f => {
+      const dur = clipsEstDuration(f.size, f.ext);
+      const src = f.source === 's3' ? ' [S3]' : '';
+      return `<option value="${escHtml(f.name)}">${escHtml(f.name)}${dur?' • '+dur:''}${src}</option>`;
+    }).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">(error loading clips)</option>';
+  }
 }
 
 async function createBeacon() {
   const engine = document.getElementById('bcn-engine').value;
-  const r = await api('POST','/api/beacon',{
-    name:     document.getElementById('bcn-name').value,
-    text:     document.getElementById('bcn-msg').value,
-    engine:   engine,
-    voice:    engine === 'cw' ? null : (document.getElementById('bcn-voice').value || null),
-    cw_wpm:   engine === 'cw' ? (parseInt(document.getElementById('bcn-cw-wpm').value) || 20) : undefined,
-    interval_minutes: parseInt(document.getElementById('bcn-interval').value)||60,
-    repeat:   parseInt(document.getElementById('bcn-repeat').value)||1,
-  });
+  const body = {
+    name:             document.getElementById('bcn-name').value,
+    engine:           engine,
+    interval_minutes: parseInt(document.getElementById('bcn-interval').value) || 60,
+    repeat:           parseInt(document.getElementById('bcn-repeat').value) || 1,
+  };
+  if (engine === 'clip') {
+    const sf = document.getElementById('bcn-clip-sel')?.value;
+    if (!sf) { showAlert('beacon-alert','Select a clip file first','warn'); return; }
+    body.sound_file = sf;
+    body.text       = '';
+  } else if (engine === 'cw') {
+    body.text    = document.getElementById('bcn-msg').value;
+    body.cw_wpm  = parseInt(document.getElementById('bcn-cw-wpm').value) || 20;
+  } else {
+    body.text  = document.getElementById('bcn-msg').value;
+    body.voice = document.getElementById('bcn-voice').value || null;
+  }
+  const r = await api('POST','/api/beacon', body);
   showAlert('beacon-alert', r.message||(r.success?'Beacon created':'Failed'), r.success?'ok':'err');
   if (r.success) loadBeacons();
 }
@@ -5438,15 +5487,15 @@ let _wfSelectedCanned = '';  // tracks the last canned image previewed
 
 async function loadCannedPreview(name) {
   _wfSelectedCanned = name;
-  const bw  = document.getElementById('wf-bw')?.value  || 2700;
+  const bw  = document.getElementById('wf-bw')?.value      || 2700;
   const ct  = document.getElementById('wf-contrast')?.value || 1.5;
-  const cal = document.getElementById('wf-callsign')?.value || '';
+  const dur = parseInt(document.getElementById('wf-dur')?.value || 30);
   // /api/waterfall/preview uses multipart form data, not JSON
   const fd = new FormData();
   fd.append('canned',       name);
   fd.append('bandwidth',    parseInt(bw));
   fd.append('contrast',     parseFloat(ct));
-  fd.append('callsign_text', cal);
+  fd.append('frame_duration', parseFloat((dur / 64).toFixed(4)));
   const res = await fetch('/api/waterfall/preview', {method:'POST', body: fd});
   const r   = await res.json();
   // Backend returns 'preview' as a data URI (data:image/png;base64,...)
@@ -5480,12 +5529,14 @@ function _wfBuildFormData(cannedOverride) {
   const fd  = new FormData();
   const can = cannedOverride || _wfSelectedCanned;
   if (can) fd.append('canned', can);
-  fd.append('bandwidth',     p.bandwidth);
-  fd.append('base_freq',     200);
-  fd.append('contrast',      p.contrast);
-  fd.append('callsign_text', p.callsign);
-  fd.append('frame_duration', 0.08);
-  fd.append('add_markers',   'true');
+  fd.append('bandwidth',      p.bandwidth);
+  fd.append('base_freq',      200);
+  fd.append('contrast',       p.contrast);
+  // Duration: back-compute frame_duration from desired total TX seconds.
+  // total_time ≈ image_height * frame_duration, default image_height=64
+  const frameDur = parseFloat((p.duration / 64).toFixed(4));
+  fd.append('frame_duration', frameDur);
+  fd.append('add_markers',    'true');
   return fd;
 }
 
@@ -5525,11 +5576,10 @@ async function wfTransmitText() {
 
 function wfGetProc() {
   return {
-    bandwidth:  parseInt(document.getElementById('wf-bw')?.value || 2700),
+    bandwidth:  parseInt(document.getElementById('wf-bw')?.value  || 2700),
     duration:   parseInt(document.getElementById('wf-dur')?.value || 30),
-    sideband:   document.getElementById('wf-sideband')?.value || 'usb',
+    sideband:   document.getElementById('wf-sideband')?.value     || 'usb',
     contrast:   parseFloat(document.getElementById('wf-contrast')?.value || 1.5),
-    callsign:   document.getElementById('wf-callsign')?.value || '',
   };
 }
 
@@ -5639,8 +5689,7 @@ async function sstvTransmit() {
   const fd = new FormData();
   fd.append('image', file);
   fd.append('mode', _sstvSelMode);
-  fd.append('callsign', document.getElementById('sstv-callsign').value);
-  fd.append('overlay_callsign', document.getElementById('sstv-overlay').checked);
+  fd.append('overlay_callsign', false);
   fd.append('vox_tones', document.getElementById('sstv-vox').checked);
 
   showAlert('sstv-alert','Encoding and transmitting SSTV...','warn', 0);
@@ -5682,8 +5731,7 @@ async function sstvEncode() {
   const fd = new FormData();
   fd.append('image', file);
   fd.append('mode', _sstvSelMode);
-  fd.append('callsign', document.getElementById('sstv-callsign').value);
-  fd.append('overlay_callsign', document.getElementById('sstv-overlay').checked);
+  fd.append('overlay_callsign', false);
   fd.append('vox_tones', document.getElementById('sstv-vox').checked);
   fd.append('encode_only', 'true');
   const res = await fetch('/api/sstv/encode', {method:'POST', body:fd});
