@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.35
+RigGPT v2.12.36
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -361,7 +361,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.35'
+VERSION        = 'v2.12.36'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1211,26 +1211,38 @@ class IcomSerialAgent:
 class PiperTTSAgent:
     def synthesize(self, text, voice=None, output_path=None):
         voice      = voice or DEFAULT_PIPER_VOICE
-        voice_info = PIPER_VOICES.get(voice, list(PIPER_VOICES.values())[0])
-        model      = voice_info['model']
+        voice_info = PIPER_VOICES.get(voice, list(PIPER_VOICES.values())[0] if PIPER_VOICES else None)
+        if not voice_info:
+            logger.error('Piper: no voices configured -- install a Piper voice model')
+            return None
+        model = voice_info['model']
         if not os.path.exists(model):
-            logger.warning(f"Piper model not found: {model} -- falling back to eSpeak")
-            return EspeakTTSAgent().synthesize(text, output_path=output_path)
+            logger.error(
+                f'Piper model not found: {model} -- '
+                f'install Piper voices to {PIPER_VOICES_DIR} or switch engine to eSpeak'
+            )
+            # Return None so the caller surfaces an error rather than silently
+            # falling back to eSpeak (which reads text phonetically).
+            return None
         if not output_path:
             _fd, output_path = tempfile.mkstemp(suffix='.wav')
             os.close(_fd)
         try:
             result = subprocess.run(
                 ['piper', '--model', model, '--output_file', output_path],
-                input=text.encode(), capture_output=True, timeout=30
+                input=text.encode('utf-8'), capture_output=True, timeout=30
             )
-            if result.returncode != 0 or not os.path.exists(output_path):
-                raise RuntimeError(result.stderr.decode())
+            if result.returncode != 0 or not os.path.exists(output_path) \
+                    or os.path.getsize(output_path) == 0:
+                raise RuntimeError(result.stderr.decode('utf-8', errors='replace').strip())
             return output_path
         except FileNotFoundError:
-            return EspeakTTSAgent().synthesize(text, output_path=output_path)
+            logger.error(
+                'Piper binary not found -- install piper-tts or switch engine to eSpeak'
+            )
+            return None
         except Exception as e:
-            logger.error(f"Piper TTS error: {e}")
+            logger.error(f'Piper TTS error: {e}')
             return None
 
 
@@ -1240,8 +1252,13 @@ class EspeakTTSAgent:
             _fd, output_path = tempfile.mkstemp(suffix='.wav')
             os.close(_fd)
         try:
+            # Pass text via stdin (not as CLI arg) to avoid espeak phonetic
+            # interpretation of certain argument patterns.  --punct suppresses
+            # punctuation-as-speech; omitting '-m' ensures plain text mode.
             subprocess.run(
-                ['espeak-ng', '-v', voice, '-s', '150', '-p', '50', '-w', output_path, text],
+                ['espeak-ng', '-v', voice, '-s', '150', '-p', '50',
+                 '--punct', '-w', output_path],
+                input=text.encode('utf-8'),
                 check=True, capture_output=True, timeout=20
             )
             return output_path
