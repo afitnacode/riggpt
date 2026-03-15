@@ -1,10 +1,51 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.11.3
+RigGPT v2.12.27
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
+          Acid Trip Mode * Alexa Mode * Clips Tab * Community Memory (Qdrant RAG)
+          Dub FX (Trenchtown) * Multi-radio profile support * Discord integration
+
+NOTE: Version is defined by the VERSION constant in the Configuration section
+below. When bumping versions, update ALL of the following in the same commit:
+  - This docstring header
+  - VERSION constant (below)
+  - requirements.txt comment header
+  - INSTALL.sh comment header and VERSION variable
+
+v2.12.27 changes:
+  - FIX (CRITICAL): @app.route('/api/ai/models') was attached to _ascii() instead
+    of api_ai_models(). Every call to /api/ai/models raised TypeError (missing
+    required argument 's'). The actual api_ai_models() was defined right below
+    but never registered as a route. Fixed by swapping the decorator onto the
+    correct function. _ascii() remains a plain module-level utility function.
+  - FIX (CRITICAL): api_config_export() called api_beacons_list() and
+    api_schedules_list() -- neither function exists. Actual names are
+    api_beacon_list() and api_schedule_list(). NameError crashed any config
+    export that included beacons or scheduled jobs.
+  - FIX (CRITICAL): api_config_import() called api_beacon_add() -- function
+    does not exist. Actual name is api_beacon_create(). NameError crashed
+    any config import that attempted to restore beacons.
+  - FIX (CRITICAL): api_config_import() called api_schedules_list() (same as
+    export bug above). Fixed to api_schedule_list().
+  - FIX: _ctrl_poller() used deprecated datetime.utcnow() (Python 3.12+
+    raises DeprecationWarning). Replaced with datetime.now(timezone.utc).
+
+v2.12.26 changes:
+  - FIX: Version strings were diverged across codebase:
+    docstring=v2.11.3, INSTALL.sh=v2.11.15, requirements.txt=v2.10.20,
+    VERSION constant=v2.12.25. All now set to v2.12.26.
+  - FIX: radio_docs_page() return tuple used double-brace syntax
+    {{'Content-Type': 'text/html; charset=utf-8'}} -- this creates a Python
+    set containing a dict (dicts are not hashable), raising TypeError at
+    runtime on every request to /radio/docs. Fixed to single-brace dict.
+  - FIX: set_antenna() returned (resp is not None) instead of
+    (resp is not None and 0xFB in resp), silently returning True on a CI-V
+    NAK. Now consistent with all other set_* methods in IcomSerialAgent.
+  - IMPROVEMENT: Docstring now documents full feature set and includes a
+    version-sync checklist to prevent future drift.
 
 v2.11.3 changes:
   - REMOVED: Coqui TTS engine -- class, route, engine-status check, all references scrubbed.
@@ -254,7 +295,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.25'
+VERSION        = 'v2.12.27'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1008,7 +1049,7 @@ class IcomSerialAgent:
         # IC-7610 CI-V 0x12: antenna select -- 0x00=ANT1, 0x01=ANT2
         val = 0x00 if ant_num == 1 else 0x01
         resp = self.send_command(0x12, val)
-        return resp is not None
+        return resp is not None and 0xFB in resp
 
     def probe_radio(self):
         """Comprehensive probe: reads frequency/mode/smeter, scans baud if needed."""
@@ -3661,7 +3702,7 @@ def api_config_export():
 
     # -- Beacons ----------------------------------------------
     try:
-        beacons_resp = api_beacons_list()
+        beacons_resp = api_beacon_list()
         beacons_data = beacons_resp.get_json() if hasattr(beacons_resp, 'get_json') else {}
         bundle['beacons'] = beacons_data.get('beacons', [])
     except Exception as e:
@@ -3669,7 +3710,7 @@ def api_config_export():
 
     # -- Scheduled jobs ---------------------------------------
     try:
-        sched_resp = api_schedules_list()
+        sched_resp = api_schedule_list()
         sched_data = sched_resp.get_json() if hasattr(sched_resp, 'get_json') else {}
         bundle['schedules'] = sched_data.get('jobs', [])
     except Exception as e:
@@ -3829,7 +3870,7 @@ def api_config_import():
     beacons_in = data.get('beacons', [])
     if beacons_in:
         try:
-            existing_resp = api_beacons_list()
+            existing_resp = api_beacon_list()
             existing = {b['name'] for b in (existing_resp.get_json() or {}).get('beacons', [])}
             for bcn in beacons_in:
                 name = bcn.get('name', '').strip()
@@ -3843,7 +3884,7 @@ def api_config_import():
                         json=bcn,
                         content_type='application/json'
                     ):
-                        resp = api_beacon_add()
+                        resp = api_beacon_create()
                         rj   = resp.get_json() if hasattr(resp, 'get_json') else {}
                         if rj.get('success'):
                             results['beacons_added'].append(name)
@@ -3859,7 +3900,7 @@ def api_config_import():
     schedules_in = data.get('schedules', [])
     if schedules_in:
         try:
-            existing_resp = api_schedules_list()
+            existing_resp = api_schedule_list()
             existing_jobs = (existing_resp.get_json() or {}).get('jobs', [])
             existing_sigs = {(j.get('message',''), j.get('cron_expression','')) for j in existing_jobs}
             for job in schedules_in:
@@ -3986,7 +4027,6 @@ def api_ai_config_post():
     return jsonify({'success': True})
 
 # -- Model discovery ------------------------------------------
-@app.route('/api/ai/models', methods=['GET'])
 def _ascii(s) -> str:
     """Sanitize to pure ASCII so Flask latin-1 encoder never chokes on
     Unicode in external API error bodies (Gemini bullets, smart quotes, etc.)."""
@@ -3995,6 +4035,7 @@ def _ascii(s) -> str:
     return str(s).encode('ascii', errors='replace').decode('ascii')
 
 
+@app.route('/api/ai/models', methods=['GET'])
 def api_ai_models():
     """Probe Ollama for available local models."""
     url = _ollama_url()
@@ -5294,7 +5335,7 @@ def _ctrl_poller():
             else:
                 _ctrl_state['error'] = ''
                 _ctrl_state['connected'] = True
-                _ctrl_state['last_poll'] = datetime.utcnow().isoformat() + 'Z'
+                _ctrl_state['last_poll'] = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         time_module.sleep(interval)
 
 
@@ -6853,7 +6894,7 @@ def radio_docs_page():
 
 </body>
 </html>"""
-    return html, 200, {{'Content-Type': 'text/html; charset=utf-8'}}
+    return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 
 
