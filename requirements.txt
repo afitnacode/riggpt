@@ -1,4 +1,4 @@
-# IC-7610 Voice Agent v2.10.20 -- Python Dependencies
+# RigGPT v2.12.27 -- Python Dependencies
 
 # Web framework
 flask>=2.3.0
