@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.32
+RigGPT v2.12.33
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -15,6 +15,24 @@ below. When bumping versions, update ALL of the following in the same commit:
   - requirements.txt comment header
   - INSTALL.sh comment header and VERSION variable
   - templates/index.html status bar hardcoded version string (sb-label in statusbar)
+
+v2.12.33 changes:
+  - FIX: Beacon delete/pause/fire buttons threw 'beacon_1 is not defined' because
+    onclick IDs were unquoted string literals. Added string quotes around ${b.id}
+    in all three onclick handlers.
+  - FIX: Beacon name showed 'Unnamed' even when a name was given. Backend stored
+    empty string when name field was blank (data.get returns '' not default).
+    Fixed: use `data.get('name','') or f'Beacon {minutes}min'`.
+  - FIX: api_beacon_list now returns `active` field (mirrors `enabled`) so JS
+    b.active checks work correctly. Previously only `enabled` was returned.
+  - FIX: Removed `callsign` field from beacon config and API (unused).
+  - FIX: Beacon validation now accepts sound_file as alternative to text.
+  - FEATURE: Beacon SOURCE/MODE now includes 'clip' option -- plays a sound file
+    from the Clips library over PTT at the scheduled interval.
+  - FIX: WF ART duration field now correctly influences transmission. Computed
+    frame_duration = duration / image_height so total TX time matches the field.
+  - CLEANUP: Removed callsign handling from beacon and waterfall where it was
+    unused cruft. callsign_text still works for the CALLSIGN canned image button.
 
 v2.12.32 changes:
   - FIX: WF ART TX IMAGE 400 -- api_waterfall_transmit now accepts JSON body
@@ -341,7 +359,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.32'
+VERSION        = 'v2.12.33'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -2337,6 +2355,37 @@ def _cw_synthesize(text: str, wpm: int = 20, tone_hz: int = 700,
     return riff + fmt_chunk + data_chunk
 
 
+def _run_beacon_clip(bid, cfg):
+    """Transmit a beacon by playing a Clips sound file over PTT."""
+    sound_file = cfg.get('sound_file', '')
+    if not sound_file:
+        logger.error(f'Beacon {bid}: no sound_file configured')
+        return
+    clips_dir  = _clips_cfg().get('dir', CLIPS_DEFAULT_DIR)
+    local_path = os.path.join(clips_dir, sound_file)
+    s3_cache   = '/tmp/riggpt_clips_cache'
+    cache_path = os.path.join(s3_cache, sound_file)
+    path = local_path if os.path.exists(local_path) else \
+           (cache_path if os.path.exists(cache_path) else None)
+    if not path:
+        logger.error(f'Beacon {bid}: clip not found: {sound_file}')
+        return
+    try:
+        ptt_agent = orchestrator.icom_agent
+        if orchestrator._connected:
+            ptt_agent.ptt_on()
+        dev = AUDIO_DEVICE or 'default'
+        import subprocess
+        subprocess.run(['aplay', '-D', dev, path], timeout=300, capture_output=True)
+        if orchestrator._connected:
+            ptt_agent.ptt_off()
+        logger.info(f'Beacon {bid}: clip played: {sound_file}')
+    except Exception as e:
+        logger.error(f'Beacon {bid} clip error: {e}')
+        try: orchestrator.icom_agent.ptt_off()
+        except Exception: pass
+
+
 def _run_beacon_cw(bid, cfg):
     """Transmit a CW beacon: synthesize tones and key PTT."""
     text = cfg.get('text', '')
@@ -2377,6 +2426,8 @@ def _run_beacon(bid):
     text     = cfg['text']
     if cfg.get('engine') == 'cw':
         _run_beacon_cw(bid, cfg)
+    elif cfg.get('engine') == 'clip' or cfg.get('sound_file'):
+        _run_beacon_clip(bid, cfg)
     else:
         if cfg.get('phonetic') and callsign:
             full = f"{text} This is {_phonetic(callsign)}"
@@ -2774,7 +2825,9 @@ def api_beacon_list():
         for bid, data in _beacons.items():
             cfg = dict(data['config'])
             cfg.update({'id': bid, 'last_tx': data.get('last_tx'),
-                        'tx_count': data.get('tx_count', 0), 'enabled': data.get('enabled', True)})
+                        'tx_count': data.get('tx_count', 0),
+                        'enabled': data.get('enabled', True),
+                        'active':  data.get('enabled', True)})  # alias for JS b.active
             result.append(cfg)
     return jsonify({'beacons': result})
 
@@ -2784,20 +2837,26 @@ def api_beacon_create():
     global _beacon_count
     if not scheduler:
         return jsonify({'success': False, 'message': 'Scheduler not available'}), 503
-    data    = request.json or {}
-    minutes = int(data.get('interval_minutes', 0))
-    if not data.get('text') or minutes < 1:
-        return jsonify({'success': False, 'message': 'text and interval_minutes (>=1) required'}), 400
+    data       = request.json or {}
+    minutes    = int(data.get('interval_minutes', 0))
+    sound_file = data.get('sound_file', '').strip()
+    if (not data.get('text') and not sound_file) or minutes < 1:
+        return jsonify({'success': False,
+                        'message': 'text (or sound_file) and interval_minutes (>=1) required'}), 400
     _beacon_count += 1
     bid = f'beacon_{_beacon_count}'
     cfg = {
-        'name': data.get('name', f'Beacon {minutes}min'), 'text': data['text'].strip(),
-        'callsign': data.get('callsign', '').strip().upper(),
-        'phonetic': bool(data.get('phonetic', True)),
-        'interval_minutes': minutes, 'engine': data.get('engine', 'piper'),
-        'voice': data.get('voice'), 'preset': data.get('preset', 'normal'),
-        'roger_beep': bool(data.get('roger_beep', True)), 'created': _now_utc(),
-        'cw_wpm': int(data.get('cw_wpm', 20)),
+        'name':       data.get('name', '') or (sound_file or f'Beacon {minutes}min'),
+        'text':       data.get('text', '').strip(),
+        'sound_file': sound_file,
+        'phonetic':   bool(data.get('phonetic', True)),
+        'interval_minutes': minutes,
+        'engine':     data.get('engine', 'piper'),
+        'voice':      data.get('voice'),
+        'preset':     data.get('preset', 'normal'),
+        'roger_beep': bool(data.get('roger_beep', True)),
+        'created':    _now_utc(),
+        'cw_wpm':     int(data.get('cw_wpm', 20)),
     }
     try:
         job = scheduler.add_job(
