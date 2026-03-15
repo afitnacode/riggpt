@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.12.27 -- Installer
+# RigGPT v2.12.28 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,7 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.12.27"
+VERSION="2.12.28"
 
 echo "=============================================="
 echo "  RigGPT v${VERSION} -- Installer"
@@ -62,12 +62,19 @@ echo "[4/7] Installing files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR/templates"
 mkdir -p "$INSTALL_DIR/wav_cache"
 
-cp "$SCRIPT_DIR/app.py"               "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/templates/index.html" "$INSTALL_DIR/templates/"
-[ -f "$SCRIPT_DIR/waterfall_image.py" ] && cp "$SCRIPT_DIR/waterfall_image.py" "$INSTALL_DIR/"
-[ -f "$SCRIPT_DIR/api_keys.py" ]        && cp "$SCRIPT_DIR/api_keys.py"        "$INSTALL_DIR/"
-[ -f "$SCRIPT_DIR/requirements.txt" ]   && cp "$SCRIPT_DIR/requirements.txt"   "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/UNINSTALL.sh" "$INSTALL_DIR/"
+# Only copy files if SCRIPT_DIR differs from INSTALL_DIR.
+# If the user cloned directly into INSTALL_DIR and ran the script from there,
+# the files are already in place -- skip the cp to avoid 'same file' errors.
+if [ "$(realpath "$SCRIPT_DIR")" != "$(realpath "$INSTALL_DIR")" ]; then
+    cp "$SCRIPT_DIR/app.py"               "$INSTALL_DIR/"
+    cp "$SCRIPT_DIR/templates/index.html" "$INSTALL_DIR/templates/"
+    [ -f "$SCRIPT_DIR/waterfall_image.py" ] && cp "$SCRIPT_DIR/waterfall_image.py" "$INSTALL_DIR/"
+    [ -f "$SCRIPT_DIR/api_keys.py" ]        && cp "$SCRIPT_DIR/api_keys.py"        "$INSTALL_DIR/"
+    [ -f "$SCRIPT_DIR/requirements.txt" ]   && cp "$SCRIPT_DIR/requirements.txt"   "$INSTALL_DIR/"
+    cp "$SCRIPT_DIR/UNINSTALL.sh" "$INSTALL_DIR/"
+else
+    echo "  Files already in $INSTALL_DIR (cloned in-place) -- skipping copy"
+fi
 chmod +x "$INSTALL_DIR/UNINSTALL.sh"
 
 # Persistent home: set ownership only, NEVER wipe (survives reinstall)
