@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.12.28 -- Installer
+# RigGPT v2.12.29 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,16 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.12.28"
+VERSION="2.12.29"
+
+# -- Parse flags ------------------------------------------------
+# -y / --yes  : skip upgrade confirmation prompt (for scripted installs)
+YES=0
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes) YES=1 ;;
+    esac
+done
 
 echo "=============================================="
 echo "  RigGPT v${VERSION} -- Installer"
@@ -19,14 +28,80 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# ── System package prerequisites ───────────────────────────────
+# -- Upgrade detection ------------------------------------------
+# Detect an existing installation by checking:
+#   1. A running or enabled systemd service unit
+#   2. An app.py already present in INSTALL_DIR
+# If found, show installed vs incoming version and ask to confirm.
+
+INSTALLED_VERSION=""
+IS_UPGRADE=0
+
+# Extract VERSION constant from the installed app.py (if it exists)
+if [ -f "$INSTALL_DIR/app.py" ]; then
+    INSTALLED_VERSION=$(grep -m1 "^VERSION" "$INSTALL_DIR/app.py" \
+        | sed "s/.*'\(.*\)'.*/\1/" 2>/dev/null || echo "")
+fi
+
+# Check whether the systemd unit exists (even if stopped)
+SVC_EXISTS=0
+if systemctl list-unit-files "${SERVICE}.service" 2>/dev/null \
+        | grep -q "${SERVICE}.service"; then
+    SVC_EXISTS=1
+fi
+
+if [ -n "$INSTALLED_VERSION" ] || [ "$SVC_EXISTS" -eq 1 ]; then
+    IS_UPGRADE=1
+    echo ""
+    echo "  !! EXISTING INSTALLATION DETECTED !!"
+    echo ""
+    if [ -n "$INSTALLED_VERSION" ]; then
+        echo "  Installed version : $INSTALLED_VERSION"
+    else
+        echo "  Installed version : unknown (app.py not found in $INSTALL_DIR)"
+    fi
+    echo "  Incoming version  : v${VERSION}"
+    echo ""
+
+    SVC_STATUS=$(systemctl is-active "$SERVICE" 2>/dev/null || echo "inactive")
+    echo "  Service status    : $SVC_STATUS"
+    echo ""
+    echo "  The upgrade will:"
+    echo "    - Stop the running service"
+    echo "    - Replace app.py, templates, and support files"
+    echo "    - Reinstall Python dependencies"
+    echo "    - Restart the service"
+    echo ""
+    echo "  Your config is SAFE -- these files are never touched:"
+    echo "    $SVC_HOME/app_settings.json"
+    echo "    $SVC_HOME/api_keys.json"
+    echo "    $SVC_HOME/canon/"
+    echo ""
+
+    if [ "$YES" -eq 0 ]; then
+        read -r -p "  Proceed with upgrade? [y/N] " CONFIRM
+        case "$CONFIRM" in
+            [yY][eE][sS]|[yY]) ;;
+            *)
+                echo ""
+                echo "  Upgrade cancelled. No changes were made."
+                exit 0
+                ;;
+        esac
+    else
+        echo "  --yes flag set -- proceeding automatically."
+    fi
+    echo ""
+fi
+
+# -- System package prerequisites ───────────────────────────────
 echo "[1/7] Installing system packages..."
 apt-get update -qq
 apt-get install -y -qq \
     python3 python3-pip alsa-utils ffmpeg sox espeak-ng curl \
     2>/dev/null || echo "  WARNING: some apt packages failed (continuing)"
 
-# ── Service user + persistent home ──────────────────────────────
+# -- Service user + persistent home ─────────────────────────────
 echo "[2/7] Creating service user..."
 if ! id "$SVC_USER" &>/dev/null; then
     # useradd -m creates home dir; -d sets path; NOT -r so home is a real user home
@@ -34,7 +109,6 @@ if ! id "$SVC_USER" &>/dev/null; then
     echo "  Created user: $SVC_USER (home: $SVC_HOME)"
 else
     echo "  User $SVC_USER already exists"
-    # Ensure home exists even if user was created without one previously
     if [ ! -d "$SVC_HOME" ]; then
         mkdir -p "$SVC_HOME"
         chown "$SVC_USER:$SVC_USER" "$SVC_HOME"
@@ -43,21 +117,20 @@ else
     fi
 fi
 
-# Group memberships
 for grp in dialout audio plugdev; do
     if getent group "$grp" &>/dev/null; then
         usermod -aG "$grp" "$SVC_USER" 2>/dev/null && echo "  Added $SVC_USER to: $grp" || true
     fi
 done
 
-# ── Stop existing service ───────────────────────────────────────
+# -- Stop existing service ──────────────────────────────────────
 echo "[3/7] Stopping existing service (if any)..."
 for f in "$INSTALL_DIR/gunicorn.ctl" "$INSTALL_DIR/gunicorn.pid" "$INSTALL_DIR/gunicorn.sock"; do
     [ -f "$f" ] && rm -f "$f" && echo "  Cleaned: $f"
 done
 systemctl stop "$SERVICE" 2>/dev/null || true
 
-# ── Install directory ───────────────────────────────────────────
+# -- Install directory ──────────────────────────────────────────
 echo "[4/7] Installing files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR/templates"
 mkdir -p "$INSTALL_DIR/wav_cache"
@@ -84,7 +157,7 @@ chmod 750 "$SVC_HOME"
 chown -R "$SVC_USER:dialout" "$INSTALL_DIR"
 chmod 755 "$INSTALL_DIR"
 
-# ── Python dependencies ─────────────────────────────────────────
+# -- Python dependencies ────────────────────────────────────────
 echo "[5/7] Installing Python dependencies..."
 pip3 install \
     flask flask-cors pyserial requests apscheduler pysstv pillow numpy \
@@ -116,7 +189,7 @@ python3 -c "import gevent; import gevent.monkey" 2>/dev/null && \
     echo "  gevent: OK" || \
     echo "  WARNING: gevent import failed -- try: apt-get install -y python3-gevent libev-dev"
 
-# ── Systemd unit ────────────────────────────────────────────────
+# -- Systemd unit ───────────────────────────────────────────────
 echo "[6/7] Installing systemd service..."
 
 GUNICORN_BIN=$(command -v gunicorn 2>/dev/null || echo "")
@@ -164,7 +237,7 @@ EOF
 systemctl daemon-reload
 systemctl enable "$SERVICE"
 
-# ── Start and verify ────────────────────────────────────────────
+# -- Start and verify ───────────────────────────────────────────
 echo "[7/7] Starting service..."
 for f in "$INSTALL_DIR/gunicorn.ctl" "$INSTALL_DIR/gunicorn.pid"; do
     [ -f "$f" ] && rm -f "$f" && echo "  Cleaned: $f"
@@ -202,10 +275,14 @@ fi
 STATUS=$(systemctl is-active "$SERVICE" 2>/dev/null || echo "unknown")
 echo ""
 echo "=============================================="
+if [ "$IS_UPGRADE" -eq 1 ]; then
+    echo "  Upgrade complete: ${INSTALLED_VERSION:-unknown} -> v${VERSION}"
+else
+    echo "  Fresh install complete: v${VERSION}"
+fi
 echo "  Service status:      $STATUS"
 echo "  Persistent config:   $SVC_HOME/"
-echo "    (app_settings.json and api_keys.json in $SVC_HOME/"
-echo "     are NOT removed on uninstall)"
+echo "    (app_settings.json, api_keys.json, canon/ never touched by installer)"
 echo "=============================================="
 
 if [ "$STATUS" = "active" ]; then
