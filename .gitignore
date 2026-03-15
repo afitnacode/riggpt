@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+wav_cache/
+*.db
+*.log
+.env
+app_settings.json
+api_keys.json
+*.zip
+*.swp
+memory/__pycache__/

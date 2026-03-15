@@ -1,0 +1,47 @@
+# IC-7610 Voice Agent v2.10.20 -- Python Dependencies
+
+# Web framework
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# Production WSGI server
+gunicorn>=21.2.0
+gevent>=23.9.0
+
+# Serial communication (CI-V)
+pyserial>=3.5
+
+# HTTP (ElevenLabs, Speechify APIs)
+requests>=2.31.0
+
+# Scheduling
+apscheduler>=3.10.0
+
+# SSTV encoding
+pysstv>=0.4.0
+
+# Image processing (SSTV + Waterfall)
+pillow>=10.0.0
+
+# Waterfall DSP
+numpy>=1.24.0
+
+# System monitoring
+psutil>=5.9
+
+# TTS engines (free, installed by default)
+edge-tts>=6.1.9
+gtts>=2.4.0
+pyttsx3>=2.90
+
+# Optional TTS engines -- install manually:
+#   pip3 install TTS --break-system-packages          # Coqui (~2GB)
+#   see https://github.com/rhasspy/piper/releases      # Piper
+
+# Optional cloud TTS -- API key required:
+#   ElevenLabs, Speechify, OpenAI (handled via api_keys.py)
+
+# Removed in v2.10.18:
+#   pyrtlsdr  -- RTL-SDR removed from UI
+# Removed in v2.10.20:
+#   pydub     -- imported but never used

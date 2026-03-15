@@ -1,0 +1,227 @@
+#!/bin/bash
+# RigGPT v2.11.15 -- Installer
+# Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
+set -e
+
+INSTALL_DIR="/opt/riggpt"
+SERVICE="riggpt"
+SVC_USER="riggpt"
+SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+VERSION="2.11.15"
+
+echo "=============================================="
+echo "  RigGPT v${VERSION} -- Installer"
+echo "=============================================="
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "ERROR: Please run as root: sudo bash $0"
+    exit 1
+fi
+
+# ── System package prerequisites ───────────────────────────────
+echo "[1/7] Installing system packages..."
+apt-get update -qq
+apt-get install -y -qq \
+    python3 python3-pip alsa-utils ffmpeg sox espeak-ng curl \
+    2>/dev/null || echo "  WARNING: some apt packages failed (continuing)"
+
+# ── Service user + persistent home ──────────────────────────────
+echo "[2/7] Creating service user..."
+if ! id "$SVC_USER" &>/dev/null; then
+    # useradd -m creates home dir; -d sets path; NOT -r so home is a real user home
+    useradd -m -d "$SVC_HOME" -s /bin/false "$SVC_USER"
+    echo "  Created user: $SVC_USER (home: $SVC_HOME)"
+else
+    echo "  User $SVC_USER already exists"
+    # Ensure home exists even if user was created without one previously
+    if [ ! -d "$SVC_HOME" ]; then
+        mkdir -p "$SVC_HOME"
+        chown "$SVC_USER:$SVC_USER" "$SVC_HOME"
+        chmod 750 "$SVC_HOME"
+        echo "  Created missing home: $SVC_HOME"
+    fi
+fi
+
+# Group memberships
+for grp in dialout audio plugdev; do
+    if getent group "$grp" &>/dev/null; then
+        usermod -aG "$grp" "$SVC_USER" 2>/dev/null && echo "  Added $SVC_USER to: $grp" || true
+    fi
+done
+
+# ── Stop existing service ───────────────────────────────────────
+echo "[3/7] Stopping existing service (if any)..."
+for f in "$INSTALL_DIR/gunicorn.ctl" "$INSTALL_DIR/gunicorn.pid" "$INSTALL_DIR/gunicorn.sock"; do
+    [ -f "$f" ] && rm -f "$f" && echo "  Cleaned: $f"
+done
+systemctl stop "$SERVICE" 2>/dev/null || true
+
+# ── Install directory ───────────────────────────────────────────
+echo "[4/7] Installing files to $INSTALL_DIR..."
+mkdir -p "$INSTALL_DIR/templates"
+mkdir -p "$INSTALL_DIR/wav_cache"
+
+cp "$SCRIPT_DIR/app.py"               "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/templates/index.html" "$INSTALL_DIR/templates/"
+[ -f "$SCRIPT_DIR/waterfall_image.py" ] && cp "$SCRIPT_DIR/waterfall_image.py" "$INSTALL_DIR/"
+[ -f "$SCRIPT_DIR/api_keys.py" ]        && cp "$SCRIPT_DIR/api_keys.py"        "$INSTALL_DIR/"
+[ -f "$SCRIPT_DIR/requirements.txt" ]   && cp "$SCRIPT_DIR/requirements.txt"   "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/UNINSTALL.sh" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/UNINSTALL.sh"
+
+# Persistent home: set ownership only, NEVER wipe (survives reinstall)
+chown "$SVC_USER:$SVC_USER" "$SVC_HOME"
+chmod 750 "$SVC_HOME"
+
+chown -R "$SVC_USER:dialout" "$INSTALL_DIR"
+chmod 755 "$INSTALL_DIR"
+
+# ── Python dependencies ─────────────────────────────────────────
+echo "[5/7] Installing Python dependencies..."
+pip3 install \
+    flask flask-cors pyserial requests apscheduler pysstv pillow numpy \
+    psutil edge-tts gtts pyttsx3 gunicorn gevent \
+    --break-system-packages -q --root-user-action=ignore 2>&1 | grep -v "^$" || true
+
+echo "  Note: Coqui TTS (optional ~2GB): pip3 install TTS --break-system-packages"
+echo "  Note: Piper TTS (optional): see https://github.com/rhasspy/piper/releases"
+
+AUDIO_DEV=$(python3 -c "
+import subprocess
+r = subprocess.run(['aplay','-l'], capture_output=True, text=True, timeout=5)
+PREFER=['burr-brown','burr brown','08bb','pcm2901','usb audio codec']
+SKIP=['pch','hda intel','hdmi','analog','digital','nvidia','amd']
+best_card,best_score=None,-1
+for line in r.stdout.splitlines():
+    if not line.startswith('card '): continue
+    low=line.lower()
+    if any(k in low for k in SKIP): continue
+    try: card_num=int(line.split(':')[0].replace('card','').strip())
+    except: continue
+    score=10 if any(k in low for k in PREFER) else 5
+    if score>best_score: best_score,best_card=score,card_num
+print(f'plughw:{best_card},0' if best_card is not None else 'default')
+" 2>/dev/null || echo "default")
+echo "  Detected audio device: $AUDIO_DEV"
+
+python3 -c "import gevent; import gevent.monkey" 2>/dev/null && \
+    echo "  gevent: OK" || \
+    echo "  WARNING: gevent import failed -- try: apt-get install -y python3-gevent libev-dev"
+
+# ── Systemd unit ────────────────────────────────────────────────
+echo "[6/7] Installing systemd service..."
+
+GUNICORN_BIN=$(command -v gunicorn 2>/dev/null || echo "")
+if [ -z "$GUNICORN_BIN" ]; then
+    for candidate in /usr/local/bin/gunicorn /usr/bin/gunicorn "$HOME/.local/bin/gunicorn"; do
+        [ -x "$candidate" ] && GUNICORN_BIN="$candidate" && break
+    done
+fi
+if [ -z "$GUNICORN_BIN" ]; then
+    echo "  WARNING: gunicorn not found -- falling back to python3 app.py"
+    EXEC_START="/usr/bin/python3 ${INSTALL_DIR}/app.py"
+else
+    echo "  Found gunicorn: $GUNICORN_BIN"
+    EXEC_START="${GUNICORN_BIN} --worker-class gevent --workers 1 --bind 0.0.0.0:5000 --timeout 300 --keep-alive 5 --log-level info --access-logfile - --error-logfile - app:app"
+fi
+
+cat > /etc/systemd/system/${SERVICE}.service << EOF
+[Unit]
+Description=RigGPT v${VERSION}
+After=network.target sound.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=${SVC_USER}
+Group=dialout
+SupplementaryGroups=audio plugdev
+WorkingDirectory=${INSTALL_DIR}
+Environment="RIGGPT_AUDIO_DEVICE=${AUDIO_DEV}"
+Environment="HOME=${SVC_HOME}"
+Environment="PULSE_SERVER="
+Environment="ALSA_CONFIG_PATH=/usr/share/alsa/alsa.conf"
+ExecStart=${EXEC_START}
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=riggpt
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable "$SERVICE"
+
+# ── Start and verify ────────────────────────────────────────────
+echo "[7/7] Starting service..."
+for f in "$INSTALL_DIR/gunicorn.ctl" "$INSTALL_DIR/gunicorn.pid"; do
+    [ -f "$f" ] && rm -f "$f" && echo "  Cleaned: $f"
+done
+chown -R "$SVC_USER:dialout" "$INSTALL_DIR"
+chmod 755 "$INSTALL_DIR"
+
+echo "  Testing Python import as $SVC_USER..."
+su -s /bin/bash -c "cd $INSTALL_DIR && python3 -c 'import app' 2>&1 | head -20" "$SVC_USER" \
+    && echo "  Import OK" || echo "  WARNING: import test had issues (may still work)"
+
+systemctl start "$SERVICE"
+
+for i in $(seq 1 10); do
+    sleep 1
+    STATUS=$(systemctl is-active "$SERVICE" 2>/dev/null || echo "unknown")
+    [ "$STATUS" = "active" ] && break
+done
+
+echo -n "  Waiting for HTTP port 5000"
+BOUND=0
+for i in $(seq 1 60); do
+    sleep 1; echo -n "."
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 \
+           "http://localhost:5000/api/status" 2>/dev/null || echo "0")
+    [ "$CODE" = "200" ] && BOUND=1 && break
+done
+echo ""
+
+if [ "$BOUND" = "0" ]; then
+    echo "  WARNING: port 5000 did not respond within 60s"
+    journalctl -u "$SERVICE" -n 40 --no-pager 2>/dev/null || true
+fi
+
+STATUS=$(systemctl is-active "$SERVICE" 2>/dev/null || echo "unknown")
+echo ""
+echo "=============================================="
+echo "  Service status:      $STATUS"
+echo "  Persistent config:   $SVC_HOME/"
+echo "    (app_settings.json and api_keys.json in $SVC_HOME/"
+echo "     are NOT removed on uninstall)"
+echo "=============================================="
+
+if [ "$STATUS" = "active" ]; then
+    IP=$(hostname -I | awk '{print $1}')
+    echo ""
+    echo "  Access:    http://${IP}:5000"
+    echo "  Logs:      journalctl -u $SERVICE -f"
+    echo "  Restart:   systemctl restart $SERVICE"
+    echo "  Uninstall: sudo bash $INSTALL_DIR/UNINSTALL.sh"
+    echo ""
+    echo "  Route check:"
+    for ep in /api/status /api/system/health /api/ai/config; do
+        CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 \
+               "http://localhost:5000${ep}" 2>/dev/null || echo "ERR")
+        echo "    GET  $ep -> HTTP $CODE  $([ "$CODE" = "200" ] && echo OK || echo FAIL)"
+    done
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+           -H "Content-Type: application/json" \
+           -d '{"text":"radio check"}' --max-time 15 \
+           "http://localhost:5000/api/transmit/preview" 2>/dev/null || echo "ERR")
+    echo "    POST /api/transmit/preview -> HTTP $CODE  $([ "$CODE" = "200" ] && echo OK || echo '(eSpeak may not be installed)')"
+else
+    echo "  WARNING: service did not start"
+    journalctl -u "$SERVICE" -n 20 --no-pager 2>/dev/null || true
+fi
+echo "=============================================="

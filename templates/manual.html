@@ -1,0 +1,2142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RigGPT User Manual — v2.12.25</title>
+<style>
+  :root {
+    --bg:      #0a0a0b;
+    --bg2:     #111113;
+    --bg3:     #18181c;
+    --border:  #2a2a30;
+    --text:    #d4d4d8;
+    --text2:   #9a9aa8;
+    --text3:   #5a5a68;
+    --green:   #22c55e;
+    --cyan:    #22d3ee;
+    --amber:   #f59e0b;
+    --red:     #ef4444;
+    --blue:    #3b82f6;
+    --purple:  #a855f7;
+    --mono:    'JetBrains Mono', 'Fira Mono', 'Cascadia Code', 'Courier New', monospace;
+    --sans:    'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --toc-w:   260px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.7;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── TOC sidebar ── */
+  #toc {
+    position: fixed;
+    top: 0; left: 0;
+    width: var(--toc-w);
+    height: 100vh;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 0 40px 0;
+    z-index: 100;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  #toc-header {
+    position: sticky;
+    top: 0;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px 10px;
+    z-index: 1;
+  }
+
+  #toc-header .logo {
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  #toc-header .ver {
+    color: var(--text3);
+    font-size: 10px;
+    margin-top: 2px;
+  }
+
+  #toc-header .back-link {
+    display: inline-block;
+    margin-top: 8px;
+    color: var(--cyan);
+    text-decoration: none;
+    font-size: 10px;
+    opacity: .7;
+    transition: opacity .15s;
+  }
+  #toc-header .back-link:hover { opacity: 1; }
+
+  .toc-section {
+    padding: 10px 0 4px 16px;
+    color: var(--text3);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    border-top: 1px solid var(--border);
+    margin-top: 6px;
+  }
+  .toc-section:first-of-type { margin-top: 0; border-top: none; }
+
+  #toc a {
+    display: block;
+    padding: 4px 16px 4px 20px;
+    color: var(--text2);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: all .1s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #toc a:hover { color: var(--text); border-left-color: var(--green); background: var(--bg3); }
+  #toc a.sub { padding-left: 30px; font-size: 10px; color: var(--text3); }
+  #toc a.sub:hover { color: var(--text2); }
+  #toc a.active { color: var(--green); border-left-color: var(--green); }
+
+  /* ── Main content ── */
+  #content {
+    margin-left: var(--toc-w);
+    flex: 1;
+    max-width: 900px;
+    padding: 48px 56px 100px;
+  }
+
+  /* ── Headings ── */
+  h1 {
+    font-family: var(--mono);
+    font-size: 28px;
+    color: var(--green);
+    letter-spacing: .04em;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .doc-subtitle {
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 12px;
+    margin-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+  }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: 15px;
+    color: var(--cyan);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin: 52px 0 16px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h2 .h2-icon { opacity: .6; font-size: 12px; }
+
+  h3 {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin: 28px 0 10px;
+  }
+
+  h4 {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    margin: 18px 0 6px;
+    letter-spacing: .05em;
+  }
+
+  /* ── Body text ── */
+  p { margin-bottom: 12px; color: var(--text); }
+
+  a { color: var(--cyan); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  strong { color: var(--text); font-weight: 600; }
+
+  /* ── Code ── */
+  code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--green);
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    padding: 14px 16px;
+    margin: 12px 0 18px;
+    overflow-x: auto;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  pre .cm  { color: var(--text3); }
+  pre .kw  { color: var(--cyan); }
+  pre .st  { color: var(--amber); }
+  pre .num { color: var(--purple); }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 13px;
+  }
+  th {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text3);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+  }
+  td {
+    border: 1px solid var(--border);
+    padding: 7px 12px;
+    vertical-align: top;
+    color: var(--text);
+  }
+  tr:nth-child(even) td { background: var(--bg2); }
+  td code { border: none; background: transparent; padding: 0; }
+
+  /* ── Callout boxes ── */
+  .callout {
+    border-left: 3px solid;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 13px;
+    border-radius: 0 4px 4px 0;
+  }
+  .callout.info    { border-color: var(--blue);  background: rgba(59,130,246,.07); }
+  .callout.warn    { border-color: var(--amber); background: rgba(245,158,11,.07); }
+  .callout.danger  { border-color: var(--red);   background: rgba(239,68,68,.07);  }
+  .callout.tip     { border-color: var(--green); background: rgba(34,197,94,.07);  }
+  .callout .label  { font-family: var(--mono); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; }
+  .callout.info    .label { color: var(--blue); }
+  .callout.warn    .label { color: var(--amber); }
+  .callout.danger  .label { color: var(--red); }
+  .callout.tip     .label { color: var(--green); }
+
+  /* ── Route pills ── */
+  .route {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    margin: 3px 0;
+  }
+  .route .method {
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .method.GET    { background: rgba(34,197,94,.15);  color: var(--green); }
+  .method.POST   { background: rgba(59,130,246,.15); color: var(--blue); }
+  .method.DELETE { background: rgba(239,68,68,.15);  color: var(--red); }
+
+  /* ── Changelog ── */
+  .cl-entry {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    margin-bottom: 20px;
+    background: var(--bg2);
+  }
+  .cl-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+  }
+  .cl-ver {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    font-weight: 700;
+  }
+  .cl-date {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+  }
+  .cl-body { padding: 10px 14px; }
+  .cl-body ul { padding-left: 18px; }
+  .cl-body li { margin-bottom: 4px; color: var(--text2); font-size: 13px; }
+  .cl-body li strong { color: var(--text); }
+  .cl-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .cl-tag.new  { background: rgba(34,197,94,.2);  color: var(--green); }
+  .cl-tag.fix  { background: rgba(239,68,68,.2);  color: var(--red); }
+  .cl-tag.chg  { background: rgba(245,158,11,.2); color: var(--amber); }
+  .cl-tag.rm   { background: rgba(90,90,104,.2);  color: var(--text3); }
+
+  /* ── Key/shortcut badge ── */
+  kbd {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-bottom: 2px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--text2);
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+  /* ── Section anchor offset (so sticky TOC doesn't cover headings) ── */
+  h2[id], h3[id] { scroll-margin-top: 20px; }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 20px;
+    border: 1px solid;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+  .pill.green  { border-color: var(--green);  color: var(--green); }
+  .pill.amber  { border-color: var(--amber); color: var(--amber); }
+  .pill.blue   { border-color: var(--blue);  color: var(--blue); }
+  .pill.red    { border-color: var(--red);   color: var(--red); }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  ul, ol { padding-left: 22px; margin-bottom: 12px; }
+  li { margin-bottom: 5px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 12px 0; }
+  .card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  .card .card-title { font-family: var(--mono); font-size: 10px; color: var(--cyan); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+
+  @media (max-width: 900px) {
+    #toc { display: none; }
+    #content { margin-left: 0; padding: 24px 20px 60px; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ TABLE OF CONTENTS ══════════════════════════════════════ -->
+<nav id="toc">
+  <div id="toc-header">
+    <div class="logo">📡 RigGPT</div>
+    <div class="ver">User Manual — v2.12.20</div>
+    <a class="back-link" href="/">← Back to App</a>
+  </div>
+
+  <div class="toc-section">Overview</div>
+  <a href="#intro">Introduction</a>
+  <a href="#quickstart">Quick Start</a>
+  <a href="#install">Installation</a>
+  <a href="#architecture">Architecture</a>
+
+  <div class="toc-section">UI Tabs</div>
+  <a href="#tab-dashboard">Dashboard</a>
+  <a href="#tab-transmit">Transmit</a>
+  <a href="#tab-ai">AI Tab</a>
+  <a href="#tab-sstv">SSTV</a>
+  <a href="#tab-waterfall">Waterfall</a>
+  <a href="#tab-schedule">Schedule</a>
+  <a href="#tab-log">Log</a>
+  <a href="#tab-config">Config</a>
+  <a href="#tab-acid">Acid Trip</a>
+
+  <div class="toc-section">Acid Trip Deep Dive</div>
+  <a href="#at-overview" class="sub">Overview</a>
+  <a href="#at-agents" class="sub">Agent Config</a>
+  <a href="#at-discord" class="sub">Discord Integration</a>
+  <a href="#at-lookback" class="sub">Discord Lookback</a>
+  <a href="#at-interact" class="sub">Discord Interact</a>
+  <a href="#at-chaos" class="sub">Chaos / Wildcard</a>
+  <a href="#at-presets" class="sub">Mode Presets</a>
+  <a href="#at-canon" class="sub">Canon Files</a>
+  <a href="#at-fx" class="sub">Per-Agent FX</a>
+  <a href="#at-audience" class="sub">Audience / SSE</a>
+  <a href="#at-scenarios" class="sub">Scenarios</a>
+  <a href="#at-ctrl" class="sub">Control Channel</a>
+
+  <div class="toc-section">TTS Engines</div>
+  <a href="#tts-espeak">eSpeak</a>
+  <a href="#tts-piper">Piper</a>
+  <a href="#tts-edge">Edge TTS</a>
+  <a href="#tts-gtts">gTTS</a>
+  <a href="#tts-openai">OpenAI TTS</a>
+  <a href="#tts-elevenlabs">ElevenLabs</a>
+  <a href="#tts-speechify">Speechify</a>
+  <a href="#tts-fastkoko">FastKoko</a>
+
+  <div class="toc-section">Radio</div>
+  <a href="#radio-profiles">Radio Profiles</a>
+  <a href="#radio-civ">CI-V Protocol</a>
+  <a href="#radio-audio">Audio Routing</a>
+
+  <div class="toc-section">Config & Data</div>
+  <a href="#config-files">Config Files</a>
+  <a href="#api-keys">API Keys</a>
+  <a href="#backup">Export / Import</a>
+  <a href="#keyboard">Keyboard Shortcuts</a>
+
+  <a href="#community-memory">Community Memory</a>
+  <a href="#memory-flow" class="sub">Agent Knowledge Flow</a>
+  <a href="#memory-qdrant" class="sub">How Qdrant Works</a>
+  <a href="#memory-ingest" class="sub">Ingestion</a>
+  <a href="#memory-context" class="sub">Context Injection</a>
+  <a href="#memory-setup" class="sub">Setup Guide</a>
+  <div class="toc-section">API Reference</div>
+  <a href="#api-radio">Radio</a>
+  <a href="#api-transmit">Transmit</a>
+  <a href="#api-ai">AI / Chat</a>
+  <a href="#api-discord">Discord</a>
+  <a href="#api-trip">Acid Trip</a>
+  <a href="#api-schedule">Schedule / Beacon</a>
+  <a href="#api-log">Log</a>
+  <a href="#api-settings">Settings</a>
+
+  <div class="toc-section">Reference</div>
+  <a href="#troubleshoot">Troubleshooting</a>
+  <a href="#paths">File Paths</a>
+  <a href="#changelog">Changelog</a>
+</nav>
+
+<!-- ══ MAIN CONTENT ══════════════════════════════════════════ -->
+<main id="content">
+
+<h1>RigGPT</h1>
+<div class="doc-subtitle">
+  User Manual &amp; API Reference &nbsp;·&nbsp; v2.12.25 &nbsp;·&nbsp; 2026-03-09<br>
+  AI-augmented voice agent for Icom amateur radio transceivers
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     INTRODUCTION
+══════════════════════════════════════════════════════════ -->
+<h2 id="intro"><span class="h2-icon">01</span> Introduction</h2>
+
+<p>RigGPT is a Flask-based web application that bridges AI text-to-speech engines with Icom amateur radio transceivers via the CI-V serial protocol. It enables automated voice transmissions, AI-generated debates (Acid Trip mode), SSTV image transmission, beacon scheduling, transmission logging, and full Discord integration.</p>
+
+<p>The interface is a dense, terminal-style operator console designed for speed and efficiency. All primary functions are keyboard-accessible. The application runs as a systemd service on Debian x86_64 and serves a single-page UI at port 5000.</p>
+
+<div class="grid2">
+  <div class="card">
+    <div class="card-title">Target Platform</div>
+    Debian 13 (trixie) amd64, Python 3.13<br>
+    Tested with Icom IC-7610 primary
+  </div>
+  <div class="card">
+    <div class="card-title">Server Stack</div>
+    Flask + gunicorn + gevent<br>
+    SQLite logging · APScheduler beacons
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     QUICK START
+══════════════════════════════════════════════════════════ -->
+<h2 id="quickstart"><span class="h2-icon">02</span> Quick Start</h2>
+
+<ol>
+  <li>Extract the zip to any directory.</li>
+  <li>Run <code>sudo bash INSTALL.sh</code> — creates the <code>riggpt</code> service user, installs dependencies, configures systemd, and starts the service.</li>
+  <li>Open <code>http://&lt;host-ip&gt;:5000</code> in a browser.</li>
+  <li>Go to <strong>Config → Connection</strong>, select your radio model, set the serial port, and click <strong>CONNECT</strong>.</li>
+  <li>Go to <strong>Config → Integrations</strong>, add API keys for whichever TTS/AI engines you want to use.</li>
+  <li>On the <strong>Transmit</strong> tab, type a message, select an engine/voice, and click <strong>TRANSMIT</strong>.</li>
+</ol>
+
+<div class="callout warn">
+  <div class="label">Amateur Radio Licence Required</div>
+  RigGPT controls PTT and transmits on amateur radio frequencies. You must hold a valid amateur radio licence and operate within your licence class privileges and local regulations.
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     INSTALLATION
+══════════════════════════════════════════════════════════ -->
+<h2 id="install"><span class="h2-icon">03</span> Installation</h2>
+
+<h3>System Requirements</h3>
+<table>
+  <tr><th>Package</th><th>Purpose</th></tr>
+  <tr><td><code>python3 python3-pip</code></td><td>Runtime</td></tr>
+  <tr><td><code>alsa-utils</code></td><td>Audio playback via aplay</td></tr>
+  <tr><td><code>ffmpeg</code></td><td>Audio format conversion, normalisation</td></tr>
+  <tr><td><code>sox</code></td><td>Audio effects (pitch, reverb, echo)</td></tr>
+  <tr><td><code>espeak-ng</code></td><td>Default offline TTS engine</td></tr>
+  <tr><td><code>curl</code></td><td>Health check during install</td></tr>
+</table>
+
+<h3>Python Packages (auto-installed)</h3>
+<p><code>flask flask-cors pyserial requests apscheduler pysstv pillow numpy psutil edge-tts gtts pyttsx3 gunicorn gevent</code></p>
+
+<h3>Optional Packages</h3>
+<table>
+  <tr><th>Package</th><th>Notes</th></tr>
+  <tr><td>Piper TTS</td><td>High-quality offline neural TTS. Download binary from <a href="https://github.com/rhasspy/piper/releases" target="_blank">rhasspy/piper</a>. Place in PATH or configure the path in Config → Piper.</td></tr>
+  <tr><td>FastKoko</td><td>Local Kokoro TTS server. See Config → FastKoko Local TTS panel for host configuration.</td></tr>
+</table>
+
+<h3>Service Management</h3>
+<pre>
+<span class="cm"># View logs</span>
+journalctl -u riggpt -f
+
+<span class="cm"># Restart</span>
+systemctl restart riggpt
+
+<span class="cm"># Stop</span>
+systemctl stop riggpt
+
+<span class="cm"># Uninstall (preserves /home/riggpt config files)</span>
+sudo bash /opt/riggpt/UNINSTALL.sh
+</pre>
+
+<h3>Persistent Files</h3>
+<p>The installer creates <code>/home/riggpt/</code> as the persistent home directory. This is <strong>never wiped</strong> on reinstall or uninstall. Your settings and API keys survive upgrades.</p>
+
+<!-- ══════════════════════════════════════════════════════════
+     ARCHITECTURE
+══════════════════════════════════════════════════════════ -->
+<h2 id="architecture"><span class="h2-icon">04</span> Architecture</h2>
+
+<pre>
+Browser (index.html)
+  └── Vanilla JS + Web Audio API
+  └── WaveSurfer v7 (waveform display)
+
+Flask (app.py)  ←──────── gunicorn + gevent workers
+  ├── CI-V Serial Thread  →  Icom radio (PTT, freq, mode, S-meter)
+  ├── APScheduler         →  Beacon / cron transmissions
+  ├── Discord Poller      →  Discord bot REST API (8s polling)
+  ├── SQLite              →  Transmission log + Acid Trip DB
+  ├── TTS Agents          →  espeak / piper / edge-tts / OpenAI / etc.
+  └── AudioEffectsAgent   →  sox / ffmpeg pipeline
+
+API Keys (api_keys.py)
+  └── AES-style XOR encryption, key: b'ic7610radioagent'
+  └── Stored: /home/riggpt/api_keys.json
+
+Settings: /home/riggpt/app_settings.json
+Canon:    /home/riggpt/canon/a/  and  /home/riggpt/canon/b/
+WAV Cache:/opt/riggpt/wav_cache/
+</pre>
+
+<!-- ══════════════════════════════════════════════════════════
+     UI TABS
+══════════════════════════════════════════════════════════ -->
+<h2 id="tab-dashboard"><span class="h2-icon">05</span> Dashboard Tab</h2>
+
+<p>The dashboard provides a live view of radio and system state via Server-Sent Events (SSE). The connection updates every second when connected.</p>
+
+<table>
+  <tr><th>Widget</th><th>Description</th></tr>
+  <tr><td>FREQUENCY</td><td>Current VFO frequency with MHz display. Click to edit and send.</td></tr>
+  <tr><td>MODE</td><td>Current operating mode (USB, LSB, AM, FM, CW, etc.). Dropdown to change.</td></tr>
+  <tr><td>S-METER</td><td>Received signal strength, BCD-decoded from CI-V. Updates live.</td></tr>
+  <tr><td>PWR / SWR / ALC</td><td>TX meters — power out, SWR, ALC level during transmit.</td></tr>
+  <tr><td>CPU / MEM / TEMP</td><td>Server system health, polled every 10 seconds.</td></tr>
+  <tr><td>CONNECTION</td><td>Radio model selector, port, CI-V address, baud rate. CONNECT/DISCONNECT buttons.</td></tr>
+  <tr><td>ANTENNA / RADIO CTL</td><td>Antenna switch, RF power, ATT, pre-amp controls via CI-V.</td></tr>
+</table>
+
+<div class="callout info">
+  <div class="label">Radio Model</div>
+  The <strong>RADIO MODEL</strong> selector is inside the CONNECTION collapsible section. Selecting a model auto-populates the CI-V address and baud rate. Always set this before connecting.
+</div>
+
+<hr>
+
+<h2 id="tab-transmit"><span class="h2-icon">06</span> Transmit Tab</h2>
+
+<p>Manually compose and transmit voice messages. The engine and voice dropdowns populate from the current Config settings.</p>
+
+<h3>Controls</h3>
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td>Text area</td><td>Message text. Supports Unicode. Non-ASCII characters are stripped for engines that require ASCII.</td></tr>
+  <tr><td>Engine</td><td>TTS engine selection. See TTS Engines section.</td></tr>
+  <tr><td>Voice</td><td>Voice identifier for the selected engine. Populated automatically when engine changes.</td></tr>
+  <tr><td>FX Preset</td><td>Audio effect chain. Options: Normal, Robot, Alien, Deep, Chipmunk, Megaphone, Underwater, Whisper, Autotune.</td></tr>
+  <tr><td>Pitch / Reverb / Echo</td><td>Fine-tune FX sliders applied after preset.</td></tr>
+  <tr><td>TRANSMIT</td><td>Synthesise, key PTT, play audio, un-key PTT.</td></tr>
+  <tr><td>PREVIEW</td><td>Synthesise and play through server speakers without PTT.</td></tr>
+  <tr><td>STOP TX</td><td>Emergency PTT-off. Also available globally as <kbd>Ctrl</kbd>+<kbd>.</kbd></td></tr>
+  <tr><td>Repeat / Delay</td><td>Transmit N times with a delay between each.</td></tr>
+</table>
+
+<hr>
+
+<h2 id="tab-ai"><span class="h2-icon">07</span> AI Tab</h2>
+
+<p>Interactive AI conversation with optional voice output. Supports Ollama (local), OpenAI, and Gemini.</p>
+
+<h3>Controls</h3>
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td>Ollama Host</td><td>URL of Ollama API, default <code>http://localhost:11434</code>.</td></tr>
+  <tr><td>Model</td><td>Loaded Ollama model name, or provider:model for cloud providers.</td></tr>
+  <tr><td>AI Provider</td><td>ollama / openai / gemini — controls which backend is used.</td></tr>
+  <tr><td>Auto TX</td><td>If enabled, AI responses are automatically transmitted after generation.</td></tr>
+  <tr><td>Temperature</td><td>Sampling temperature (0.0 = deterministic, 2.0 = very random).</td></tr>
+  <tr><td>Max Tokens</td><td>Maximum output tokens per response.</td></tr>
+  <tr><td>System Prompt</td><td>Persistent system context injected at the start of every conversation.</td></tr>
+  <tr><td>DEBUG</td><td>Toggles a live log panel showing API calls and timing.</td></tr>
+</table>
+
+<hr>
+
+<h2 id="tab-sstv"><span class="h2-icon">08</span> SSTV Tab</h2>
+
+<p>Slow Scan Television image transmission. Encodes images to audio and transmits via the radio's USB audio interface.</p>
+
+<h3>Modes</h3>
+<p>20 modes across 6 families:</p>
+<table>
+  <tr><th>Family</th><th>Modes</th></tr>
+  <tr><td>Robot</td><td>Robot36, Robot72</td></tr>
+  <tr><td>Martin</td><td>Martin1, Martin2</td></tr>
+  <tr><td>Scottie</td><td>Scottie1, Scottie2, ScottieDX</td></tr>
+  <tr><td>PD</td><td>PD50, PD90, PD120, PD160, PD180, PD240, PD290</td></tr>
+  <tr><td>Wraase</td><td>WraaseSC2-120, WraaseSC2-180</td></tr>
+  <tr><td>Pasokon</td><td>Pasokon P3, P5, P7</td></tr>
+</table>
+
+<h3>Options</h3>
+<table>
+  <tr><th>Option</th><th>Description</th></tr>
+  <tr><td>VOX Tone</td><td>Prepend a 1750 Hz tone to trigger VOX-activated receivers.</td></tr>
+  <tr><td>FSKID</td><td>Embed your callsign as an FSK-modulated ID after the image.</td></tr>
+  <tr><td>ENCODE ONLY</td><td>Encode image to WAV and preview without transmitting. Also enables WAV download.</td></tr>
+  <tr><td>Keep Aspect</td><td>Scale image maintaining aspect ratio, letterboxed to mode dimensions.</td></tr>
+</table>
+
+<hr>
+
+<h2 id="tab-waterfall"><span class="h2-icon">09</span> Waterfall Tab</h2>
+
+<p>Transmit images as waterfall/spectrogram patterns — visible in software-defined radio spectrum displays.</p>
+
+<h3>Image Types</h3>
+<ul>
+  <li><strong>Canned images</strong> — predefined test patterns (grid, checkerboard, bars, etc.)</li>
+  <li><strong>Custom upload</strong> — any image file converted to waterfall format</li>
+  <li><strong>Generative</strong> — 12 algorithmic generators: Plasma, Mandelbrot, Lissajous, Galaxy Vortex, and others. Supports random selection and auto-cycling.</li>
+</ul>
+
+<hr>
+
+<h2 id="tab-schedule"><span class="h2-icon">10</span> Schedule Tab</h2>
+
+<p>Schedule one-shot or repeating transmissions using cron syntax. Powered by APScheduler.</p>
+
+<h3>Beacon Fields</h3>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td>Cron</td><td>Standard 5-field cron expression: <code>minute hour day month weekday</code></td></tr>
+  <tr><td>Text</td><td>Message to transmit on schedule.</td></tr>
+  <tr><td>Engine / Voice</td><td>TTS engine and voice for this beacon (independent of Transmit tab settings).</td></tr>
+  <tr><td>TX On Air</td><td>If unchecked, plays preview only (no PTT).</td></tr>
+  <tr><td>Enabled</td><td>Toggle beacon without deleting it.</td></tr>
+  <tr><td>FIRE NOW</td><td>Immediate one-shot trigger for testing.</td></tr>
+</table>
+
+<div class="callout tip">
+  <div class="label">Cron Examples</div>
+  <code>*/15 * * * *</code> — every 15 minutes<br>
+  <code>0 9 * * 1-5</code> — 09:00 weekdays<br>
+  <code>30 14 * * 6,0</code> — 14:30 on weekends
+</div>
+
+<hr>
+
+<h2 id="tab-log"><span class="h2-icon">11</span> Log Tab</h2>
+
+<p>SQLite-backed transmission history. Every PTT event is logged with timestamp, text, engine, duration, and audio fingerprint.</p>
+
+<h3>Features</h3>
+<ul>
+  <li>Filter by date range, engine, or text search</li>
+  <li>Play back individual transmission WAV files</li>
+  <li>Export log as CSV</li>
+  <li>Delete individual entries or clear all</li>
+  <li>Stats panel: total transmissions, total air time, most used engine</li>
+</ul>
+
+<hr>
+
+<h2 id="tab-config"><span class="h2-icon">12</span> Config Tab</h2>
+
+<p>Global configuration, API key management, engine health checks, and import/export.</p>
+
+<h3>Sections</h3>
+<table>
+  <tr><th>Section</th><th>Description</th></tr>
+  <tr><td>CONNECTION</td><td>Radio model, serial port, CI-V address, baud rate. Connect / Disconnect.</td></tr>
+  <tr><td>INTEGRATIONS</td><td>API key management for all cloud providers. Keys are encrypted at rest.</td></tr>
+  <tr><td>ENGINE STATUS</td><td>Live health check for each TTS engine. Shows which are available.</td></tr>
+  <tr><td>AUDIO DEVICES</td><td>ALSA device list and calibration tool.</td></tr>
+  <tr><td>DISCORD</td><td>Bot token, guild ID, channel ID, message buffer size. APPLY to activate.</td></tr>
+  <tr><td>CTRL CHANNEL</td><td>Separate Discord channel for bot control commands. See Control Channel section.</td></tr>
+  <tr><td>AI CONFIG</td><td>Ollama host, default model, AI provider selection.</td></tr>
+  <tr><td>PIPER</td><td>Piper TTS binary path and model directory.</td></tr>
+  <tr><td>FASTKOKO LOCAL TTS</td><td>FastKoko server host and port.</td></tr>
+  <tr><td>EXPORT / IMPORT</td><td>Full config backup as JSON. Optional plaintext API key export.</td></tr>
+  <tr><td>GONG</td><td>Path to Taco Bell gong WAV file (played on demand from any tab).</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════
+     ACID TRIP
+══════════════════════════════════════════════════════════ -->
+<h2 id="tab-acid"><span class="h2-icon">13</span> Acid Trip Tab</h2>
+
+<p>Acid Trip is a real-time AI debate engine. Two AI agents engage in an open-ended conversation, their voices transmitted live over the radio. Discord chat drives the conversation in real time.</p>
+
+<h3 id="at-overview">Overview</h3>
+<p>Each "trip" runs for a configured number of turns. Each half-turn, the active agent generates a response using its persona, canon, and the conversation history, synthesises it via its assigned TTS engine, and transmits. Discord messages are woven into the generation prompt as a live audience signal.</p>
+
+<div class="callout info">
+  <div class="label">Design Philosophy</div>
+  Agents are intentionally <strong>nameless</strong>. They know each other exists through the conversation but have no handle to address each other directly. This creates a more atmospheric, less chatty exchange. The output guardrail in every system prompt explicitly instructs the model not to use names.
+</div>
+
+<h3 id="at-agents">Agent Configuration</h3>
+<p>Each agent (A and B) has independent configuration:</p>
+
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td>Emoji</td><td>Visual identifier shown in the chat panel and topic label.</td></tr>
+  <tr><td>Engine</td><td>TTS engine for this agent's voice output.</td></tr>
+  <tr><td>Voice</td><td>Voice identifier. Load available voices with the ↺ button.</td></tr>
+  <tr><td>Provider</td><td>AI provider for text generation: ollama / openai / gemini.</td></tr>
+  <tr><td>Model</td><td>Per-agent model override. Leave blank to use the shared AI tab model.</td></tr>
+  <tr><td>Persona</td><td>System prompt character description. This is the primary steering instruction.</td></tr>
+  <tr><td>Canon</td><td>Background context woven into the system prompt as plain prose (no header labels). Can be typed directly or loaded from a server file.</td></tr>
+  <tr><td>Opening Line</td><td>Agent A's first utterance. Leave blank to auto-generate from the topic.</td></tr>
+  <tr><td>FX Preset / Pitch / Reverb / Echo</td><td>Per-agent audio effects applied after TTS synthesis.</td></tr>
+</table>
+
+<h3>Session Controls</h3>
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td>TOPIC</td><td>The debate subject. Injected into every system prompt.</td></tr>
+  <tr><td>TURNS</td><td>Number of full exchange rounds (each agent speaks once per turn).</td></tr>
+  <tr><td>DELAY</td><td>Pause in seconds between turns.</td></tr>
+  <tr><td>MAX TOK</td><td>Maximum tokens per generation. Applied directly — no hidden floors.</td></tr>
+  <tr><td>TEMP</td><td>Sampling temperature. Higher = more unpredictable.</td></tr>
+  <tr><td>GAP MIN/MAX</td><td>Random pre-speech pause range for conversational pacing.</td></tr>
+  <tr><td>HESITATE</td><td>Random filler injection ("um", "uh", "well...") probability.</td></tr>
+  <tr><td>TX ON AIR</td><td>If enabled, audio is transmitted via PTT. If disabled, preview only.</td></tr>
+  <tr><td>WILDCARD</td><td>Auto-inject random chaos events every N turns.</td></tr>
+  <tr><td>START / STOP</td><td>Begin or abort the debate.</td></tr>
+</table>
+
+<hr>
+
+<h3 id="at-discord">Discord Integration</h3>
+<p>When Discord is configured and connected, Acid Trip continuously reads the Discord message buffer and uses it to influence agent generation.</p>
+
+<h4>Discord Influence Slider (1–10)</h4>
+<p>Controls how strongly Discord messages are framed in the system prompt:</p>
+<table>
+  <tr><th>Level</th><th>Label</th><th>Effect</th></tr>
+  <tr><td>1–3</td><td>Minimal / Low / Noticeable</td><td>Soft background suggestion — "somewhere at the back of your mind..."</td></tr>
+  <tr><td>4–5</td><td>Moderate / Present</td><td>Audience awareness — Discord messages may surface naturally.</td></tr>
+  <tr><td>6–7</td><td>Strong / Heavy <span class="pill green">default</span></td><td>Direct reaction — agents weave Discord content into their speech.</td></tr>
+  <tr><td>8–9</td><td>Dominant / Obsessed</td><td>Discord can derail the argument; agents address the audience directly.</td></tr>
+  <tr><td>10</td><td>Consumed</td><td>Agents abandon the debate entirely in favour of audience response.</td></tr>
+</table>
+
+<div class="callout tip">
+  <div class="label">How Influence Actually Works</div>
+  The system context is rebuilt from scratch on every turn, so adjusting the slider mid-debate takes effect immediately on the next generation. The slider at 1–3 uses soft prose framing; at 4+ it activates the Lookback mechanism.
+</div>
+
+<hr>
+
+<h3 id="at-lookback">Discord Lookback</h3>
+<p>The primary mechanism for Discord to drive the conversation. When Influence is 4 or above and Lookback N &gt; 0, the Lookback system fires on qualifying turns and <strong>replaces the final user message in the generation prompt</strong> with a synthesised Discord-driven directive. The agent responds directly to what Discord said, not to the prior agent turn.</p>
+
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td>DISCORD LOOKBACK N</td><td>How many recent Discord messages to pull in (0 = off, max 10).</td></tr>
+  <tr><td>DRIVE EVERY N TURNS</td><td>Fire frequency. 1 = every turn, 2 = every other turn, etc.</td></tr>
+</table>
+
+<p>When Lookback fires, a blue <code>📡 DISCORD DRIVE [N msg]: ...</code> banner appears in the chat transcript showing exactly what content was used as the prompt. The status field shows the last turn it fired on.</p>
+
+<p>The prompt framing scales with Influence level:</p>
+<ul>
+  <li><strong>4–5:</strong> "Your listeners have been talking: ... Let what they said color what you say next."</li>
+  <li><strong>6–7:</strong> "Your audience just said: ... React to this directly. Make it the springboard."</li>
+  <li><strong>8–9:</strong> "STOP. Your audience is talking and you cannot ignore it: ... Let it hijack the conversation."</li>
+  <li><strong>10:</strong> "EVERYTHING STOPS. ... Forget the debate."</li>
+</ul>
+
+<div class="callout tip">
+  <div class="label">Chaos Queue Priority</div>
+  If a chaos queue event (SPICY button, scheduled event, control channel inject) arrives on the same turn as a Lookback fire, the chaos event takes priority. Lookback only fires on turns where the chaos queue is empty.
+</div>
+
+<hr>
+
+<h3 id="at-interact">Discord Interact Mode</h3>
+<p>Discord Interact is a reactive mode where Discord messages trigger agent responses directly, rather than running on a fixed turn schedule.</p>
+
+<h4>Two Operating Modes</h4>
+<table>
+  <tr><th>Condition</th><th>Button Label</th><th>Behaviour</th></tr>
+  <tr><td>No trip running</td><td>📡 INTERACT: LISTENING</td><td>Waits for Discord activity. When a new message arrives, launches a fresh <code>tripStart()</code> with the Discord context as the seed. START/STOP are locked while listening.</td></tr>
+  <tr><td>Trip already running</td><td>📡 INTERACT: MID-TRIP</td><td>Arms without interrupting the current debate. Incoming Discord messages are pushed directly into the inject and chaos queues. The running agents pick them up on their next turn. START/STOP remain usable.</td></tr>
+</table>
+
+<p>When a mid-trip Interact-armed debate ends naturally, the button automatically transitions to <strong>LISTENING</strong> mode and waits for the next Discord trigger to start a fresh trip. Pressing STOP manually disarms Interact entirely.</p>
+
+<hr>
+
+<h3 id="at-chaos">Chaos / Wildcard</h3>
+<p>Chaos events are plain-text interrupts injected into the agent's next generation as the active user message, overriding the normal conversational flow for that turn.</p>
+
+<h4>Sources</h4>
+<ul>
+  <li><strong>SPICY button</strong> — manual inject of a random event from the built-in chaos list</li>
+  <li><strong>WILDCARD auto-chaos</strong> — fires every N turns automatically (toggle + frequency control)</li>
+  <li><strong>Scheduled chaos</strong> — per-turn events defined in Mode Presets or the scenario schedule editor</li>
+  <li><strong>Control channel</strong> — <code>!inject [text]</code> command via Discord</li>
+  <li><strong>Discord Lookback / Interact</strong> — Discord content treated as chaos when it fires</li>
+</ul>
+
+<hr>
+
+<h3 id="at-presets">Mode Presets</h3>
+<p>Six pre-built scenarios accessible from the MODE dropdown. Each preset sets both agents' emoji, persona, canon, opening line, voice, engine, topic, temperature, and a scheduled chaos timeline.</p>
+
+<table>
+  <tr><th>Preset</th><th>Description</th></tr>
+  <tr><td>Increasing Paranoia</td><td>One agent grows increasingly paranoid; the other is too smooth, too perfect.</td></tr>
+  <tr><td>Signal Decay</td><td>A degrading radio transmission tries to communicate with its receiver.</td></tr>
+  <tr><td>Last Two People</td><td>Post-apocalyptic. Two survivors make contact for the first time.</td></tr>
+  <tr><td>Very Bad Therapy</td><td>A therapist who is not coping runs a session with a patient who is too polite to say so.</td></tr>
+  <tr><td>The Oracle Speaks</td><td>A seeker approaches an oracle. The oracle answers the question beneath the question.</td></tr>
+  <tr><td>Memory Loop</td><td>One agent is trapped in a loop, aware of it, trying to break out. The other has deja vu.</td></tr>
+</table>
+
+<hr>
+
+<h3 id="at-canon">Canon Files</h3>
+<p>Canon is background context given to an agent in its system prompt. It is woven in as plain prose (no document-style headers) so the model treats it as inherent character knowledge rather than an instruction document.</p>
+
+<p>Canon can be typed directly into the Canon textarea, or loaded from server files:</p>
+<ul>
+  <li>Place <code>.md</code> files in <code>/home/riggpt/canon/a/</code> or <code>/home/riggpt/canon/b/</code></li>
+  <li>Click the ↺ button next to the Canon dropdown to refresh the file list</li>
+  <li>Select a file from the dropdown — it loads into the textarea automatically</li>
+  <li>Canon is saved/restored with other agent settings across sessions</li>
+</ul>
+
+<hr>
+
+<h3 id="at-fx">Per-Agent FX</h3>
+<p>Each agent has an independent audio effects chain applied after TTS synthesis. Controls:</p>
+<table>
+  <tr><th>Control</th><th>Range</th><th>Description</th></tr>
+  <tr><td>FX Preset</td><td>9 options</td><td>Normal, Robot, Alien, Deep, Chipmunk, Megaphone, Underwater, Whisper, Autotune</td></tr>
+  <tr><td>Pitch</td><td>-12 to +12 semitones</td><td>Fine pitch shift applied after preset</td></tr>
+  <tr><td>Reverb</td><td>0–100</td><td>Room reverb amount</td></tr>
+  <tr><td>Echo</td><td>0–100</td><td>Echo/delay amount</td></tr>
+</table>
+
+<hr>
+
+<h3 id="at-audience">Audience / Live View</h3>
+<p>The <strong>📺 LIVE</strong> button opens <code>/trip/live</code> in a new tab — a minimal SSE-driven audience view that displays the debate transcript as it happens. Suitable for streaming or display on a second monitor.</p>
+
+<p>Events broadcast via SSE at <code>/api/trip/stream</code>:</p>
+<ul>
+  <li><code>start</code> — trip begins with topic and agent identifiers</li>
+  <li><code>turn</code> — each agent utterance with emoji, text, and turn number</li>
+  <li><code>chaos</code> — chaos event fired</li>
+  <li><code>finish</code> — trip ends with reason</li>
+</ul>
+
+<hr>
+
+<h3 id="at-scenarios">Scenarios</h3>
+<p>Save and recall complete trip configurations including all agent settings, topic, session parameters, and scheduled chaos timelines. Scenarios are stored in the SQLite database.</p>
+
+<p>The 💾 LOG button saves the current transcript (not the configuration) as a named transcript record. Transcripts are also accessible at <code>/api/trip/transcripts</code>.</p>
+
+<hr>
+
+<h3 id="at-ctrl">Discord Control Channel</h3>
+<p>A separate Discord channel can be used to send commands to RigGPT during a live trip. Configure the control channel ID separately from the audience channel in Config → CTRL CHANNEL.</p>
+
+<p>Access the command reference page at <code>/trip/commands</code>.</p>
+
+<table>
+  <tr><th>Command</th><th>Description</th></tr>
+  <tr><td><code>!inject [text]</code></td><td>Inject text as a chaos event on the next turn</td></tr>
+  <tr><td><code>!topic [text]</code></td><td>Steer the debate toward a new topic</td></tr>
+  <tr><td><code>!persona a [text]</code></td><td>Override Agent A's persona mid-trip</td></tr>
+  <tr><td><code>!persona b [text]</code></td><td>Override Agent B's persona mid-trip</td></tr>
+  <tr><td><code>!paranoid</code></td><td>Apply paranoia escalation event</td></tr>
+  <tr><td><code>!glitch</code></td><td>Signal glitch interruption</td></tr>
+  <tr><td><code>!silence</code></td><td>Uncomfortable silence event</td></tr>
+  <tr><td><code>!paranoid / !loop / !decay</code></td><td>Load scenario preset shortcuts</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════
+     TTS ENGINES
+══════════════════════════════════════════════════════════ -->
+<h2 id="tts-espeak"><span class="h2-icon">14</span> TTS: eSpeak</h2>
+<p>Offline, zero-latency. Robotic character that works well for non-human personas. No API key required.</p>
+<p>Voices follow eSpeak voice string format: <code>en-us</code>, <code>en-gb</code>, <code>en-us+m3</code>, <code>en-us+f3</code>, etc. The <code>+m</code> and <code>+f</code> suffixes select male/female variants.</p>
+
+<h2 id="tts-piper"><span class="h2-icon">15</span> TTS: Piper</h2>
+<p>High-quality offline neural TTS. Natural-sounding voices with very low latency once models are loaded. No API key required. Requires the Piper binary and ONNX model files.</p>
+<p>Configure the binary path and model directory in Config → Piper. Voice names correspond to ONNX model filenames without extension.</p>
+
+<h2 id="tts-edge"><span class="h2-icon">16</span> TTS: Edge TTS</h2>
+<p>Microsoft Edge neural TTS via the web API. High quality, wide language coverage, no API key required — uses the same endpoint as Edge browser's read-aloud feature. Requires internet connection.</p>
+
+<h2 id="tts-gtts"><span class="h2-icon">17</span> TTS: gTTS</h2>
+<p>Google Text-to-Speech via the web API. Basic quality, good for testing. No API key required. Requires internet connection.</p>
+
+<h2 id="tts-openai"><span class="h2-icon">18</span> TTS: OpenAI TTS</h2>
+<p>OpenAI's TTS-1 and TTS-1-HD models. High quality, natural prosody. Requires an OpenAI API key configured in Integrations.</p>
+<p>Available voices: alloy, echo, fable, onyx, nova, shimmer.</p>
+
+<h2 id="tts-elevenlabs"><span class="h2-icon">19</span> TTS: ElevenLabs</h2>
+<p>Premium AI voice cloning and synthesis. Best quality, highest latency. Requires an ElevenLabs API key. Voice IDs are fetched from your ElevenLabs account.</p>
+
+<h2 id="tts-speechify"><span class="h2-icon">20</span> TTS: Speechify</h2>
+<p>Speechify API. Requires a Speechify API key. Voice list fetched from account. Some voices require specific audio format handling — the engine validates WAV output and retries on format errors.</p>
+
+<h2 id="tts-fastkoko"><span class="h2-icon">21</span> TTS: FastKoko</h2>
+<p>Local <a href="https://github.com/remsky/Kokoro-FastAPI" target="_blank">Kokoro-FastAPI</a> server. High-quality neural TTS running entirely locally after setup. Configure the server host and port in Config → FastKoko Local TTS. No API key required — the server runs on your own hardware.</p>
+
+<!-- ══════════════════════════════════════════════════════════
+     RADIO
+══════════════════════════════════════════════════════════ -->
+<h2 id="radio-profiles"><span class="h2-icon">22</span> Radio Profiles</h2>
+
+<table>
+  <tr><th>Model</th><th>CI-V Address</th><th>Baud Rate</th><th>Notes</th></tr>
+  <tr><td>Icom IC-7610</td><td>0x98</td><td>57600</td><td>Dual-watch, twin passband. USB audio: Burr-Brown PCM2901.</td></tr>
+  <tr><td>Icom IC-7410</td><td>0x6E</td><td>19200</td><td>Single-band HF+50MHz. USB audio: C-Media CM108.</td></tr>
+  <tr><td>Icom IC-7300</td><td>0x94</td><td>115200</td><td>Popular SDR-based HF. USB audio: Burr-Brown.</td></tr>
+  <tr><td>Icom IC-7100</td><td>0x88</td><td>19200</td><td>Mobile/base HF+VHF+UHF. USB audio: CM108.</td></tr>
+  <tr><td>Icom IC-9700</td><td>0xA2</td><td>115200</td><td>VHF/UHF/SHF. USB audio: PCM2901.</td></tr>
+  <tr><td>Other / Manual</td><td>0x00</td><td>9600</td><td>Enter CI-V address and baud manually.</td></tr>
+</table>
+
+<h3>CI-V Address Detection</h3>
+<p>If you're unsure of your radio's CI-V address, use <strong>Config → Debug → CIV PROBE</strong>. This scans addresses 0x80–0xA0 and reports which one responds.</p>
+
+<h2 id="radio-civ"><span class="h2-icon">23</span> CI-V Protocol</h2>
+<p>RigGPT communicates with the radio via Icom's CI-V (Computer Interface V) serial protocol over the USB/serial interface built into compatible transceivers.</p>
+
+<h3>PTT Mechanism</h3>
+<p>PTT is asserted via CI-V command <code>0x1C 0x00 0x01</code> (transmit on) and <code>0x1C 0x00 0x00</code> (transmit off). A poller thread continuously reads frequency, mode, and S-meter data and pauses automatically during transmission to avoid lock contention.</p>
+
+<div class="callout danger">
+  <div class="label">Emergency PTT-Off</div>
+  Press <kbd>Ctrl</kbd>+<kbd>.</kbd> at any time to immediately terminate PTT and any active transmission. The STOP TX button on the Transmit tab does the same. These are always-active regardless of which tab is focused.
+</div>
+
+<h2 id="radio-audio"><span class="h2-icon">24</span> Audio Routing</h2>
+<p>RigGPT uses ALSA directly via <code>aplay</code> for audio playback to the radio's USB audio interface. The installer auto-detects the best audio device by scanning for Burr-Brown / PCM2901 / CM108 identifiers in the ALSA card list.</p>
+
+<p>The detected device is stored in the systemd unit as <code>RIGGPT_AUDIO_DEVICE</code>. To change it, edit <code>/etc/systemd/system/riggpt.service</code> and restart the service, or recalibrate from Config → Audio Devices.</p>
+
+<!-- ══════════════════════════════════════════════════════════
+     CONFIG & DATA
+══════════════════════════════════════════════════════════ -->
+<h2 id="config-files"><span class="h2-icon">25</span> Config Files</h2>
+<table>
+  <tr><th>Path</th><th>Contents</th><th>Survives reinstall</th></tr>
+  <tr><td><code>/home/riggpt/app_settings.json</code></td><td>All UI settings, agent configs, session parameters</td><td>✓ Yes</td></tr>
+  <tr><td><code>/home/riggpt/api_keys.json</code></td><td>Encrypted API keys</td><td>✓ Yes</td></tr>
+  <tr><td><code>/home/riggpt/canon/a/</code></td><td>Agent A canon <code>.md</code> files</td><td>✓ Yes</td></tr>
+  <tr><td><code>/home/riggpt/canon/b/</code></td><td>Agent B canon <code>.md</code> files</td><td>✓ Yes</td></tr>
+  <tr><td><code>/opt/riggpt/transmission_log.db</code></td><td>SQLite: transmission log, trip transcripts, scenarios</td><td>Reinstall only</td></tr>
+  <tr><td><code>/opt/riggpt/wav_cache/</code></td><td>Cached TTS WAV files</td><td>Reinstall only</td></tr>
+</table>
+
+<h2 id="api-keys"><span class="h2-icon">26</span> API Keys</h2>
+<p>Keys are stored in <code>/home/riggpt/api_keys.json</code> encrypted with XOR using the fixed key <code>b'ic7610radioagent'</code>. This provides obfuscation against casual inspection but is not cryptographically strong — do not store keys on shared systems without additional access controls.</p>
+
+<p>When exporting config, you can choose masked export (safe to share) or plaintext key export (store securely — treat as sensitive).</p>
+
+<h2 id="backup"><span class="h2-icon">27</span> Export / Import</h2>
+<p>Config → Export/Import provides full backup and restore of all settings.</p>
+
+<ul>
+  <li><strong>EXPORT</strong> — downloads a JSON file containing all settings, agent presets, session parameters, and UI state. API keys are masked by default.</li>
+  <li><strong>EXPORT WITH KEYS</strong> — same, but includes plaintext API keys. Use for full migration to a new machine.</li>
+  <li><strong>IMPORT</strong> — uploads a previously exported JSON. Duplicate keys are skipped; a per-category result report is shown.</li>
+</ul>
+
+<div class="callout warn">
+  <div class="label">Before Exporting</div>
+  The export captures the current DOM state. Make sure you've set any settings you want to capture before clicking Export — the UI state is flushed to the backend immediately before the export file is generated.
+</div>
+
+<h2 id="keyboard"><span class="h2-icon">28</span> Keyboard Shortcuts</h2>
+<table>
+  <tr><th>Shortcut</th><th>Action</th></tr>
+  <tr><td><kbd>1</kbd>–<kbd>8</kbd></td><td>Switch to tab 1–8 (Dashboard through Acid Trip)</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Open command palette</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>.</kbd></td><td>Emergency PTT-OFF — terminate all transmission immediately</td></tr>
+  <tr><td><kbd>G</kbd></td><td>Gong (Taco Bell chime) from any tab</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════
+     API REFERENCE
+══════════════════════════════════════════════════════════ -->
+<h2 id="community-memory"><span class="h2-icon">40</span> Community Memory</h2>
+
+<p>The Community Memory system ingests your Discord channel history into a local <strong>Qdrant</strong> vector database, builds per-user personality profiles using a local LLM, and injects relevant community context into Acid Trip agent system prompts at runtime. Agents develop historical awareness of their audience — running jokes, technical obsessions, who argues about what — grounded in real conversation history.</p>
+
+<div class="callout tip">
+  <div class="label">RAG, Not Training</div>
+  Model weights are never modified. Community knowledge is injected as plain prose into the system prompt at runtime. Swap models freely — the memory system works with any engine. Knowledge updates take effect on the next ingest run with no restart required.
+</div>
+
+<!-- ── FLOW DIAGRAM ─────────────────────────────────────────────── -->
+<h3 id="memory-flow">Agent Knowledge Flow</h3>
+
+<p>The diagram below shows how personality and community knowledge flow from raw Discord history into agent speech at transmit time.</p>
+
+<div style="overflow-x:auto; margin:1.5rem 0;">
+<svg viewBox="0 0 860 540" xmlns="http://www.w3.org/2000/svg"
+     style="width:100%;max-width:860px;font-family:monospace;background:#0a0a0a;border:1px solid #333;display:block;">
+
+  <!-- ── defs: arrowhead ── -->
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555"/>
+    </marker>
+    <marker id="arr-grn" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#22c55e"/>
+    </marker>
+    <marker id="arr-amb" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
+    </marker>
+    <marker id="arr-cyn" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#06b6d4"/>
+    </marker>
+  </defs>
+
+  <!-- ═══════════════ LEFT COLUMN: DATA SOURCES ═══════════════ -->
+  <text x="90" y="28" text-anchor="middle" fill="#666" font-size="10" letter-spacing="1">DATA SOURCES</text>
+
+  <!-- Discord history box -->
+  <rect x="10" y="40" width="160" height="44" rx="3" fill="#111" stroke="#444"/>
+  <text x="90" y="57" text-anchor="middle" fill="#7dd3fc" font-size="11" font-weight="bold">Discord Channel</text>
+  <text x="90" y="72" text-anchor="middle" fill="#555" font-size="9">29 000+ messages</text>
+
+  <!-- Canon files box -->
+  <rect x="10" y="104" width="160" height="44" rx="3" fill="#111" stroke="#444"/>
+  <text x="90" y="121" text-anchor="middle" fill="#7dd3fc" font-size="11" font-weight="bold">Canon Files</text>
+  <text x="90" y="136" text-anchor="middle" fill="#555" font-size="9">/canon/a  /canon/b</text>
+
+  <!-- Operator persona box -->
+  <rect x="10" y="168" width="160" height="44" rx="3" fill="#111" stroke="#444"/>
+  <text x="90" y="185" text-anchor="middle" fill="#7dd3fc" font-size="11" font-weight="bold">Agent Persona</text>
+  <text x="90" y="200" text-anchor="middle" fill="#555" font-size="9">Acid Trip tab — A / B config</text>
+
+  <!-- Live Discord lookback box -->
+  <rect x="10" y="232" width="160" height="44" rx="3" fill="#111" stroke="#444"/>
+  <text x="90" y="249" text-anchor="middle" fill="#7dd3fc" font-size="11" font-weight="bold">Live Discord</text>
+  <text x="90" y="264" text-anchor="middle" fill="#555" font-size="9">Lookback / Interact</text>
+
+  <!-- ═══════════════ INGEST PIPELINE ═══════════════ -->
+  <text x="335" y="28" text-anchor="middle" fill="#666" font-size="10" letter-spacing="1">INGEST PIPELINE  (riggpt-ingest.py)</text>
+
+  <!-- nomic-embed-text box -->
+  <rect x="215" y="40" width="150" height="44" rx="3" fill="#111" stroke="#f59e0b" stroke-width="1"/>
+  <text x="290" y="57" text-anchor="middle" fill="#f59e0b" font-size="11" font-weight="bold">nomic-embed-text</text>
+  <text x="290" y="72" text-anchor="middle" fill="#555" font-size="9">Ollama  —  768-dim vectors</text>
+
+  <!-- LLM profiler box -->
+  <rect x="215" y="104" width="150" height="44" rx="3" fill="#111" stroke="#f59e0b" stroke-width="1"/>
+  <text x="290" y="121" text-anchor="middle" fill="#f59e0b" font-size="11" font-weight="bold">qwen3:14b</text>
+  <text x="290" y="136" text-anchor="middle" fill="#555" font-size="9">Profile + thread summary LLM</text>
+
+  <!-- thread cluster box -->
+  <rect x="215" y="168" width="150" height="44" rx="3" fill="#111" stroke="#f59e0b" stroke-width="1"/>
+  <text x="290" y="181" text-anchor="middle" fill="#f59e0b" font-size="11" font-weight="bold">cluster_threads()</text>
+  <text x="290" y="196" text-anchor="middle" fill="#555" font-size="9">reply chains + 5-min windows</text>
+  <text x="290" y="208" text-anchor="middle" fill="#555" font-size="9">→ summarise_thread()</text>
+
+  <!-- cron box -->
+  <rect x="215" y="232" width="150" height="44" rx="3" fill="#111" stroke="#444"/>
+  <text x="290" y="249" text-anchor="middle" fill="#aaa" font-size="11" font-weight="bold">cron  every 4h</text>
+  <text x="290" y="264" text-anchor="middle" fill="#555" font-size="9">--delta  incremental update</text>
+
+  <!-- arrows: discord → embed -->
+  <line x1="170" y1="62" x2="213" y2="62" stroke="#555" stroke-width="1.2" marker-end="url(#arr)"/>
+  <!-- discord → LLM profiler -->
+  <line x1="170" y1="62" x2="195" y2="62" stroke="none"/>
+  <polyline points="170,62 195,62 195,126 213,126" fill="none" stroke="#555" stroke-width="1.2" marker-end="url(#arr)"/>
+  <!-- discord → thread cluster -->
+  <polyline points="170,62 195,62 195,190 213,190" fill="none" stroke="#555" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════ QDRANT ═══════════════ -->
+  <text x="530" y="28" text-anchor="middle" fill="#666" font-size="10" letter-spacing="1">QDRANT  (192.168.40.15:6333)</text>
+
+  <!-- discord_messages -->
+  <rect x="410" y="40" width="170" height="52" rx="3" fill="#111" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="495" y="58" text-anchor="middle" fill="#22c55e" font-size="11" font-weight="bold">discord_messages</text>
+  <text x="495" y="72" text-anchor="middle" fill="#555" font-size="9">content · author_username · author_display</text>
+  <text x="495" y="84" text-anchor="middle" fill="#555" font-size="9">author_id · timestamp · has_attachment</text>
+
+  <!-- user_profiles -->
+  <rect x="410" y="108" width="170" height="52" rx="3" fill="#111" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="495" y="126" text-anchor="middle" fill="#22c55e" font-size="11" font-weight="bold">user_profiles</text>
+  <text x="495" y="140" text-anchor="middle" fill="#555" font-size="9">display_name · communication_style</text>
+  <text x="495" y="152" text-anchor="middle" fill="#555" font-size="9">dominant_topics · humor_style · role</text>
+
+  <!-- conversation_threads -->
+  <rect x="410" y="176" width="170" height="52" rx="3" fill="#111" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="495" y="194" text-anchor="middle" fill="#22c55e" font-size="11" font-weight="bold">conversation_threads</text>
+  <text x="495" y="208" text-anchor="middle" fill="#555" font-size="9">summary · participant_displays</text>
+  <text x="495" y="220" text-anchor="middle" fill="#555" font-size="9">message_count · timestamp</text>
+
+  <!-- channel_themes -->
+  <rect x="410" y="244" width="170" height="52" rx="3" fill="#111" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="495" y="262" text-anchor="middle" fill="#22c55e" font-size="11" font-weight="bold">channel_themes</text>
+  <text x="495" y="276" text-anchor="middle" fill="#555" font-size="9">community_character · running_jokes</text>
+  <text x="495" y="288" text-anchor="middle" fill="#555" font-size="9">distinctive_phrases · recurring_topics</text>
+
+  <!-- arrows: embed → discord_messages -->
+  <line x1="365" y1="62" x2="408" y2="66" stroke="#f59e0b" stroke-width="1.2" marker-end="url(#arr-amb)"/>
+  <!-- LLM → user_profiles -->
+  <line x1="365" y1="126" x2="408" y2="132" stroke="#f59e0b" stroke-width="1.2" marker-end="url(#arr-amb)"/>
+  <!-- thread cluster → conversation_threads -->
+  <line x1="365" y1="194" x2="408" y2="198" stroke="#f59e0b" stroke-width="1.2" marker-end="url(#arr-amb)"/>
+  <!-- LLM → channel_themes (curves down) -->
+  <polyline points="365,126 390,126 390,268 408,268" fill="none" stroke="#f59e0b" stroke-width="1.2" marker-end="url(#arr-amb)"/>
+
+  <!-- ═══════════════ RUNTIME ═══════════════ -->
+  <text x="730" y="28" text-anchor="middle" fill="#666" font-size="10" letter-spacing="1">RUNTIME  (memory.py  →  app.py)</text>
+
+  <!-- build_briefing box -->
+  <rect x="610" y="40" width="160" height="52" rx="3" fill="#111" stroke="#06b6d4" stroke-width="1.2"/>
+  <text x="690" y="58" text-anchor="middle" fill="#06b6d4" font-size="11" font-weight="bold">build_briefing()</text>
+  <text x="690" y="72" text-anchor="middle" fill="#555" font-size="9">turn 0 only — threads + profiles</text>
+  <text x="690" y="84" text-anchor="middle" fill="#555" font-size="9">+ themes → one-time briefing</text>
+
+  <!-- build_context box -->
+  <rect x="610" y="108" width="160" height="52" rx="3" fill="#111" stroke="#06b6d4" stroke-width="1.2"/>
+  <text x="690" y="126" text-anchor="middle" fill="#06b6d4" font-size="11" font-weight="bold">build_context()</text>
+  <text x="690" y="140" text-anchor="middle" fill="#555" font-size="9">turns 1+  — profiles + threads</text>
+  <text x="690" y="152" text-anchor="middle" fill="#555" font-size="9">+ past message echoes (≤ turn 3)</text>
+
+  <!-- system prompt assembly box -->
+  <rect x="610" y="176" width="160" height="52" rx="3" fill="#111" stroke="#a855f7" stroke-width="1.2"/>
+  <text x="690" y="190" text-anchor="middle" fill="#a855f7" font-size="11" font-weight="bold">System Prompt</text>
+  <text x="690" y="204" text-anchor="middle" fill="#555" font-size="9">persona + canon + memory ctx</text>
+  <text x="690" y="216" text-anchor="middle" fill="#555" font-size="9">+ live Discord lookback</text>
+  <text x="690" y="228" text-anchor="middle" fill="#555" font-size="9">→ /api/ai/chat</text>
+
+  <!-- TTS + PTT box -->
+  <rect x="610" y="252" width="160" height="52" rx="3" fill="#111" stroke="#ef4444" stroke-width="1.2"/>
+  <text x="690" y="270" text-anchor="middle" fill="#ef4444" font-size="11" font-weight="bold">TTS  →  PTT  →  RF</text>
+  <text x="690" y="284" text-anchor="middle" fill="#555" font-size="9">WAV render · CI-V key · transmit</text>
+  <text x="690" y="296" text-anchor="middle" fill="#555" font-size="9">SSE audience page updated</text>
+
+  <!-- Qdrant → build_briefing -->
+  <line x1="580" y1="66" x2="608" y2="66" stroke="#22c55e" stroke-width="1.2" marker-end="url(#arr-grn)"/>
+  <!-- Qdrant → build_context -->
+  <line x1="580" y1="134" x2="608" y2="134" stroke="#22c55e" stroke-width="1.2" marker-end="url(#arr-grn)"/>
+  <!-- Qdrant → build_context (threads) -->
+  <polyline points="580,200 596,200 596,152 608,152" fill="none" stroke="#22c55e" stroke-width="1.2" marker-end="url(#arr-grn)"/>
+
+  <!-- briefing → system prompt -->
+  <polyline points="690,92 690,100 650,100 650,174" fill="none" stroke="#06b6d4" stroke-width="1.2" marker-end="url(#arr-cyn)"/>
+  <!-- build_context → system prompt -->
+  <line x1="690" y1="160" x2="690" y2="174" stroke="#06b6d4" stroke-width="1.2" marker-end="url(#arr-cyn)"/>
+
+  <!-- system prompt → TTS -->
+  <line x1="690" y1="228" x2="690" y2="250" stroke="#a855f7" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- canon + persona → system prompt (from left column) -->
+  <polyline points="170,190 200,190 200,330 600,330 600,202 608,202" fill="none" stroke="#444" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <polyline points="170,126 205,126 205,335 602,335 602,210 608,210" fill="none" stroke="#444" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- live discord → system prompt -->
+  <polyline points="170,254 207,254 207,340 604,340 604,218 608,218" fill="none" stroke="#444" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════ LEGEND ═══════════════ -->
+  <rect x="10" y="420" width="840" height="1" fill="#222"/>
+  <text x="20" y="444" fill="#666" font-size="9">LEGEND:</text>
+  <line x1="72" y1="440" x2="100" y2="440" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arr-amb)"/>
+  <text x="104" y="444" fill="#888" font-size="9">Ollama pipeline (embed / summarise)</text>
+  <line x1="280" y1="440" x2="308" y2="440" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arr-grn)"/>
+  <text x="312" y="444" fill="#888" font-size="9">Qdrant vector search (cosine similarity)</text>
+  <line x1="500" y1="440" x2="528" y2="440" stroke="#06b6d4" stroke-width="1.5" marker-end="url(#arr-cyn)"/>
+  <text x="532" y="444" fill="#888" font-size="9">Memory context injection</text>
+  <line x1="680" y1="440" x2="708" y2="440" stroke="#444" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="712" y="444" fill="#888" font-size="9">Static config (no network)</text>
+
+  <!-- turn labels -->
+  <rect x="10" y="462" width="840" height="58" rx="3" fill="#0d0d0d" stroke="#222"/>
+  <text x="20" y="478" fill="#555" font-size="9" font-weight="bold">TURN 0 — BRIEFING</text>
+  <text x="20" y="492" fill="#888" font-size="9">build_briefing() fires once. Injects: top 4 threads on topic + audience profiles + running jokes. Both agents A and B receive identical briefing.</text>
+  <text x="20" y="506" fill="#555" font-size="9" font-weight="bold">TURNS 1–3 — CONTEXT</text>
+  <text x="20" y="520" fill="#888" font-size="9">build_context() per agent. Injects: Community DNA (1hr cache) + 2-3 relevant profiles + 3 thread summaries + past message echoes. Agent A and B use different query angles.</text>
+  <text x="20" y="506" fill="#555" font-size="9" font-weight="bold" dy="14">TURNS 4+ — LEAN</text>
+  <text x="450" y="506" fill="#888" font-size="9">Community DNA + profiles only. Past echoes and threads dropped. Live Discord Lookback carries</text>
+  <text x="450" y="520" fill="#888" font-size="9">audience signal forward from here.</text>
+</svg>
+</div>
+
+<!-- ── HOW QDRANT WORKS ─────────────────────────────────────────── -->
+<h3 id="memory-qdrant">How Qdrant Works</h3>
+
+<p>Qdrant is a vector database — it stores documents alongside their mathematical representations (vectors) and answers queries like "find me the 5 documents most semantically similar to this phrase" in milliseconds. RigGPT uses it as a long-term memory layer that no SQL database could replicate: meaning-based retrieval rather than keyword matching.</p>
+
+<h4>Vectors and Embeddings</h4>
+<p>Every piece of text stored in Qdrant is first passed through <code>nomic-embed-text</code> — a local Ollama embedding model that converts text into a 768-dimensional vector (a list of 768 floating-point numbers). Semantically similar texts produce geometrically close vectors. "Antenna tuner SWR problems" and "my coax has high VSWR" will have closer vectors than "antenna tuner SWR problems" and "I had pizza for lunch." Qdrant searches using <strong>cosine similarity</strong>: the angle between vectors, where 0° = identical meaning and 90° = unrelated.</p>
+
+<h4>The Four Collections</h4>
+<table>
+  <tr><th>Collection</th><th>One document = </th><th>Payload fields</th><th>Rebuilt</th></tr>
+  <tr>
+    <td><code>discord_messages</code></td>
+    <td>One Discord message</td>
+    <td><code>content</code>, <code>author_username</code>, <code>author_display</code>, <code>author_id</code>, <code>author_hash</code>, <code>timestamp</code>, <code>has_attachment</code></td>
+    <td>New messages only (delta)</td>
+  </tr>
+  <tr>
+    <td><code>user_profiles</code></td>
+    <td>One community member's behavioral profile</td>
+    <td><code>display_name</code>, <code>communication_style</code>, <code>dominant_topics</code>, <code>humor_style</code>, <code>audience_role</code>, <code>recurring_themes</code>, <code>emotional_register</code>, <code>technical_depth</code>, <code>message_count</code></td>
+    <td>Only users with new messages (delta)</td>
+  </tr>
+  <tr>
+    <td><code>conversation_threads</code></td>
+    <td>One clustered conversation thread</td>
+    <td><code>summary</code>, <code>participant_displays</code>, <code>participant_usernames</code>, <code>message_count</code>, <code>participant_count</code>, <code>timestamp</code>, <code>first_message_id</code></td>
+    <td>New delta messages at 100% sample; full ingest at 40% sample + all 5+ message threads</td>
+  </tr>
+  <tr>
+    <td><code>channel_themes</code></td>
+    <td>Single channel-wide summary document</td>
+    <td><code>community_character</code>, <code>running_jokes_or_references</code>, <code>distinctive_phrases</code>, <code>recurring_topics</code>, <code>emotional_register</code>, <code>notable_events</code></td>
+    <td>Every delta run (fast — samples recent messages only)</td>
+  </tr>
+</table>
+
+<h4>Thread Clustering Algorithm</h4>
+<p>The <code>cluster_threads()</code> function groups messages into conversation threads without requiring Discord thread IDs. A new thread starts when both of these are true: the message does not reference (reply to) any message in the current thread, <em>and</em> more than 5 minutes have elapsed since the last message. This catches natural conversation breaks — topic shifts after silence — as well as explicit reply chains. Only threads with 2 or more participants are stored.</p>
+<p>Thread summaries are generated by <code>qwen3:14b</code> with a prompt that names participants and captures what was actually said — not a generic summary, but a specific one: "Dave and K4ABC argued about whether FT8 counts as a real contact, with K4ABC eventually conceding the point."</p>
+
+<h4>Point IDs</h4>
+<p>Qdrant requires integer point IDs. Discord message IDs are <strong>snowflakes</strong> — 64-bit integers encoding timestamp + worker + sequence. RigGPT stores the lower 63 bits (<code>int(message_id) &amp; 0x7FFFFFFFFFFFFFFF</code>) to stay within Qdrant's signed 64-bit range. This makes every message's point ID stable and deterministic — re-running ingest on the same message is an upsert, not a duplicate insert.</p>
+
+<h4>Payload Indexes</h4>
+<p>Qdrant payload indexes allow fast filtering without scanning all vectors. RigGPT creates indexes on <code>author_hash</code>, <code>author_username</code>, and <code>timestamp_unix</code> in <code>discord_messages</code>, and on <code>participant_usernames</code> and <code>timestamp_unix</code> in <code>conversation_threads</code>. These are used by the ingest pipeline to efficiently retrieve all messages for a given user when rebuilding their profile.</p>
+
+<h4>Cosine Score Thresholds</h4>
+<p>Each collection has a minimum similarity threshold below which results are discarded:</p>
+<table>
+  <tr><th>Collection</th><th>Threshold</th><th>Rationale</th></tr>
+  <tr><td><code>discord_messages</code></td><td>0.30</td><td>Loose — cast a wide net for related content</td></tr>
+  <tr><td><code>user_profiles</code></td><td>0.35</td><td>Slightly tighter — profile must actually relate to topic</td></tr>
+  <tr><td><code>conversation_threads</code></td><td>0.40</td><td>Strictest — only inject threads clearly on-topic</td></tr>
+</table>
+
+<!-- ── INGESTION ─────────────────────────────────────────────────── -->
+<h3 id="memory-ingest">Ingestion</h3>
+
+<p>The ingestion pipeline lives in <code>memory/riggpt-ingest.py</code>. It runs independently of the Flask app — deploy it on any machine that can reach Discord's API and your Qdrant instance.</p>
+
+<h4>First Run (full history)</h4>
+<pre>
+<span class="cm"># Set credentials</span>
+<span class="kw">export</span> DISCORD_TOKEN=<span class="st">"Bot your-bot-token"</span>
+<span class="kw">export</span> DISCORD_CHANNEL_ID=<span class="st">"channel-snowflake-id"</span>
+<span class="kw">export</span> QDRANT_HOST=<span class="st">"http://192.168.40.15:6333"</span>
+<span class="kw">export</span> OLLAMA_HOST=<span class="st">"http://192.168.40.15:11434"</span>
+
+<span class="cm"># One-time full ingest (checkpoint-resumable)</span>
+python3 /opt/riggpt-memory/riggpt-ingest.py --full
+</pre>
+
+<div class="callout warn">
+  <div class="label">Checkpoint Gotcha</div>
+  The full ingest is checkpoint-resumable — if interrupted, re-run <code>--full</code> and it picks up from the last processed message. However, if you drop and recreate the Qdrant collections (e.g. to add new fields), you must also delete the checkpoint file first:
+  <pre style="margin-top:0.5rem">rm /home/riggpt/memory_checkpoint.json</pre>
+  Without this, the script will see no messages older than the checkpoint and report "0 messages fetched."
+</div>
+
+<p>Expected timing on an RTX-class GPU running <code>qwen3:14b</code> with <code>nomic-embed-text</code>:</p>
+<table>
+  <tr><th>Phase</th><th>Time (29k messages)</th><th>Bottleneck</th></tr>
+  <tr><td>Message fetch from Discord API</td><td>2–5 min</td><td>Discord rate limit (50 req/s)</td></tr>
+  <tr><td>Embedding pass (nomic-embed-text)</td><td>10–20 min</td><td>Ollama throughput</td></tr>
+  <tr><td>Thread clustering + summarisation</td><td>15–30 min</td><td>qwen3:14b inference (40% sample)</td></tr>
+  <tr><td>Profile generation (467 users)</td><td>10–20 min</td><td>qwen3:14b inference</td></tr>
+  <tr><td>Channel themes</td><td>1–2 min</td><td>Single LLM call</td></tr>
+</table>
+
+<h4>Incremental Updates (delta)</h4>
+<pre>
+<span class="cm"># Only ingests messages newer than last known ID</span>
+<span class="cm"># Rebuilds only profiles for users with new messages</span>
+<span class="cm"># Thread summaries for new messages at 100% sample rate</span>
+python3 /opt/riggpt-memory/riggpt-ingest.py --delta
+</pre>
+
+<p>Delta runs are efficient by design. A typical 4-hour window on an active channel processes tens to hundreds of messages. The cron wrapper at <code>/opt/riggpt-memory/run-delta.sh</code> injects credentials and calls <code>--delta</code>.</p>
+
+<h4>Standalone Rebuilds</h4>
+<pre>
+<span class="cm"># Rebuild only profiles (fast after fixing a profiling bug)</span>
+python3 /opt/riggpt-memory/riggpt-ingest.py --profiles-only
+
+<span class="cm"># Rebuild only thread summaries from stored messages</span>
+python3 /opt/riggpt-memory/riggpt-ingest.py --threads-only
+
+<span class="cm"># Print collection statistics</span>
+python3 /opt/riggpt-memory/riggpt-ingest.py --status
+</pre>
+
+<!-- ── CONTEXT INJECTION ──────────────────────────────────────────── -->
+<h3 id="memory-context">Context Injection</h3>
+
+<p>When memory is enabled, <code>memory.build_context()</code> or <code>memory.build_briefing()</code> is called for every <code>/api/ai/chat</code> request from Acid Trip. The result is appended to the system prompt as plain prose — no headers, no JSON, indistinguishable from the core persona text.</p>
+
+<h4>Turn 0: Pre-Trip Briefing</h4>
+<p>On the very first turn of a trip (<code>trip_turn=0</code>), both agents receive a richer one-time briefing built by <code>build_briefing()</code>. This gives agents shared grounding before a single word is said on air:</p>
+<ol>
+  <li><strong>Past thread summaries</strong> — the top 4 conversation threads from Qdrant most relevant to the trip topic. Named participants included. "Dave and K4ABC argued about this for three days in January."</li>
+  <li><strong>Relevant audience members</strong> — the 4 user profiles most closely matched to the topic, with name, role, usual topics, and humor style.</li>
+  <li><strong>Running community references</strong> — pulled from <code>channel_themes.running_jokes_or_references</code>. Phrases and in-jokes the agents can drop naturally.</li>
+</ol>
+
+<h4>Turns 1–3: Per-Turn Context</h4>
+<p>Built by <code>build_context()</code> with three layers:</p>
+<ol>
+  <li><strong>Community DNA</strong> — the channel-level character profile, cached for 1 hour. Always included. Covers overall vibe, humor culture, recurring phrases, what this community actually cares about.</li>
+  <li><strong>Audience profiles</strong> — 2–3 user profiles most semantically relevant to the current topic, retrieved fresh each turn. Agents A and B use different query angles so they encounter different community facets.</li>
+  <li><strong>Thread summaries</strong> — 3 conversation threads close to the topic. Injected as "Past conversations in this community on related topics."</li>
+  <li><strong>Past message echoes</strong> — a semantic search for raw Discord messages close to the topic. Injected as background memory: "this community has talked about similar things before." Turns 0–3 only.</li>
+</ol>
+
+<h4>Turns 4+: Lean Mode</h4>
+<p>Community DNA and audience profiles only. Past echoes and threads are dropped to keep the prompt lean. The Discord Lookback system carries live audience signal from this point forward.</p>
+
+<div class="callout info">
+  <div class="label">What Agents Actually Receive</div>
+  Memory context is injected as natural prose, not labeled blocks. The agent sees something like: <em>"The people listening to you right now include: Dave (technical expert) — usually talks about weak signal modes, humor style: dry and literal. [K4ABC] argues regularly with Dave about FT8 operating ethics. Past conversations on related topics: [Dave, K4ABC] Dave made the case that FT8 contacts don't count as real QSOs — K4ABC eventually conceded after a long argument. Running references you can drop naturally: 'the SWR incident', 'Dave's shack fire of 2021'."</em>
+</div>
+
+<!-- ── SETUP GUIDE ─────────────────────────────────────────────────── -->
+<h3 id="memory-setup">Setup Guide</h3>
+
+<h4>1. Qdrant (Docker)</h4>
+<pre>
+<span class="cm"># Deploy Qdrant (or use included docker-compose.yml)</span>
+docker run -d --name qdrant \
+  --restart unless-stopped \
+  -p 6333:6333 \
+  -v qdrant_storage:/qdrant/storage \
+  qdrant/qdrant
+
+<span class="cm"># Verify</span>
+curl http://localhost:6333/healthz
+</pre>
+
+<h4>2. Ollama with GPU (Docker)</h4>
+<pre>
+docker run -d --name ollama --gpus all \
+  --restart unless-stopped \
+  -p 11434:11434 \
+  -v ollama:/root/.ollama \
+  ollama/ollama
+
+<span class="cm"># Pull required models</span>
+docker exec ollama ollama pull nomic-embed-text
+docker exec ollama ollama pull qwen3:14b
+
+<span class="cm"># Verify GPU access</span>
+docker exec ollama nvidia-smi
+</pre>
+
+<div class="callout warn">
+  <div class="label">GPU Access After Reboot</div>
+  If <code>nvidia-smi</code> returns "Failed to initialize NVML" after a host reboot, the container started before the NVIDIA kernel modules were ready. Fix:
+  <pre style="margin-top:0.5rem">docker restart ollama
+docker exec ollama nvidia-smi</pre>
+  To prevent this permanently, add a systemd drop-in that makes Docker wait for the NVIDIA runtime:
+  <pre style="margin-top:0.5rem">mkdir -p /etc/systemd/system/docker.service.d
+echo -e "[Unit]\nAfter=nvidia-persistenced.service" \
+  > /etc/systemd/system/docker.service.d/nvidia-wait.conf
+systemctl daemon-reload</pre>
+</div>
+
+<h4>3. Deploy ingest scripts</h4>
+<pre>
+mkdir -p /opt/riggpt-memory
+cp memory/riggpt-ingest.py /opt/riggpt-memory/
+cp memory/memory.py /opt/riggpt-memory/
+pip3 install requests qdrant-client --break-system-packages
+</pre>
+
+<h4>4. Configure credentials</h4>
+<pre>
+<span class="cm"># Create credentials wrapper (or use riggpt-cron-setup.sh)</span>
+cat > /opt/riggpt-memory/run-delta.sh &lt;&lt; 'EOF'
+#!/bin/bash
+export DISCORD_TOKEN="Bot your-token-here"
+export DISCORD_CHANNEL_ID="your-channel-snowflake-id"
+export QDRANT_HOST="http://192.168.40.15:6333"
+export OLLAMA_HOST="http://192.168.40.15:11434"
+python3 /opt/riggpt-memory/riggpt-ingest.py --delta >> /var/log/riggpt-ingest.log 2>&amp;1
+EOF
+chmod +x /opt/riggpt-memory/run-delta.sh
+</pre>
+
+<h4>5. Full ingest</h4>
+<pre>
+<span class="cm"># Source credentials, then run full ingest</span>
+<span class="kw">export</span> DISCORD_TOKEN=<span class="st">"Bot your-token-here"</span>
+<span class="kw">export</span> DISCORD_CHANNEL_ID=<span class="st">"your-channel-id"</span>
+python3 /opt/riggpt-memory/riggpt-ingest.py --full
+
+<span class="cm"># Monitor progress</span>
+<span class="cm"># Expect 45-90 min total for 4-5 years of history</span>
+</pre>
+
+<h4>6. Cron setup</h4>
+<pre>
+<span class="cm"># /etc/cron.d/riggpt-memory</span>
+<span class="num">0</span> */4 * * * root /opt/riggpt-memory/run-delta.sh
+</pre>
+
+<h4>7. Verify and enable in RigGPT</h4>
+<pre>
+python3 /opt/riggpt-memory/riggpt-ingest.py --status
+<span class="cm"># Should show counts for all 4 collections</span>
+</pre>
+<p>In Config &rarr; Community Memory:</p>
+<ul>
+  <li>Set <strong>QDRANT HOST</strong> to your Qdrant address</li>
+  <li>Set <strong>EMBED MODEL</strong> to <code>nomic-embed-text</code></li>
+  <li>Check <strong>ENABLED</strong> and save</li>
+  <li>Click <strong>STATUS</strong> — should show message and profile counts for all 4 collections</li>
+  <li>Click <strong>TEST QUERY</strong> — enter any topic your Discord discusses and verify results come back</li>
+  <li>To preview a full briefing: set collection to <code>briefing</code> in TEST QUERY and enter a trip topic</li>
+</ul>
+
+
+
+
+<h2 id="api-radio"><span class="h2-icon">40</span> API: Radio</h2>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/connect</code></div>
+<p>Connect to radio. Body: <code>{"port": "/dev/ttyIC7610", "baud_rate": 57600, "ci_v_address": "0x98"}</code></p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/disconnect</code></div>
+<p>Disconnect from radio.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/radio/frequency</code></div>
+<p>Returns current VFO frequency in Hz.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/radio/frequency</code></div>
+<p>Set frequency. Body: <code>{"frequency_hz": 14225000}</code></p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/radio/mode</code></div>
+<p>Returns current operating mode string.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/radio/mode</code></div>
+<p>Set mode. Body: <code>{"mode": "USB"}</code></p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/ptt</code></div>
+<p>Manual PTT control. Body: <code>{"state": true}</code> or <code>{"state": false}</code></p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/radio/profiles</code></div>
+<p>Returns all radio profiles with CI-V addresses, baud rates, and audio hints.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/radio/probe</code></div>
+<p>Scan CI-V addresses 0x80–0xA0 and return which one responds.</p>
+
+<h2 id="api-transmit"><span class="h2-icon">40</span> API: Transmit</h2>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/transmit</code></div>
+<p>Synthesise and transmit with PTT. Body:</p>
+<pre>{"text": "CQ CQ CQ", "engine": "espeak", "voice": "en-us+m3",
+ "preset": "normal", "pitch": 0, "reverb": 0, "echo": 0,
+ "repeat": 1, "delay": 2}</pre>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/transmit/preview</code></div>
+<p>Synthesise and play without PTT. Same body as <code>/api/transmit</code>.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/tx/terminate</code></div>
+<p>Emergency stop. Immediately terminates any active transmission and releases PTT.</p>
+
+<h2 id="api-ai"><span class="h2-icon">40</span> API: AI / Chat</h2>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/ai/chat</code></div>
+<p>Send a conversation to the AI. Used internally by Acid Trip. Body:</p>
+<pre>{"messages": [{"role": "user", "content": "Hello"}],
+ "system": "You are...",
+ "temperature": 1.1,
+ "max_tokens": 80,
+ "model": "qwen2.5:7b",
+ "transmit": false}</pre>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/ai/models</code></div>
+<p>List available Ollama models.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/voices/{engine}</code></div>
+<p>List available voices for an engine. Engine values: <code>espeak</code>, <code>piper</code>, <code>edge</code>, <code>gtts</code>, <code>openai</code>, <code>elevenlabs</code>, <code>speechify</code>, <code>fastkoko</code>.</p>
+
+<h2 id="api-discord"><span class="h2-icon">40</span> API: Discord</h2>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/discord/status</code></div>
+<p>Returns connection status, bot name, channel name, message count, and current sequence number.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/discord/messages</code></div>
+<p>Returns buffered messages. Query param: <code>?limit=10</code></p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/discord/config</code></div>
+<p>Update Discord configuration. Body: <code>{"token": "...", "guild_id": "...", "channel_id": "...", "apply": true}</code></p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/discord/clear</code></div>
+<p>Clear the message buffer.</p>
+
+<h2 id="api-trip"><span class="h2-icon">40</span> API: Acid Trip</h2>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/trip/stream</code></div>
+<p>SSE stream. Events: <code>start</code>, <code>turn</code>, <code>chaos</code>, <code>finish</code>. Used by the live audience page.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/trip/event</code></div>
+<p>Internal — broadcast an event to all SSE subscribers.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/trip/transcripts</code></div>
+<p>List all saved trip transcripts.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/trip/transcripts</code></div>
+<p>Save a transcript. Body: <code>{"topic": "...", "transcript": "..."}</code></p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/trip/scenarios</code></div>
+<p>List all saved scenarios.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/trip/scenarios</code></div>
+<p>Save a scenario. Body: full trip configuration object.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/canon/list</code></div>
+<p>Returns <code>{"files": {"a": [...], "b": [...]&#125;&#125;</code> listing <code>.md</code> files in canon directories.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/canon/file</code></div>
+<p>Read a canon file. Query params: <code>?agent=a&amp;name=filename.md</code></p>
+
+<h2 id="api-schedule"><span class="h2-icon">40</span> API: Schedule / Beacon</h2>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/beacon</code></div>
+<p>List all beacons.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/beacon</code></div>
+<p>Create a beacon. Body includes cron, text, engine, voice, tx fields.</p>
+
+<div class="route"><span class="method DELETE">DELETE</span> <code>/api/beacon/{bid}</code></div>
+<p>Delete a beacon by ID.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/beacon/{bid}/fire</code></div>
+<p>Trigger a beacon immediately.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/beacon/{bid}/pause</code></div>
+<p>Toggle a beacon's enabled state.</p>
+
+<h2 id="api-log"><span class="h2-icon">40</span> API: Log</h2>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/log/transmissions</code></div>
+<p>List transmission log entries. Query params: <code>?limit=50&amp;offset=0</code></p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/log/export</code></div>
+<p>Export full log as CSV download.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/log/stats</code></div>
+<p>Returns aggregate stats: total count, total duration, engine breakdown.</p>
+
+<div class="route"><span class="method DELETE">DELETE</span> <code>/api/log/clear</code></div>
+<p>Clear all log entries.</p>
+
+<h2 id="api-settings"><span class="h2-icon">40</span> API: Settings</h2>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/settings</code></div>
+<p>Return all persisted settings as a flat JSON object.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/settings</code></div>
+<p>Merge settings. Only keys present in <code>ALLOWED_SETTINGS_KEYS</code> are accepted. Unknown keys are silently dropped.</p>
+
+<div class="route"><span class="method GET">GET</span> <code>/api/config/export</code></div>
+<p>Export full config JSON (masked keys). Add <code>?include_keys=true</code> for plaintext keys.</p>
+
+<div class="route"><span class="method POST">POST</span> <code>/api/config/import</code></div>
+<p>Import a previously exported config JSON.</p>
+
+<!-- ══════════════════════════════════════════════════════════
+     TROUBLESHOOTING
+══════════════════════════════════════════════════════════ -->
+<h2 id="troubleshoot"><span class="h2-icon">43</span> Troubleshooting</h2>
+
+<!-- ── RADIO / AUDIO ─────────────────────────────────────────────── -->
+<h3>No audio output / PTT activates but no sound</h3>
+<ul>
+  <li>Check the ALSA device in Config &rarr; Audio Devices. The IC-7610 appears as a Burr-Brown / PCM2901 USB audio device.</li>
+  <li>Verify the radio is in USB mode and the USB audio codec is selected in the radio's audio settings (Menu &rarr; Connectors).</li>
+  <li>Run <code>aplay -l</code> on the server to list available cards. Update <code>RIGGPT_AUDIO_DEVICE</code> in the systemd unit if needed.</li>
+  <li>Check <code>journalctl -u riggpt -f</code> for sounddevice errors. "Invalid device" means the card index changed — re-list with <code>aplay -l</code> after reconnecting USB.</li>
+</ul>
+
+<h3>PTT not working / radio not keying</h3>
+<ul>
+  <li>Verify CI-V address. Use Config &rarr; Debug &rarr; CIV PROBE to scan for the responding address.</li>
+  <li>Check baud rate matches the radio's CI-V baud setting (Menu &rarr; Connectors &rarr; CI-V Baud Rate on the IC-7610).</li>
+  <li>Ensure the <code>riggpt</code> service user is in the <code>dialout</code> group: <code>groups riggpt</code>. If not: <code>usermod -aG dialout riggpt</code> then restart the service.</li>
+  <li>Check <code>journalctl -u riggpt -f</code> for serial port errors. "Permission denied" on <code>/dev/ttyUSB0</code> is the dialout group issue.</li>
+</ul>
+
+<h3>Transmission cuts off mid-sentence</h3>
+<ul>
+  <li>The WAV file may be longer than the PTT timeout. Increase the TX timeout value in Config &rarr; Radio or use a shorter MAX TOK value for AI generation.</li>
+  <li>For Acid Trip: check the DELAY setting. Insufficient gap between turns can cause the next PTT to pre-empt the current transmission.</li>
+</ul>
+
+<!-- ── AI / TTS ──────────────────────────────────────────────────── -->
+<h3>AI generation fails / "AI ERROR" in Acid Trip log</h3>
+<ul>
+  <li>For Ollama: verify the host is reachable (<code>curl http://your-host:11434</code>) and the model is loaded (<code>ollama list</code>). The model must appear in the list — if it was recently pulled, wait for the pull to complete.</li>
+  <li>For OpenAI / Gemini / ElevenLabs: check the API key in Config &rarr; Integrations. Use the TEST button. A 401 error means wrong or expired key. A 429 means rate limit — reduce request frequency or upgrade tier.</li>
+  <li>Acid Trip debug log (bottom of Acid Trip tab, DEBUG section) shows full error details including HTTP status codes and response bodies.</li>
+  <li>"latin-1 encoding error" in server logs means a non-ASCII character (em-dash, smart quote) slipped into a response string. This is a backend bug — report it with the offending response text.</li>
+</ul>
+
+<h3>TTS produces no audio / silent WAV file</h3>
+<ul>
+  <li>Speechify: exit code 69 means the Speechify desktop app is not running or is not logged in. Launch Speechify on the server machine and ensure you are logged in.</li>
+  <li>Edge TTS / gTTS: requires outbound internet. Check connectivity from the server.</li>
+  <li>Piper / eSpeak: verify the model file path is correct in the TTS engine config. Run <code>piper --help</code> to confirm the binary is in PATH.</li>
+  <li>FastKoko: verify the Kokoro service is running at the configured URL. Check <code>curl http://localhost:8880/health</code>.</li>
+  <li>For any engine: check <code>/opt/riggpt/wav_cache/</code> — if WAV files are being created but are 0 bytes or very small, the TTS call succeeded but rendered silence. This is usually a voice/model mismatch.</li>
+</ul>
+
+<h3>Agent speaks its system prompt aloud (prompt leakage)</h3>
+<ul>
+  <li>The backend <code>_sanitise_trip_reply()</code> strips known leakage patterns. Check the DEBUG log to see what was stripped.</li>
+  <li>Weaker or smaller models (under 7B parameters) are most prone to this. Try a larger model.</li>
+  <li>Reduce MAX TOK — shorter forced output leaves less room for the model to ramble into its own instructions.</li>
+  <li>Temperature above 1.4 dramatically increases leakage probability. Reduce TEMP to 0.9–1.2.</li>
+  <li>If the persona text is very long (heavy Canon loading), some models will echo it. Trim the canon or use a model with stronger instruction-following.</li>
+</ul>
+
+<!-- ── DISCORD ───────────────────────────────────────────────────── -->
+<h3>Discord not receiving messages</h3>
+<ul>
+  <li>Verify the bot token, guild ID, and channel ID in Config &rarr; Discord. Click APPLY after any changes.</li>
+  <li>The Discord poller runs every 8 seconds. Messages should appear in the Acid Trip DEBUG &rarr; 📡 DISCORD tab within ~10 seconds of being posted.</li>
+  <li>Ensure the bot has <strong>Read Message History</strong> and <strong>View Channel</strong> permissions on the configured channel.</li>
+  <li>If the bot was recently invited or permissions changed, it may need to be kicked and re-invited to pick up new permission scopes.</li>
+  <li>Check <code>journalctl -u riggpt -f</code> for 401 errors from the Discord poller — these indicate an expired or revoked bot token.</li>
+</ul>
+
+<h3>Discord Interact does nothing when messages are posted</h3>
+<ul>
+  <li>The INTERACT button must be active (cyan) before or during a trip. It is not retroactive.</li>
+  <li>During a running trip, Interact pushes to the inject queue — the agent will pick it up on the next turn, not immediately.</li>
+  <li>If INFLUENCE is set to 0, Discord messages are received but have no weight in the system prompt. Raise it (default: 7).</li>
+  <li>The control channel is excluded from Interact by design — only audience channel messages drive agent behavior.</li>
+</ul>
+
+<!-- ── ACID TRIP UI ──────────────────────────────────────────────── -->
+<h3>Acid Trip START button does nothing</h3>
+<ul>
+  <li>Open browser developer console (F12 &rarr; Console). Any JavaScript errors will appear there — these are the definitive diagnosis.</li>
+  <li>Ensure at least one AI provider is configured with a model selected. The model dropdown must not be empty.</li>
+  <li>If Discord Interact is armed (button is cyan), START is locked. Disarm Interact first, then START.</li>
+  <li>Hard-reload the page (Ctrl+Shift+R) to clear any stale cached JavaScript — especially after a version upgrade.</li>
+</ul>
+
+<h3>Trip runs but agents give identical or very similar responses</h3>
+<ul>
+  <li>Verify Agent A and Agent B have distinct personas. If both fields are empty or identical, the agents have no differentiation.</li>
+  <li>Set TEMP to at least 0.9. Very low temperature causes deterministic, repetitive output.</li>
+  <li>Ensure Agent A and Agent B are using different voice/TTS configurations — identical voices make the problem harder to notice on air.</li>
+  <li>Check that SEED is blank or different for each agent. A fixed identical seed forces identical sampling.</li>
+</ul>
+
+<h3>Agent response gets cut off / ends mid-sentence</h3>
+<ul>
+  <li>MAX TOK is set too low. The response hit the token limit before completing. Raise MAX TOK or shorten the persona prompt to leave more room for the actual response.</li>
+  <li>For models with a small context window, very long conversation histories (many turns) push early content out of context. The model loses track and truncates. Reduce TURNS or switch to a larger context model.</li>
+</ul>
+
+<!-- ── COMMUNITY MEMORY ──────────────────────────────────────────── -->
+<h3>Memory STATUS shows 0 messages / collections not found</h3>
+<ul>
+  <li>Qdrant is not reachable. Verify the host address in Config &rarr; Community Memory and run <code>curl http://your-qdrant-host:6333/healthz</code> from the RigGPT server.</li>
+  <li>The full ingest has not been run yet. Run <code>python3 /opt/riggpt-memory/riggpt-ingest.py --full</code>.</li>
+  <li>If collections were dropped and recreated but the ingest shows "0 messages fetched," the checkpoint file is stale. Delete it: <code>rm /home/riggpt/memory_checkpoint.json</code> and re-run <code>--full</code>.</li>
+</ul>
+
+<h3>Delta ingest fails with 401 Unauthorized</h3>
+<ul>
+  <li>The credentials wrapper at <code>/opt/riggpt-memory/run-delta.sh</code> still contains the placeholder token. Edit it: <code>nano /opt/riggpt-memory/run-delta.sh</code> and replace <code>REPLACE_WITH_YOUR_BOT_TOKEN</code> with the actual bot token.</li>
+  <li>The bot token must be prefixed with <code>Bot </code> (capital B, space) — e.g. <code>Bot MTIzNDU2Nzg5.XXXXXX</code>.</li>
+  <li>If the token was recently regenerated in the Discord Developer Portal, update the credentials wrapper and the RigGPT Config &rarr; Discord panel.</li>
+</ul>
+
+<h3>Profile generation produces low-quality or empty profiles</h3>
+<ul>
+  <li>The profile LLM (qwen3:14b by default) must be running on Ollama. Verify with <code>docker exec ollama ollama list</code>.</li>
+  <li>If profiles are generating but fields are empty or nonsensical, the model may be emitting thinking-mode <code>&lt;think&gt;</code> blocks before JSON. This is handled automatically in v2.12.18+. Ensure you are running the latest ingest script.</li>
+  <li>Users with fewer than 10 messages are skipped during profiling. This is intentional — insufficient data produces unreliable profiles.</li>
+  <li>Run <code>--profiles-only</code> after confirming the LLM is healthy to rebuild without re-ingesting messages.</li>
+</ul>
+
+<h3>Ollama GPU access lost after host reboot</h3>
+<ul>
+  <li><code>docker exec ollama nvidia-smi</code> returns "Failed to initialize NVML: Unknown Error" — the container started before the NVIDIA kernel module was ready.</li>
+  <li>Fix immediately: <code>docker restart ollama</code> then verify with <code>docker exec ollama nvidia-smi</code>.</li>
+  <li>Permanent fix — make Docker wait for the NVIDIA runtime on every boot:</li>
+</ul>
+<pre>
+mkdir -p /etc/systemd/system/docker.service.d
+echo -e "[Unit]\nAfter=nvidia-persistenced.service" \
+  > /etc/systemd/system/docker.service.d/nvidia-wait.conf
+systemctl daemon-reload
+</pre>
+
+<h3>Memory context not appearing in agent responses</h3>
+<ul>
+  <li>Confirm memory is enabled in Config &rarr; Community Memory (checkbox must be checked and saved).</li>
+  <li>Click STATUS — if it shows 0 profiles or 0 messages, the ingest has not run or Qdrant is unreachable.</li>
+  <li>Check the Acid Trip DEBUG log for "Memory inject failed" or "Memory context injected (0 chars)" lines. The former indicates a Qdrant connection error. The latter means the semantic search returned no results above the similarity threshold — the topic may be too niche relative to what was actually discussed in Discord.</li>
+  <li>Use TEST QUERY in the Config panel to manually verify retrieval for your trip topic.</li>
+</ul>
+
+<!-- ── SERVICE / STARTUP ─────────────────────────────────────────── -->
+<h3>RigGPT service won't start / crashes on startup</h3>
+<ul>
+  <li>Check <code>journalctl -u riggpt -n 50 --no-pager</code> for the traceback. Common causes:</li>
+  <li>Port 5000 already in use: another process has the port. <code>ss -tlnp | grep 5000</code> to identify it.</li>
+  <li>Database migration error: the SQLite schema changed between versions. Stop the service, run the migration manually, restart.</li>
+  <li>Missing Python dependency: <code>ModuleNotFoundError</code> in the log. Install with <code>pip3 install &lt;module&gt; --break-system-packages</code> as the riggpt user.</li>
+  <li>Config file permission error: <code>/home/riggpt/app_settings.json</code> must be owned by the riggpt user. <code>chown riggpt:riggpt /home/riggpt/app_settings.json</code>.</li>
+</ul>
+
+<h3>Page loads blank / all tabs empty after upgrade</h3>
+<ul>
+  <li>Hard-reload with Ctrl+Shift+R (or Cmd+Shift+R on Mac) to clear browser cache. Stale JS from a previous version is the most common cause.</li>
+  <li>The server sends cache-busting headers but some browsers ignore them for the main document. If hard-reload doesn't fix it, open DevTools &rarr; Application &rarr; Clear Storage &rarr; Clear site data.</li>
+  <li>Check browser console (F12) for JavaScript errors — a TDZ (Temporal Dead Zone) or reference error will prevent the entire page from initializing.</li>
+</ul>
+
+<h3>Export/Import not saving all settings</h3>
+<ul>
+  <li>Click EXPORT only — do not navigate away or switch tabs before the download completes. The export snapshot captures DOM state at click time.</li>
+  <li>If Agent A/B configuration is missing after import, the relevant keys may have been added after your export was created. Check the version number in the export JSON — settings keys change between versions and older exports may be missing new fields.</li>
+  <li>The API keys export is optional and separate from the main settings export. If you need to migrate API keys to a new machine, enable "include API keys (plaintext)" in the export dialog.</li>
+</ul>
+
+
+
+<!-- ══════════════════════════════════════════════════════════
+     FILE PATHS
+══════════════════════════════════════════════════════════ -->
+<h2 id="paths"><span class="h2-icon">40</span> File Paths</h2>
+<table>
+  <tr><th>Path</th><th>Description</th></tr>
+  <tr><td><code>/opt/riggpt/</code></td><td>Application install directory</td></tr>
+  <tr><td><code>/opt/riggpt/app.py</code></td><td>Main Flask application</td></tr>
+  <tr><td><code>/opt/riggpt/api_keys.py</code></td><td>Encrypted key management module</td></tr>
+  <tr><td><code>/opt/riggpt/waterfall_image.py</code></td><td>Generative waterfall image module</td></tr>
+  <tr><td><code>/opt/riggpt/templates/index.html</code></td><td>Single-page frontend</td></tr>
+  <tr><td><code>/opt/riggpt/templates/manual.html</code></td><td>This document</td></tr>
+  <tr><td><code>/opt/riggpt/wav_cache/</code></td><td>Cached TTS audio files</td></tr>
+  <tr><td><code>/opt/riggpt/transmission_log.db</code></td><td>SQLite database</td></tr>
+  <tr><td><code>/home/riggpt/app_settings.json</code></td><td>Persisted settings</td></tr>
+  <tr><td><code>/home/riggpt/api_keys.json</code></td><td>Encrypted API keys</td></tr>
+  <tr><td><code>/home/riggpt/canon/a/</code></td><td>Agent A canon files (.md)</td></tr>
+  <tr><td><code>/home/riggpt/canon/b/</code></td><td>Agent B canon files (.md)</td></tr>
+  <tr><td><code>/etc/systemd/system/riggpt.service</code></td><td>Systemd unit file</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════
+     CHANGELOG
+══════════════════════════════════════════════════════════ -->
+<h2 id="changelog"><span class="h2-icon">40</span> Changelog</h2>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.25</span>
+    <span class="cl-date">2026-03-15</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Clips tab</strong> &mdash; new <code>&#9654; CLIPS</code> tab in the main tab bar. Radio automation media player: presents .wav/.mp3/.ogg/.flac/.aiff/.m4a files as a grid of clickable cards. Clicking a card keys PTT and plays the file over air, then drops PTT automatically.</li>
+    <li><span class="cl-tag new">new</span> <strong>Local directory source</strong> &mdash; configurable path (default <code>/opt/riggpt/clips</code>), configurable poll interval (default 60s). Background poller thread rescans on interval. Manual SCAN button triggers immediate rescan.</li>
+    <li><span class="cl-tag new">new</span> <strong>Amazon S3 source</strong> &mdash; optional S3 bucket as second clip source. Configure bucket, region, key prefix in the Clips sidebar. AWS credentials (access key + secret) stored via <code>/api/integrations/s3</code> in the standard encrypted key store &mdash; entry point in Config &rarr; API KEYS &rarr; AMAZON S3 (CLIPS). S3 files are downloaded to <code>/tmp/riggpt_clips_cache/</code> and cached for the session. Requires <code>pip install boto3</code>.</li>
+    <li><span class="cl-tag new">new</span> Card grid: filename, type badge, estimated duration, file size, source indicator (LOCAL green / S3 amber). Sort by name/size/type/source. Text filter. Source filter strip (ALL / LOCAL / S3). ON AIR badge + card highlight during playback. STOP button drops PTT immediately.</li>
+    <li><span class="cl-tag new">new</span> Backend: <code>_clips_poller()</code> thread, <code>_clips_scan_all()</code>, <code>_clips_play()</code> with PTT + aplay fallback chain. Routes: <code>GET /api/clips/list</code>, <code>POST /api/clips/play</code>, <code>POST /api/clips/stop</code>, <code>POST /api/clips/scan</code>, <code>GET /api/clips/status</code>.</li>
+    <li><span class="cl-tag new">new</span> All Clips + S3 settings persisted to <code>app_settings.json</code>: <code>clips_dir</code>, <code>clips_poll_interval</code>, <code>clips_s3_enabled</code>, <code>clips_s3_bucket</code>, <code>clips_s3_region</code>, <code>clips_s3_prefix</code>.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.24</span>
+    <span class="cl-date">2026-03-10</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag fix">fix</span> <strong>Alexa: name collision</strong> &mdash; <code>_alexa_log</code> list was shadowed by <code>def _alexa_log()</code> at module level; <code>.append()</code> and <code>.clear()</code> would fail at runtime. Renamed to <code>_alexa_activity</code> (list) and <code>_alexa_emit()</code> (function).</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Alexa: toggle crash</strong> &mdash; <code>api_alexa_toggle()</code> called non-existent <code>_save_settings()</code>. Corrected to <code>_save_app_settings(_app_settings)</code>.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Alexa: UI panel missing</strong> &mdash; HTML insertion in v2.12.23 silently failed. Panel now confirmed present; all 8 element IDs and 6 JS functions verified.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Non-ASCII in app.py</strong> &mdash; Box-drawing characters in Alexa comment block replaced with plain ASCII. Prevents potential latin-1 Werkzeug encode errors.</li>
+    <li><span class="cl-tag fix">fix</span> Route function <code>api_alexa_log()</code> renamed <code>api_alexa_log_get()</code> to avoid Flask endpoint name collision.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.23</span>
+    <span class="cl-date">2026-03-10</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Alexa Mode</strong> — AI tab now has a Discord-triggered auto-response system. When any Discord message in the audience channel contains the configured trigger phrase (default: "AI Radio"), RigGPT generates and transmits a single snarky, sarcastic, short response over air. Persona: impatient, rude, very funny, considers itself vastly smarter than the humans bothering it. Response capped at 60 tokens by default (configurable).</li>
+    <li><span class="cl-tag new">new</span> Alexa watcher thread polls Discord ring buffer every 4 seconds. Drops duplicate triggers while a response is in progress (lock-protected). Advances message cursor after each scan to avoid re-processing.</li>
+    <li><span class="cl-tag new">new</span> Alexa panel in AI tab col 1: TRIGGER phrase, MODEL, ENGINE, VOICE, MAX TOK fields. ENABLE/DISABLE toggle, SAVE, TEST buttons. Live activity log with auto-refresh. Status dot: grey=off, green=listening, red=transmitting.</li>
+    <li><span class="cl-tag new">new</span> Routes: <code>GET /api/alexa/status</code>, <code>GET /api/alexa/log</code>, <code>POST /api/alexa/log/clear</code>, <code>POST /api/alexa/toggle</code>, <code>POST /api/alexa/test</code>.</li>
+    <li><span class="cl-tag new">new</span> Supports all AI providers: Ollama, OpenAI, Gemini. Uses same <code>_chat_via_openai</code>/<code>_chat_via_gemini</code> helpers as Acid Trip. Temperature fixed at 1.1 for personality variety.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.22</span>
+    <span class="cl-date">2026-03-10</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag fix">fix</span> <strong>Manual page TemplateNotFound</strong> — Jinja2 was treating <code>}}</code> in an API reference code example as a template close tag, crashing template rendering. Escaped with HTML entities.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Gong &ldquo;Device or resource busy&rdquo;</strong> — rapid successive clicks spawned concurrent <code>aplay</code> processes that raced for the ALSA device. Added <code>_play_file_lock</code> (non-blocking acquire): duplicate play requests while one is in progress are silently dropped. The lock is always released in a <code>finally</code> block.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.21</span>
+    <span class="cl-date">2026-03-10</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Expanded documentation</strong> — Community Memory section rebuilt with Qdrant internals deep-dive, SVG agent knowledge flow diagram, thread clustering algorithm explanation, cosine threshold table, point ID scheme, and payload index rationale.</li>
+    <li><span class="cl-tag new">new</span> Troubleshooting section expanded from 6 to 17 topics covering radio/audio, AI/TTS, Discord, Acid Trip UI, Community Memory, and service/startup issues.</li>
+    <li><span class="cl-tag new">new</span> TOC updated with Memory sub-sections: Agent Knowledge Flow, How Qdrant Works.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.20</span>
+    <span class="cl-date">2026-03-09</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Conversation threads collection</strong> (<code>conversation_threads</code>) — messages clustered into reply/time-window threads, summarised via qwen3:14b, embedded and stored. Threads include participant display names, message count, and timestamp.</li>
+    <li><span class="cl-tag new">new</span> <code>cluster_threads()</code>, <code>summarise_thread()</code>, <code>build_threads()</code> in ingest script. Full ingest samples 40% of shorter threads + all threads with 5+ messages. Delta ingests at 100% (small batch). <code>--threads-only</code> flag for standalone rebuild.</li>
+    <li><span class="cl-tag new">new</span> Thread context injected into agent system prompts on turns 0&ndash;3 alongside message echoes.</li>
+    <li><span class="cl-tag new">new</span> <strong>Pre-trip briefing</strong> — on turn 0, agents receive a richer one-time briefing covering past threads on the topic, audience members most likely watching, and community running references. Sent via <code>trip_briefing: true</code> flag from JS.</li>
+    <li><span class="cl-tag new">new</span> <code>build_briefing()</code> method in <code>memory.py</code>. <code>/api/memory/query</code> now accepts <code>collection: "conversation_threads"</code> and <code>collection: "briefing"</code>.</li>
+    <li><span class="cl-tag chg">chg</span> Re-ingest required to populate <code>conversation_threads</code> collection.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.19</span>
+    <span class="cl-date">2026-03-09</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>De-anonymized user profiles</strong> — Discord <code>username</code> and <code>global_name</code> (display name) now stored in message payloads and profile documents. Profile generation prompt includes the user's name. Runtime audience prose uses real names: "Dave is a technical expert..." rather than "One regular is a...".</li>
+    <li><span class="cl-tag chg">chg</span> Re-ingest required: drop and recreate <code>discord_messages</code> and <code>user_profiles</code> collections, then run <code>--full</code> again.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.18</span>
+    <span class="cl-date">2026-03-09</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag fix">fix</span> <strong>Qwen3 thinking mode JSON parse failure</strong> &mdash; <code>qwen3:14b</code> emits <code>&lt;think&gt;...&lt;/think&gt;</code> blocks before JSON output; stripped before parse in both profile and theme generation. <code>think: false</code> added to Ollama API payload. <code>/no_think</code> added to system prompts. <code>re.search</code> extracts first valid JSON object as final fallback.</li>
+    <li><span class="cl-tag chg">chg</span> Qdrant default host set to <code>192.168.40.15:6333</code> (live instance). No env vars needed for standard setup.</li>
+    <li><span class="cl-tag chg">chg</span> Summary/profile model upgraded to <code>qwen3:14b</code> &mdash; best available on this Ollama instance.</li>
+    <li><span class="cl-tag chg">chg</span> Control channel excluded from ingestion &mdash; only main audience channel ingested.</li>
+    <li><span class="cl-tag new">new</span> <code>memory/riggpt-cron-setup.sh</code> &mdash; one-command Docker host cron install. Pulls <code>nomic-embed-text</code> into Ollama container, creates credentials wrapper at <code>/opt/riggpt-memory/run-delta.sh</code>, installs <code>/etc/cron.d/riggpt-memory</code> (every 4 hours).</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.16</span>
+    <span class="cl-date">2026-03-09</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Community Memory system</strong> — Discord channel history ingested into Qdrant vector DB. Per-user personality profiles generated via Ollama (qwen2.5). Channel-level community DNA document maintained and refreshed on each delta run.</li>
+    <li><span class="cl-tag new">new</span> <code>memory/riggpt-ingest.py</code> — full history + checkpoint-resumable ingest, efficient delta updates (only new messages and affected users), profile and theme rebuild. Cron-friendly.</li>
+    <li><span class="cl-tag new">new</span> <code>memory/memory.py</code> — runtime query interface. No new hard dependencies. Graceful degradation when Qdrant is offline.</li>
+    <li><span class="cl-tag new">new</span> Memory context injected per-turn in <code>/api/ai/chat</code>: community DNA + audience profiles + past message echoes (turns 0&#8211;3).</li>
+    <li><span class="cl-tag new">new</span> <code>/api/memory/status</code> and <code>/api/memory/query</code> debug routes.</li>
+    <li><span class="cl-tag new">new</span> Config tab &#8594; COMMUNITY MEMORY panel. STATUS and TEST QUERY buttons.</li>
+    <li><span class="cl-tag new">new</span> User privacy: Discord IDs/names never stored. Profiles keyed by SHA-256 hash only.</li>
+    <li><span class="cl-tag new">new</span> Full documentation manual ships in every zip. DOCS link in persistent top bar.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.15</span>
+    <span class="cl-date">2026-03-09</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Discord Interact mid-trip mode</strong> — button can now be armed while a trip is already running. Discord messages inject into the live debate via inject/chaos queues rather than launching a new trip. Button shows <em>INTERACT: MID-TRIP</em> when armed during a running debate.</li>
+    <li><span class="cl-tag new">new</span> When a mid-trip Interact-armed debate ends naturally, the button transitions automatically to <em>LISTENING</em> mode.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.14</span>
+    <span class="cl-date">2026-03-09</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag chg">chg</span> <strong>Agents are now permanently nameless</strong> — NAME fields removed from both persona cards. Agents are identified by emoji only. No name is ever passed to the model or prefixed to conversation history.</li>
+    <li><span class="cl-tag rm">rm</span> NAMELESS checkbox removed — namelessness is now unconditional. The output guardrail explicitly instructs models not to address the other speaker by name.</li>
+    <li><span class="cl-tag chg">chg</span> Discord Influence default changed from 1 (Minimal) to 7 (Heavy).</li>
+    <li><span class="cl-tag fix">fix</span> TDZ crash: <code>aEmoji</code>/<code>bEmoji</code> declared before <code>aName</code>/<code>bName</code> in <code>tripStart()</code>.</li>
+    <li><span class="cl-tag fix">fix</span> Opener error check now uses <code>__error__</code> object pattern consistently with rest of trip loop.</li>
+    <li><span class="cl-tag fix">fix</span> Scenario manager, <code>tripPersonaPreset()</code>, and <code>tripModePreset()</code> no longer attempt to write to removed name DOM fields.</li>
+    <li><span class="cl-tag new">new</span> This documentation manual added to the project. DOCS link added to persistent top bar.</li>
+    <li><span class="cl-tag new">new</span> Changelog begins.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.13</span>
+    <span class="cl-date">2026-03-09</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Discord Lookback</strong> — on qualifying turns (Influence ≥ 4, Lookback N &gt; 0), replaces the final user message in <code>msgsToSend</code> with a Discord-driven directive. Agent responds <em>directly</em> to Discord content rather than the prior turn.</li>
+    <li><span class="cl-tag new">new</span> DISCORD LOOKBACK controls in center panel: message count (0–10) and drive-every-N-turns frequency.</li>
+    <li><span class="cl-tag new">new</span> Blue <code>📡 DISCORD DRIVE</code> banner appears in chat transcript when Lookback fires.</li>
+    <li><span class="cl-tag fix">fix</span> Discord markup tokens stripped at ingestion and in reply sanitiser: <code>&lt;#channel&gt;</code>, <code>&lt;@user&gt;</code>, <code>&lt;@&amp;role&gt;</code>, <code>&lt;:emoji:id&gt;</code>, <code>&lt;a:emoji:id&gt;</code>. Double spaces from inline removals collapsed.</li>
+    <li><span class="cl-tag fix">fix</span> Token floors removed: Ollama no longer hard-floors at 300 tokens, OpenAI/Gemini at 200. MAX TOK setting is now respected directly.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.12</span>
+    <span class="cl-date">2026-03-08</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag fix">fix</span> <strong>System context rebuilt per-turn</strong> — <code>_buildCtx</code> was called once at trip start and frozen. Now called fresh every turn, reading live Discord messages and current Influence slider value.</li>
+    <li><span class="cl-tag new">new</span> <code>_tripDiscordInjectQueue</code> — Discord messages pushed into both agents' conversation histories as <code>role:'user'</code> messages for immediate effect.</li>
+    <li><span class="cl-tag fix">fix</span> Removed <code>[CHAOS EVENT]:</code> bracket prefix from chaos queue messages — the sanitiser was stripping it, silently voiding the content.</li>
+    <li><span class="cl-tag fix">fix</span> Token floors removed from all three AI provider paths (Ollama 300, OpenAI 200, Gemini 200).</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.11</span>
+    <span class="cl-date">2026-03-08</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Prompt guardrails against system-prompt leakage</strong> — canon, topic, oracle, and Discord influence rewritten as natural prose without structural labels or bracket formatting.</li>
+    <li><span class="cl-tag new">new</span> Hard output guardrail appended last to every system prompt: models instructed to output only spoken words, never metadata or instructions.</li>
+    <li><span class="cl-tag new">new</span> Backend sanitiser <code>_sanitise_trip_reply()</code> applied to all <code>/api/ai/chat</code> replies. Strips leaked system-prompt lines and residual bracket blocks.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.10</span>
+    <span class="cl-date">2026-03-08</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag fix">fix</span> <code>window._discordMessages</code> never populated — <code>_discordRefreshMessages()</code> fetched but never wrote to the global.</li>
+    <li><span class="cl-tag fix">fix</span> Discord polling not started on Acid Trip tab — <code>tripInit()</code> now calls <code>discordStartPolling()</code>.</li>
+    <li><span class="cl-tag fix">fix</span> Duplicate injection — <code>_discordLastInjectedId</code> watermark prevents re-injecting same messages across poll cycles.</li>
+    <li><span class="cl-tag fix">fix</span> Inject target routing unified — all targets push to <code>_tripChaosQueue</code>.</li>
+    <li><span class="cl-tag new">new</span> Discord monitor panel added to bottom debug area as a second tab (📡 DISCORD). Shows live connection status, buffer contents, and last inject event.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.9</span>
+    <span class="cl-date">2026-03-08</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Canon server-file browser</strong> — <code>.md</code> files in <code>/home/riggpt/canon/a/</code> and <code>/home/riggpt/canon/b/</code> accessible from dropdown above Canon textarea.</li>
+    <li><span class="cl-tag new">new</span> <strong>Discord Influence slider</strong> (1–10) with labelled levels from Minimal to Consumed.</li>
+    <li><span class="cl-tag new">new</span> MAX TOK default changed to 60. Backend floors removed.</li>
+    <li><span class="cl-tag fix">fix</span> Spicy/Static buttons definitively disabled when trip not running.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.8</span>
+    <span class="cl-date">2026-03-08</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag fix">fix</span> Acid Trip CSS grid layout — FX rows correctly placed inside persona cards.</li>
+    <li><span class="cl-tag fix">fix</span> TDZ crash on <code>aFX</code> variable declared after first <code>_tripSpeak</code> call.</li>
+    <li><span class="cl-tag fix">fix</span> Per-agent model not saving — <code>model-sel</code> added to <code>_TRIP_AGENT_FIELDS</code> and <code>ALLOWED_SETTINGS_KEYS</code>.</li>
+    <li><span class="cl-tag fix">fix</span> Spicy/Static buttons not firing.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.6 – v2.12.7</span>
+    <span class="cl-date">2026-03-07</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Radio Model Selector</strong> with six profiles.</li>
+    <li><span class="cl-tag new">new</span> <strong>Per-Agent FX</strong> — independent audio effect chains for each Acid Trip agent.</li>
+    <li><span class="cl-tag new">new</span> <strong>Discord Control Channel</strong> — separate channel for <code>!inject</code>, <code>!topic</code>, <code>!persona</code> and other commands.</li>
+    <li><span class="cl-tag new">new</span> Conversational spacing controls: GAP MIN/MAX, HESITATE.</li>
+    <li><span class="cl-tag new">new</span> Sticky Agent A/B config across sessions.</li>
+    <li><span class="cl-tag fix">fix</span> Chaos preset trigger bugs.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.0 – v2.12.5</span>
+    <span class="cl-date">2026-03-07</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Acid Trip Mode Presets</strong> — six built-in scenarios (Paranoia, Signal Decay, Last Two, Bad Therapy, Oracle, Memory Loop).</li>
+    <li><span class="cl-tag new">new</span> <strong>FastKoko Local TTS</strong> engine integration.</li>
+    <li><span class="cl-tag new">new</span> Trip transcripts and scenarios stored in SQLite.</li>
+    <li><span class="cl-tag new">new</span> SSE live audience page at <code>/trip/live</code>.</li>
+    <li><span class="cl-tag new">new</span> Scheduled chaos events per scenario.</li>
+    <li><span class="cl-tag fix">fix</span> Speechify silent-failure / FFmpeg exit 69.</li>
+    <li><span class="cl-tag new">new</span> <strong>Discord Interact mode</strong>.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.11.14 – v2.11.16</span>
+    <span class="cl-date">2026-03-07</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Discord integration</strong> — poller thread, ring buffer, status/messages/config API routes, Discord panel in Config tab.</li>
+    <li><span class="cl-tag new">new</span> <code>_discordMaybeInject()</code> — Discord messages injected into Acid Trip chaos queue based on inject-target setting.</li>
+  </ul></div>
+</div>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.11.x</span>
+    <span class="cl-date">2026-03-06 – 2026-03-07</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag chg">chg</span> Project renamed from ic7610-voice-agent to <strong>RigGPT</strong>. Service user changed to <code>riggpt</code>.</li>
+    <li><span class="cl-tag fix">fix</span> PTT test, Gemini API key permission, latin-1 encoding crash (<code>_ascii()</code> helper), Gemini model deprecation, masked API key re-save bug.</li>
+    <li><span class="cl-tag rm">rm</span> Coqui TTS engine removed.</li>
+    <li><span class="cl-tag rm">rm</span> RTL-SDR spectrum display removed.</li>
+    <li><span class="cl-tag chg">chg</span> UI redesign: dark terminal operator console aesthetic, monospace fonts, semantic accent colours, keyboard-first navigation.</li>
+  </ul></div>
+</div>
+
+</main>
+
+<script>
+// ── Active TOC highlighting on scroll ──────────────────────────
+const headings = document.querySelectorAll('h2[id], h3[id]');
+const tocLinks  = document.querySelectorAll('#toc a');
+
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`#toc a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-10% 0px -80% 0px' });
+
+headings.forEach(h => obs.observe(h));
+</script>
+</body>
+</html>

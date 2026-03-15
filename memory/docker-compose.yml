@@ -1,0 +1,30 @@
+version: "3.9"
+
+# RigGPT Memory Stack
+# Qdrant vector database for Discord channel history and personality profiles.
+# Deploy on your LAN host: docker compose up -d
+# Qdrant REST API: http://<host>:6333
+# Qdrant dashboard: http://<host>:6333/dashboard
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: riggpt-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST API + dashboard
+      - "6334:6334"   # gRPC (not used by RigGPT but available)
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      # Increase this if you have many concurrent requests
+      QDRANT__SERVICE__MAX_REQUEST_SIZE_MB: "32"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  qdrant_storage:
+    driver: local
