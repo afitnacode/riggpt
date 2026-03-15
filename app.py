@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.27
+RigGPT v2.12.30
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -14,6 +14,16 @@ below. When bumping versions, update ALL of the following in the same commit:
   - VERSION constant (below)
   - requirements.txt comment header
   - INSTALL.sh comment header and VERSION variable
+
+v2.12.30 changes:
+  - FIX: WF ART BW HZ default changed from 2400 to 2700 (HTML input, and both
+    JS fallback values in loadCannedPreview() and wfGetProc()).
+  - FIX (CRITICAL): createBeacon() JS sent key 'message' but api_beacon_create()
+    reads data.get('text'). Field name mismatch caused every beacon creation to
+    return HTTP 400 BAD REQUEST. Fixed: JS now sends key 'text' to match backend.
+  - FIX: Clips tab button was missing from #cmdstrip tab bar. The pane HTML
+    (id="pane-clips") and showTab('clips') handler both existed; only the button
+    was absent. Added after ACID TRIP in tab bar.
 
 v2.12.27 changes:
   - FIX (CRITICAL): @app.route('/api/ai/models') was attached to _ascii() instead
