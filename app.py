@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.30
+RigGPT v2.12.31
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -15,6 +15,26 @@ below. When bumping versions, update ALL of the following in the same commit:
   - requirements.txt comment header
   - INSTALL.sh comment header and VERSION variable
   - templates/index.html status bar hardcoded version string (sb-label in statusbar)
+
+v2.12.31 changes:
+  - FEATURE: Clips default directory changed from /opt/riggpt/clips to /sounds.
+  - FEATURE: New GET /api/clips/test-path endpoint -- tests a directory path for
+    existence, type (must be a dir), and read permission; returns file count.
+  - FEATURE: New POST /api/clips/upload endpoint -- accepts multipart file upload,
+    saves to configured clips dir (creates it if needed), triggers background
+    rescan, returns per-file success/error details.
+  - UI: Clips pane redesigned as radio-station automation panel:
+    - 4 color-coded tiers (JINGLES/green, PROMOS/blue, SPOTS/amber, MISC/purple),
+      6 cart buttons each = 24 total slots.
+    - CART view: pre-populated buttons, empty until assigned to a file.
+    - FILES view: original card grid (all scanned files).
+    - Click empty slot to assign from scanned file list.
+    - Click loaded button to transmit; x to clear assignment.
+    - Cart assignments persisted in localStorage.
+    - TEST PATH button in sidebar validates local directory.
+    - UPLOAD section: file picker + drag-and-drop upload to /sounds.
+    - SCAN button explicitly rescans both local and S3.
+    - Info panel updated with new default path and feature docs.
 
 v2.12.30 changes:
   - FIX: WF ART BW HZ default changed from 2400 to 2700 (HTML input, and both
@@ -306,7 +326,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.30'
+VERSION        = 'v2.12.31'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -5897,7 +5917,7 @@ def api_alexa_test():
 # ======================================================================
 
 CLIPS_EXTENSIONS = {'.wav', '.mp3', '.ogg', '.flac', '.aiff', '.m4a'}
-CLIPS_DEFAULT_DIR = '/opt/riggpt/clips'
+CLIPS_DEFAULT_DIR = '/sounds'
 
 
 def _clips_cfg() -> dict:
@@ -6202,6 +6222,81 @@ def api_clips_status():
             'last_scan': _clips_last_scan,
             'config':    _clips_cfg(),
         })
+
+
+@app.route('/api/clips/test-path', methods=['GET'])
+def api_clips_test_path():
+    """Test whether a directory path exists, is a directory, and is readable."""
+    path = request.args.get('path', '').strip()
+    if not path:
+        cfg = _clips_cfg()
+        path = cfg['dir']
+    if not path:
+        return jsonify({'success': False, 'message': 'No path specified'})
+    if not os.path.exists(path):
+        return jsonify({'success': False, 'path': path,
+                        'message': f'Path does not exist: {path}'})
+    if not os.path.isdir(path):
+        return jsonify({'success': False, 'path': path,
+                        'message': f'Path is not a directory: {path}'})
+    if not os.access(path, os.R_OK):
+        return jsonify({'success': False, 'path': path,
+                        'message': f'Path is not readable (check permissions): {path}'})
+    try:
+        files = [f for f in os.listdir(path)
+                 if os.path.splitext(f)[1].lower() in CLIPS_EXTENSIONS]
+        return jsonify({'success': True, 'path': path,
+                        'message': f'OK — {len(files)} audio file(s) found',
+                        'file_count': len(files)})
+    except Exception as e:
+        return jsonify({'success': False, 'path': path, 'message': str(e)})
+
+
+@app.route('/api/clips/upload', methods=['POST'])
+def api_clips_upload():
+    """Upload audio files into the configured clips directory."""
+    cfg = _clips_cfg()
+    clips_dir = cfg['dir'] or CLIPS_DEFAULT_DIR
+    try:
+        os.makedirs(clips_dir, exist_ok=True)
+    except Exception as e:
+        return jsonify({'success': False,
+                        'message': f'Cannot create directory {clips_dir}: {e}'}), 500
+    if 'files' not in request.files:
+        return jsonify({'success': False, 'message': 'No files in request'}), 400
+    uploaded_files = request.files.getlist('files')
+    if not uploaded_files:
+        return jsonify({'success': False, 'message': 'No files provided'}), 400
+    saved, errors = [], []
+    for f in uploaded_files:
+        if not f.filename:
+            continue
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in CLIPS_EXTENSIONS:
+            errors.append(f'{f.filename}: unsupported format (use WAV/MP3/OGG/FLAC/AIFF/M4A)')
+            continue
+        dest = os.path.join(clips_dir, os.path.basename(f.filename))
+        try:
+            f.save(dest)
+            saved.append(f.filename)
+            logger.info(f'clips: uploaded {f.filename} -> {dest}')
+        except Exception as e:
+            errors.append(f'{f.filename}: {e}')
+            logger.error(f'clips: upload error for {f.filename}: {e}')
+    if saved:
+        threading.Thread(target=_clips_scan_all, daemon=True, name='clips-scan').start()
+    n_saved = len(saved)
+    n_err   = len(errors)
+    if n_saved and not n_err:
+        msg = f'Uploaded {n_saved} file(s) to {clips_dir}'
+    elif n_saved and n_err:
+        msg = f'Uploaded {n_saved}, {n_err} error(s)'
+    elif n_err:
+        msg = f'{n_err} error(s): {errors[0]}'
+    else:
+        msg = 'No files processed'
+    return jsonify({'success': bool(saved), 'message': msg,
+                    'saved': saved, 'errors': errors, 'directory': clips_dir})
 
 
 # -- Discord Control Channel routes -----------------------------
