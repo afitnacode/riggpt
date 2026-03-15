@@ -14,6 +14,7 @@ below. When bumping versions, update ALL of the following in the same commit:
   - VERSION constant (below)
   - requirements.txt comment header
   - INSTALL.sh comment header and VERSION variable
+  - templates/index.html status bar hardcoded version string (sb-label in statusbar)
 
 v2.12.30 changes:
   - FIX: WF ART BW HZ default changed from 2400 to 2700 (HTML input, and both
@@ -305,7 +306,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.27'
+VERSION        = 'v2.12.30'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
