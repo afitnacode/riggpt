@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.34
+RigGPT v2.12.35
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -274,6 +274,7 @@ import os
 import sys
 import json
 import queue
+import shutil
 import serial
 import serial.tools.list_ports
 import subprocess
@@ -330,6 +331,7 @@ _clips_lock     = threading.Lock()
 _clips_files: list = []      # [{name, path, size, ext, source, cached_path}]
 _clips_last_scan: str = ''   # ISO timestamp of last scan
 _clips_playing: bool = False # True while a clip TX is in progress
+_clips_proc = None           # Popen handle for the running player process
 _clips_s3_cache_dir = '/tmp/riggpt_clips_cache'
 
 
@@ -359,7 +361,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.34'
+VERSION        = 'v2.12.35'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6279,12 +6281,17 @@ def _clips_download_s3(clip: dict) -> str | None:
         return None
 
 
+# Track the currently-running clips play process so it can be interrupted
+_clips_proc: 'subprocess.Popen | None' = None
+
+
 def _clips_play(clip: dict):
     """
-    PTT + aplay a clip.  Runs in a daemon thread.
-    Sets/clears _clips_playing.
+    PTT + play a clip.  Runs in a daemon thread.
+    Sets/clears _clips_playing.  Uses ffplay (all formats) with aplay fallback.
     """
-    global _clips_playing
+    global _clips_playing, _clips_proc
+    ext = (clip.get('ext') or '').upper()
     try:
         # Resolve playback path
         if clip['source'] == 's3':
@@ -6296,50 +6303,86 @@ def _clips_play(clip: dict):
             logger.error(f'clips: file not found for playback: {fpath!r}')
             return
 
-        logger.info(f'clips: playing {os.path.basename(fpath)!r}')
+        logger.info(f'clips: playing {os.path.basename(fpath)!r} (ext={ext})')
 
         # PTT on
-        ptt_ok = False
         try:
             if orchestrator.icom_agent and orchestrator.icom_agent.serial_conn \
                     and orchestrator.icom_agent.serial_conn.is_open:
                 orchestrator.icom_agent.ptt_on()
-                ptt_ok = True
                 time_module.sleep(0.3)
             else:
                 logger.warning('clips: radio not connected -- playing without PTT')
         except Exception as ptt_e:
             logger.warning(f'clips: PTT on failed: {ptt_e}')
 
-        # Audio playback via aplay (same device fallback chain as gong)
-        devices = []
-        if AUDIO_DEVICE and AUDIO_DEVICE != 'default':
-            devices.append(AUDIO_DEVICE)
-        devices += ['default', None]
-
+        # Build player command: prefer ffplay (handles all formats), fall back to aplay for WAV
+        dev = AUDIO_DEVICE if (AUDIO_DEVICE and AUDIO_DEVICE != 'default') else None
         played = False
-        for dev in devices:
+
+        # --- try ffplay first (handles MP3, OGG, FLAC, AIFF, M4A, WAV) ---
+        ffplay = shutil.which('ffplay')
+        if ffplay:
             try:
-                cmd = ['aplay']
+                cmd = [ffplay, '-nodisp', '-autoexit', '-loglevel', 'error']
                 if dev:
-                    cmd += ['-D', dev]
+                    # ffplay uses SDL; set AUDIODEV env or use -acodec / alsa device
+                    # Simplest cross-platform: just let SDL pick, override via env
+                    pass
                 cmd.append(fpath)
-                result = subprocess.run(cmd, capture_output=True, timeout=600)
-                if result.returncode == 0:
-                    played = True
-                    break
-                err = result.stderr.decode('utf-8', errors='replace').strip()
-                logger.warning(f'clips: aplay failed device={dev}: {err}')
+                with _clips_lock:
+                    pass  # lock not needed for proc ref, just for flag
+                proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL)
+                _clips_proc = proc
+                proc.wait(timeout=600)
+                _clips_proc = None
+                played = (proc.returncode == 0)
+                if not played:
+                    logger.warning(f'clips: ffplay exited {proc.returncode}')
             except subprocess.TimeoutExpired:
-                logger.warning(f'clips: aplay timed out')
-                break
-            except Exception as ae:
-                logger.warning(f'clips: aplay exception: {ae}')
+                logger.warning('clips: ffplay timed out')
+                try: proc.kill()
+                except Exception: pass
+                _clips_proc = None
+            except Exception as e:
+                logger.warning(f'clips: ffplay error: {e}')
+                _clips_proc = None
+
+        # --- fall back to aplay for WAV ---
+        if not played:
+            devices = [dev, 'default'] if dev else ['default']
+            devices = [d for d in devices if d]  # remove None
+            for d in devices + [None]:
+                try:
+                    cmd = ['aplay']
+                    if d:
+                        cmd += ['-D', d]
+                    cmd.append(fpath)
+                    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                            stderr=subprocess.DEVNULL)
+                    _clips_proc = proc
+                    proc.wait(timeout=120)
+                    _clips_proc = None
+                    if proc.returncode == 0:
+                        played = True
+                        break
+                    logger.warning(f'clips: aplay failed rc={proc.returncode} dev={d}')
+                except subprocess.TimeoutExpired:
+                    logger.warning('clips: aplay timed out')
+                    try: proc.kill()
+                    except Exception: pass
+                    _clips_proc = None
+                    break
+                except Exception as ae:
+                    logger.warning(f'clips: aplay exception: {ae}')
+                    _clips_proc = None
 
         if not played:
-            logger.error(f'clips: all aplay attempts failed for {fpath!r}')
+            logger.error(f'clips: all player attempts failed for {fpath!r}')
 
     finally:
+        _clips_proc = None
         # PTT off
         try:
             if orchestrator.icom_agent and orchestrator.icom_agent.serial_conn \
@@ -6390,19 +6433,29 @@ def api_clips_scan():
 
 @app.route('/api/clips/play', methods=['POST'])
 def api_clips_play():
-    """PTT + play a clip by name. Drops request if already playing."""
-    global _clips_playing
+    """PTT + play a clip by name. Interrupts any current playback and starts fresh."""
+    global _clips_playing, _clips_proc
     data = request.json or {}
     name = data.get('name', '').strip()
     if not name:
         return jsonify({'success': False, 'message': 'name required'}), 400
 
+    # If something is already playing, kill it first
     with _clips_lock:
         if _clips_playing:
-            return jsonify({'success': False, 'message': 'Already playing'}), 409
+            proc = _clips_proc
+            if proc:
+                try: proc.kill()
+                except Exception: pass
+            _clips_playing = False
+            _clips_proc = None
+        # Small grace period for thread teardown
+    time_module.sleep(0.1)
+
+    with _clips_lock:
         clip = next((f for f in _clips_files if f['name'] == name), None)
         if clip is None:
-            return jsonify({'success': False, 'message': f'Clip not found: {name}'}), 404
+            return jsonify({'success': False, 'message': f'Clip not found: {name}. Click SCAN ALL to refresh.'}), 404
         _clips_playing = True
 
     threading.Thread(target=_clips_play, args=(clip,),
@@ -6412,19 +6465,24 @@ def api_clips_play():
 
 @app.route('/api/clips/stop', methods=['POST'])
 def api_clips_stop():
-    """PTT off + kill any running aplay. Best-effort."""
-    global _clips_playing
+    """PTT off + kill any running player. Best-effort."""
+    global _clips_playing, _clips_proc
+    # Kill the tracked process first
+    with _clips_lock:
+        proc = _clips_proc
+        _clips_proc = None
+        _clips_playing = False
+    if proc:
+        try: proc.kill()
+        except Exception: pass
+    # Belt-and-suspenders: pkill any stragglers
+    for player in ('ffplay', 'aplay'):
+        try: subprocess.run(['pkill', '-f', player], capture_output=True)
+        except Exception: pass
     try:
         orchestrator.icom_agent.ptt_off()
     except Exception:
         pass
-    # Kill any aplay processes
-    try:
-        subprocess.run(['pkill', '-f', 'aplay'], capture_output=True)
-    except Exception:
-        pass
-    with _clips_lock:
-        _clips_playing = False
     return jsonify({'success': True})
 
 
