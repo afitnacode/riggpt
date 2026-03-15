@@ -1635,7 +1635,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.31</span>
+    <span class="sb-label">v2.12.32</span>
   </div>
 </div>
 
@@ -2161,7 +2161,7 @@ hr.div  {
       </div>
       <div class="form-row">
         <label>ENGINE</label>
-        <select id="bcn-engine" style="flex:1">
+        <select id="bcn-engine" style="flex:1" onchange="bcnEngineChange()">
           <option value="espeak">eSpeak</option>
           <option value="piper">Piper</option>
           <option value="edge">Edge TTS</option>
@@ -2171,9 +2171,17 @@ hr.div  {
           <option value="speechify">Speechify</option>
           <option value="openai">OpenAI TTS</option>
           <option value="fastkoko">FastKoko (Local)</option>
+          <option value="cw">&#9671; CW (Morse Code)</option>
         </select>
       </div>
-      <div class="form-row">
+      <!-- CW options (shown only when engine=cw) -->
+      <div class="form-row" id="bcn-cw-row" style="display:none">
+        <label>WPM</label>
+        <input type="number" id="bcn-cw-wpm" value="20" min="5" max="60" style="flex:1">
+        <span style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap;padding:0 var(--s2)">wpm</span>
+      </div>
+      <!-- Voice (hidden when CW) -->
+      <div class="form-row" id="bcn-voice-row">
         <label>VOICE</label>
         <input type="text" id="bcn-voice" placeholder="default" style="flex:1">
       </div>
@@ -2371,12 +2379,13 @@ hr.div  {
      PANE: SCHEDULE
 ══════════════════════════ -->
 <div id="pane-sched" class="pane">
-  <div style="display:grid;grid-template-columns:1fr 320px;height:100%;overflow:hidden">
+  <div style="display:grid;grid-template-columns:1fr 360px;height:100%;overflow:hidden">
+
     <!-- Schedule list -->
     <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
       <div class="panel-header">
         <span class="panel-title">SCHEDULED TRANSMISSIONS</span>
-        <button class="btn sm" onclick="loadSchedule()">↺</button>
+        <button class="btn sm" onclick="loadSchedule()">&#8634;</button>
       </div>
       <div class="alert-strip" id="sched-alert"></div>
       <div class="scroll-body" id="sched-list">
@@ -2385,39 +2394,132 @@ hr.div  {
     </div>
 
     <!-- New schedule form -->
-    <div style="display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;flex-direction:column;overflow-y:auto">
       <div class="panel-header"><span class="panel-title">NEW SCHEDULE</span></div>
-      <div class="form-row">
-        <label>CRON</label>
-        <input type="text" id="sched-cron" placeholder="0 * * * *" style="flex:1">
-      </div>
-      <div style="font-size:9px;color:var(--text-dim);padding:0 var(--s4) var(--s3)">
-        m h dom mon dow — e.g. "0 * * * *" = every hour
-      </div>
-      <div style="padding:0 var(--s4) var(--s3);border-bottom:var(--b1)">
-        <div class="field">
-          <label>MESSAGE</label>
-          <textarea id="sched-msg" placeholder="Scheduled transmission text..." rows="3"></textarea>
-        </div>
-      </div>
-      <div class="form-row">
-        <label>ENGINE</label>
-        <select id="sched-engine" style="flex:1">
-          <option value="espeak">eSpeak</option>
-          <option value="piper">Piper</option>
-          <option value="edge">Edge TTS</option>
-          <option value="gtts">Google TTS</option>
-          <option value="pyttsx3">System TTS</option>
-          <option value="elevenlabs">ElevenLabs</option>
-          <option value="speechify">Speechify</option>
-          <option value="openai">OpenAI TTS</option>
-          <option value="fastkoko">FastKoko (Local)</option>
+
+      <!-- ── CRON HELPER ── -->
+      <div class="sec-head">CRON EXPRESSION</div>
+
+      <!-- Preset picker -->
+      <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1)">
+        <select id="sched-cron-preset" onchange="schedCronPreset(this.value)"
+                style="width:100%;font-size:var(--fz-xs)">
+          <option value="">&#9660; Quick presets...</option>
+          <option value="* * * * *">Every minute</option>
+          <option value="*/5 * * * *">Every 5 minutes</option>
+          <option value="*/15 * * * *">Every 15 minutes</option>
+          <option value="*/30 * * * *">Every 30 minutes</option>
+          <option value="0 * * * *">Every hour (top of hour)</option>
+          <option value="30 * * * *">Every hour (half past)</option>
+          <option value="0 */2 * * *">Every 2 hours</option>
+          <option value="0 */4 * * *">Every 4 hours</option>
+          <option value="0 6 * * *">Daily at 06:00</option>
+          <option value="0 12 * * *">Daily at noon</option>
+          <option value="0 18 * * *">Daily at 18:00</option>
+          <option value="0 20 * * *">Daily at 20:00</option>
+          <option value="0 8 * * 1">Every Monday at 08:00</option>
+          <option value="0 8 * * 1-5">Weekdays at 08:00</option>
+          <option value="0 9 * * 6,0">Weekends at 09:00</option>
+          <option value="0 0 1 * *">1st of every month</option>
         </select>
       </div>
-      <div class="form-row">
-        <label>VOICE</label>
-        <input type="text" id="sched-voice" placeholder="default" style="flex:1">
+
+      <!-- Visual field builder -->
+      <div style="padding:var(--s3) var(--s4);border-bottom:var(--b1)">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s2);margin-bottom:var(--s2)">
+          <div class="field">
+            <label style="font-size:8px">MIN</label>
+            <input type="text" id="sched-f-min" value="0" oninput="schedFieldsToExpr()"
+                   style="font-size:9px;text-align:center">
+          </div>
+          <div class="field">
+            <label style="font-size:8px">HOUR</label>
+            <input type="text" id="sched-f-hour" value="*" oninput="schedFieldsToExpr()"
+                   style="font-size:9px;text-align:center">
+          </div>
+          <div class="field">
+            <label style="font-size:8px">DOM</label>
+            <input type="text" id="sched-f-dom" value="*" oninput="schedFieldsToExpr()"
+                   style="font-size:9px;text-align:center">
+          </div>
+          <div class="field">
+            <label style="font-size:8px">MON</label>
+            <input type="text" id="sched-f-mon" value="*" oninput="schedFieldsToExpr()"
+                   style="font-size:9px;text-align:center">
+          </div>
+          <div class="field">
+            <label style="font-size:8px">DOW</label>
+            <input type="text" id="sched-f-dow" value="*" oninput="schedFieldsToExpr()"
+                   style="font-size:9px;text-align:center">
+          </div>
+        </div>
+        <!-- Assembled expression (editable) -->
+        <div style="display:flex;align-items:center;gap:var(--s2)">
+          <input type="text" id="sched-cron" placeholder="0 * * * *"
+                 oninput="schedExprToFields()" style="flex:1;font-family:var(--font);font-size:var(--fz-sm)">
+          <button class="btn sm" onclick="schedValidateCron()" title="Check expression">&#10003;</button>
+        </div>
+        <!-- Human-readable description -->
+        <div id="sched-cron-desc"
+             style="font-size:9px;color:var(--cyan);margin-top:var(--s2);min-height:14px;line-height:1.4"></div>
+        <div style="font-size:8px;color:var(--text-dim);margin-top:var(--s1)">
+          Fields: MIN(0-59) HOUR(0-23) DOM(1-31) MON(1-12) DOW(0-7, 0=Sun)<br>
+          Use * = any &nbsp;·&nbsp; */N = every N &nbsp;·&nbsp; N,M = list &nbsp;·&nbsp; N-M = range
+        </div>
       </div>
+
+      <!-- ── PAYLOAD TYPE ── -->
+      <div class="sec-head">WHAT TO TRANSMIT</div>
+      <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1)">
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s3)">
+          <button id="sched-type-tts-btn" class="btn sm primary"
+                  onclick="schedSetType('tts')">&#128172; TTS</button>
+          <button id="sched-type-clip-btn" class="btn sm"
+                  onclick="schedSetType('clip')">&#128444; CLIP</button>
+        </div>
+
+        <!-- TTS fields -->
+        <div id="sched-tts-fields">
+          <div class="field" style="margin-bottom:var(--s3)">
+            <label>MESSAGE</label>
+            <textarea id="sched-msg" placeholder="Scheduled transmission text..." rows="3"></textarea>
+          </div>
+          <div class="form-row" style="padding:0;margin-bottom:var(--s2)">
+            <label style="min-width:48px">ENGINE</label>
+            <select id="sched-engine" style="flex:1;font-size:var(--fz-xs)">
+              <option value="espeak">eSpeak</option>
+              <option value="piper">Piper</option>
+              <option value="edge">Edge TTS</option>
+              <option value="gtts">Google TTS</option>
+              <option value="pyttsx3">System TTS</option>
+              <option value="elevenlabs">ElevenLabs</option>
+              <option value="speechify">Speechify</option>
+              <option value="openai">OpenAI TTS</option>
+              <option value="fastkoko">FastKoko (Local)</option>
+            </select>
+          </div>
+          <div class="form-row" style="padding:0">
+            <label style="min-width:48px">VOICE</label>
+            <input type="text" id="sched-voice" placeholder="default" style="flex:1;font-size:var(--fz-xs)">
+          </div>
+        </div>
+
+        <!-- Clip fields (hidden by default) -->
+        <div id="sched-clip-fields" style="display:none">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">
+            Select a file from the Clips library to play over the air.
+          </div>
+          <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+            <select id="sched-clip-sel" style="flex:1;font-size:var(--fz-xs)">
+              <option value="">(loading clips...)</option>
+            </select>
+            <button class="btn sm" onclick="schedRefreshClips()" title="Refresh clip list">&#8634;</button>
+          </div>
+          <div id="sched-clip-info"
+               style="font-size:9px;color:var(--text3);min-height:14px"></div>
+        </div>
+      </div>
+
       <div class="btn-row border-top" style="margin-top:auto">
         <button class="btn primary" onclick="createSchedule()">+ CREATE</button>
       </div>
@@ -5276,12 +5378,22 @@ async function loadBeacons() {
     </div>`).join('');
 }
 
+function bcnEngineChange() {
+  const eng = document.getElementById('bcn-engine')?.value;
+  const cwRow  = document.getElementById('bcn-cw-row');
+  const vxRow  = document.getElementById('bcn-voice-row');
+  if (cwRow)  cwRow.style.display  = eng === 'cw' ? '' : 'none';
+  if (vxRow)  vxRow.style.display  = eng === 'cw' ? 'none' : '';
+}
+
 async function createBeacon() {
+  const engine = document.getElementById('bcn-engine').value;
   const r = await api('POST','/api/beacon',{
     name:     document.getElementById('bcn-name').value,
     text:     document.getElementById('bcn-msg').value,
-    engine:   document.getElementById('bcn-engine').value,
-    voice:    document.getElementById('bcn-voice').value || null,
+    engine:   engine,
+    voice:    engine === 'cw' ? null : (document.getElementById('bcn-voice').value || null),
+    cw_wpm:   engine === 'cw' ? (parseInt(document.getElementById('bcn-cw-wpm').value) || 20) : undefined,
     interval_minutes: parseInt(document.getElementById('bcn-interval').value)||60,
     repeat:   parseInt(document.getElementById('bcn-repeat').value)||1,
   });
@@ -5322,7 +5434,10 @@ async function loadWaterfallCanned() {
   if (cs) cs.oninput = function() { document.getElementById('wf-contrast-val').textContent = this.value; };
 }
 
+let _wfSelectedCanned = '';  // tracks the last canned image previewed
+
 async function loadCannedPreview(name) {
+  _wfSelectedCanned = name;
   const bw  = document.getElementById('wf-bw')?.value  || 2700;
   const ct  = document.getElementById('wf-contrast')?.value || 1.5;
   const cal = document.getElementById('wf-callsign')?.value || '';
@@ -5360,16 +5475,40 @@ function drawWaterfall(b64) {
 async function wfStartPreview() { await loadCannedPreview('smiley'); }
 function wfStop() {}
 
+function _wfBuildFormData(cannedOverride) {
+  const p   = wfGetProc();
+  const fd  = new FormData();
+  const can = cannedOverride || _wfSelectedCanned;
+  if (can) fd.append('canned', can);
+  fd.append('bandwidth',     p.bandwidth);
+  fd.append('base_freq',     200);
+  fd.append('contrast',      p.contrast);
+  fd.append('callsign_text', p.callsign);
+  fd.append('frame_duration', 0.08);
+  fd.append('add_markers',   'true');
+  return fd;
+}
+
 async function wfTransmit() {
-  const r = await api('POST','/api/waterfall/transmit',wfGetProc());
-  showAlert('wf-alert', r.message||(r.success?'TX complete':'Failed'), r.success?'ok':'err');
+  if (!_wfSelectedCanned) {
+    showAlert('wf-alert', 'Click a canned image to preview it first, then TX IMAGE', 'warn');
+    return;
+  }
+  showAlert('wf-alert', 'Transmitting waterfall image...', 'warn', 0);
+  try {
+    const res = await fetch('/api/waterfall/transmit', {method:'POST', body: _wfBuildFormData()});
+    const r   = await res.json();
+    showAlert('wf-alert', r.message||(r.success?'TX complete':'Failed'), r.success?'ok':'err');
+  } catch(e) { showAlert('wf-alert','TX error: '+e.message,'err'); }
 }
 
 async function wfTransmitCanned(name) {
-  const p = wfGetProc();
-  p.canned = name;
-  const r = await api('POST','/api/waterfall/transmit', p);
-  showAlert('wf-alert', r.message||(r.success?'TX complete':'Failed'), r.success?'ok':'err');
+  showAlert('wf-alert', 'Transmitting '+name+'...', 'warn', 0);
+  try {
+    const res = await fetch('/api/waterfall/transmit', {method:'POST', body: _wfBuildFormData(name)});
+    const r   = await res.json();
+    showAlert('wf-alert', r.message||(r.success?'TX complete':'Failed'), r.success?'ok':'err');
+  } catch(e) { showAlert('wf-alert','TX error: '+e.message,'err'); }
 }
 
 function wfTextPreset(txt) { document.getElementById('wf-text-inp').value = txt; }
@@ -5484,6 +5623,15 @@ function sstvLoadFile(f) {
   reader.readAsDataURL(f);
 }
 
+// Approximate TX durations by mode (seconds, including encoding overhead)
+const _SSTV_DURATIONS = {
+  'Robot36':72,'Robot72':120,'Martin M1':130,'Martin M2':72,
+  'Scottie S1':120,'Scottie S2':75,'Scottie DX':285,
+  'PD90':100,'PD120':130,'PD160':170,'PD180':190,'PD240':250,
+  'Wraase SC2-180':190,
+};
+let _sstvTxTimer = null;
+
 async function sstvTransmit() {
   if (!_sstvSelMode) { showAlert('sstv-alert','Select a mode first','warn'); return; }
   const file = document.getElementById('sstv-file-inp').files[0];
@@ -5500,12 +5648,31 @@ async function sstvTransmit() {
   if (wrap) wrap.style.display = 'block';
   sstvProgress(0, 'Encoding...');
 
+  // Animate progress bar based on elapsed time vs expected mode duration
+  const expectedSecs = _SSTV_DURATIONS[_sstvSelMode] || 90;
+  const t0 = Date.now();
+  clearInterval(_sstvTxTimer);
+  _sstvTxTimer = setInterval(() => {
+    const elapsed = (Date.now() - t0) / 1000;
+    const pct = Math.min(97, Math.round((elapsed / expectedSecs) * 100));
+    const label = elapsed < 3 ? 'Encoding...' :
+                  elapsed < expectedSecs * 0.9 ? `Transmitting ${_sstvSelMode}… ${Math.round(elapsed)}s` :
+                  'Finishing up…';
+    sstvProgress(pct, label);
+  }, 500);
+
   try {
     const res = await fetch('/api/sstv', {method:'POST', body:fd});
     const r   = await res.json();
+    clearInterval(_sstvTxTimer);
+    sstvProgress(100, r.success ? 'TX complete ✓' : 'Failed');
+    setTimeout(() => { if (wrap) wrap.style.display='none'; sstvProgress(0,''); }, 2000);
     showAlert('sstv-alert', r.message||(r.success?'SSTV TX complete':'Failed'), r.success?'ok':'err');
-  } catch(e) { showAlert('sstv-alert','SSTV error: '+e.message,'err'); }
-  finally { if (wrap) wrap.style.display='none'; }
+  } catch(e) {
+    clearInterval(_sstvTxTimer);
+    if (wrap) wrap.style.display='none';
+    showAlert('sstv-alert','SSTV error: '+e.message,'err');
+  }
 }
 
 async function sstvEncode() {
@@ -5560,22 +5727,35 @@ async function loadSchedule() {
     lst.innerHTML = '<div style="padding:var(--s7) var(--s4);color:var(--text3);font-size:var(--fz-sm)">No schedules configured.</div>';
     return;
   }
-  lst.innerHTML = jobs.map(j => `
-    <div class="sched-item">
+  lst.innerHTML = jobs.map(j => {
+    const label = j.sound_file ? ('\uD83D\uDCFC '+j.sound_file) : (j.message||j.text||'');
+    const eng   = j.sound_file ? 'CLIP' : (j.engine||'');
+    return `<div class="sched-item">
       <span class="sched-cron">${escHtml(j.cron||j.schedule||'')}</span>
-      <span class="sched-msg">${escHtml(j.message||'')}</span>
-      <span class="sched-eng">${escHtml(j.engine||'')}</span>
+      <span class="sched-msg">${escHtml(label)}</span>
+      <span class="sched-eng">${escHtml(eng)}</span>
       <button class="btn sm tx sched-del" onclick="deleteSchedule('${j.id}')">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function createSchedule() {
-  const r = await api('POST','/api/schedule',{
-    cron_expression: document.getElementById('sched-cron').value,
-    message: document.getElementById('sched-msg').value,
-    engine:  document.getElementById('sched-engine').value,
-    voice:   document.getElementById('sched-voice').value || null,
-  });
+  const cron  = document.getElementById('sched-cron').value.trim();
+  if (!cron) { showAlert('sched-alert','Enter a cron expression','warn'); return; }
+  const type  = document.getElementById('sched-type-tts-btn').classList.contains('primary') ? 'tts' : 'clip';
+  let body = { cron, message: '' };
+  if (type === 'clip') {
+    const sf = document.getElementById('sched-clip-sel')?.value;
+    if (!sf) { showAlert('sched-alert','Select a clip file','warn'); return; }
+    body.sound_file = sf;
+  } else {
+    const msg = document.getElementById('sched-msg').value.trim();
+    if (!msg) { showAlert('sched-alert','Enter a message','warn'); return; }
+    body.text   = msg;
+    body.engine = document.getElementById('sched-engine').value;
+    body.voice  = document.getElementById('sched-voice').value || null;
+  }
+  const r = await api('POST','/api/schedule', body);
   showAlert('sched-alert', r.message||(r.success?'Created':'Failed'), r.success?'ok':'err');
   if (r.success) loadSchedule();
 }
@@ -5585,6 +5765,155 @@ async function deleteSchedule(id) {
   await api('DELETE', `/api/schedule/${id}`);
   loadSchedule();
 }
+
+// ── Cron helper ──────────────────────────────────────────────
+function schedCronPreset(val) {
+  if (!val) return;
+  const el = document.getElementById('sched-cron');
+  if (el) { el.value = val; schedExprToFields(); }
+  // Reset dropdown to placeholder after selection
+  const sel = document.getElementById('sched-cron-preset');
+  if (sel) setTimeout(() => sel.value = '', 50);
+}
+
+function schedFieldsToExpr() {
+  const f = (id) => document.getElementById(id)?.value.trim() || '*';
+  const expr = `${f('sched-f-min')} ${f('sched-f-hour')} ${f('sched-f-dom')} ${f('sched-f-mon')} ${f('sched-f-dow')}`;
+  const el = document.getElementById('sched-cron');
+  if (el) el.value = expr;
+  schedDescribe(expr);
+}
+
+function schedExprToFields() {
+  const expr = document.getElementById('sched-cron')?.value.trim() || '';
+  const parts = expr.split(/\s+/);
+  if (parts.length !== 5) { schedDescribe(expr); return; }
+  const ids = ['sched-f-min','sched-f-hour','sched-f-dom','sched-f-mon','sched-f-dow'];
+  ids.forEach((id, i) => { const el = document.getElementById(id); if (el) el.value = parts[i]; });
+  schedDescribe(expr);
+}
+
+function schedValidateCron() {
+  schedExprToFields();
+  const desc = document.getElementById('sched-cron-desc')?.textContent;
+  if (desc && !desc.includes('?')) {
+    showAlert('sched-alert', 'Cron: ' + desc, 'ok', 3000);
+  } else {
+    showAlert('sched-alert', 'Check expression — 5 fields required (min hr dom mon dow)', 'warn', 4000);
+  }
+}
+
+function schedDescribe(expr) {
+  const el = document.getElementById('sched-cron-desc');
+  if (!el) return;
+  const d = _cronDescribe(expr);
+  el.textContent = d;
+  el.style.color = d.includes('?') ? 'var(--warn)' : 'var(--cyan)';
+}
+
+function _cronDescribe(expr) {
+  if (!expr || !expr.trim()) return '';
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return '? 5 fields required: MIN HOUR DOM MON DOW';
+  const [min, hour, dom, mon, dow] = parts;
+
+  // Helper: describe a single field
+  const field = (v, unit, zero) => {
+    if (v === '*') return null;
+    if (v.startsWith('*/')) {
+      const n = v.slice(2);
+      return `every ${n} ${unit}${n==='1'?'':'s'}`;
+    }
+    if (v.includes('-')) return `${unit}s ${v}`;
+    if (v.includes(',')) return `${unit}s ${v}`;
+    return `${unit} ${v}`;
+  };
+
+  const parts2 = [
+    field(min,  'minute'), field(hour, 'hour'),
+    field(dom,  'day of month'), field(mon, 'month'), field(dow, 'day of week'),
+  ].filter(Boolean);
+
+  const timeStr = () => {
+    if (hour !== '*' && !hour.includes('/') && min !== '*' && !min.includes('/')) {
+      const hh = hour.padStart(2,'0'), mm = min.padStart(2,'0');
+      return `at ${hh}:${mm}`;
+    }
+    return null;
+  };
+
+  if (min === '*' && hour === '*' && dom === '*' && mon === '*' && dow === '*')
+    return 'Every minute';
+  if (min.startsWith('*/') && hour === '*' && dom === '*' && mon === '*' && dow === '*')
+    return `Every ${min.slice(2)} minutes`;
+  if (min !== '*' && !min.includes('/') && hour === '*' && dom === '*' && mon === '*' && dow === '*')
+    return `Every hour at :${min.padStart(2,'0')}`;
+  if (min !== '*' && !min.includes('/') && hour !== '*' && !hour.includes('/') && dom === '*' && mon === '*' && dow === '*')
+    return `Daily at ${hour.padStart(2,'0')}:${min.padStart(2,'0')} UTC`;
+  if (dom === '*' && mon === '*' && dow !== '*' && hour !== '*' && !hour.includes('/'))
+    return `Every ${_DOW_NAMES[dow] || 'week'} at ${hour.padStart(2,'0')}:${min.padStart(2,'0')} UTC`;
+  if (dom !== '*' && mon === '*' && dow === '*')
+    return `Day ${dom} of each month at ${hour !== '*'?hour.padStart(2,'0'):'?'}:${min !== '*'?min.padStart(2,'0'):'?'} UTC`;
+  if (parts2.length) return parts2.join(', ');
+  return expr;
+}
+
+const _DOW_NAMES = {
+  '0':'Sunday','1':'Monday','2':'Tuesday','3':'Wednesday',
+  '4':'Thursday','5':'Friday','6':'Saturday','7':'Sunday',
+  '1-5':'Weekdays','6,0':'Weekends','0,6':'Weekends',
+};
+
+// ── Schedule type toggle (TTS vs CLIP) ────────────────────────────
+function schedSetType(type) {
+  const ttsBtn   = document.getElementById('sched-type-tts-btn');
+  const clipBtn  = document.getElementById('sched-type-clip-btn');
+  const ttsFlds  = document.getElementById('sched-tts-fields');
+  const clipFlds = document.getElementById('sched-clip-fields');
+  if (type === 'tts') {
+    if (ttsBtn)  ttsBtn.className  = 'btn sm primary';
+    if (clipBtn) clipBtn.className = 'btn sm';
+    if (ttsFlds)  ttsFlds.style.display  = '';
+    if (clipFlds) clipFlds.style.display = 'none';
+  } else {
+    if (ttsBtn)  ttsBtn.className  = 'btn sm';
+    if (clipBtn) clipBtn.className = 'btn sm primary';
+    if (ttsFlds)  ttsFlds.style.display  = 'none';
+    if (clipFlds) clipFlds.style.display = '';
+    schedRefreshClips();
+  }
+}
+
+async function schedRefreshClips() {
+  const sel  = document.getElementById('sched-clip-sel');
+  const info = document.getElementById('sched-clip-info');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">(loading...)</option>';
+  try {
+    const r = await fetch('/api/clips/list');
+    const d = await r.json();
+    const files = d.files || [];
+    if (!files.length) {
+      sel.innerHTML = '<option value="">(no clips — scan in Clips tab first)</option>';
+      if (info) info.textContent = 'No clips found. Go to CLIPS tab and click SCAN ALL.';
+      return;
+    }
+    sel.innerHTML = files.map(f => {
+      const dur = clipsEstDuration(f.size, f.ext);
+      const src = f.source === 's3' ? ' [S3]' : '';
+      return `<option value="${escHtml(f.name)}">${escHtml(f.name)}${dur?' • '+dur:''}${src}</option>`;
+    }).join('');
+    if (info) info.textContent = `${files.length} clip(s) available`;
+  } catch(e) {
+    sel.innerHTML = '<option value="">(error loading clips)</option>';
+    if (info) info.textContent = 'Error: ' + e.message;
+  }
+}
+
+// Init cron helper on page load
+(function schedInitCron() {
+  schedFieldsToExpr();
+})();
 
 // ─────────────────────────────────────────────────────────────
 // HISTORY / LOG

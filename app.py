@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.31
+RigGPT v2.12.32
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -15,6 +15,21 @@ below. When bumping versions, update ALL of the following in the same commit:
   - requirements.txt comment header
   - INSTALL.sh comment header and VERSION variable
   - templates/index.html status bar hardcoded version string (sb-label in statusbar)
+
+v2.12.32 changes:
+  - FIX: WF ART TX IMAGE 400 -- api_waterfall_transmit now accepts JSON body
+    (application/json) in addition to multipart/form-data. Also accepts
+    canned image name from JSON so wfTransmit() works without file upload.
+  - FIX: SSTV transmit progress bar now animates in real-time while TX is
+    in flight using per-mode duration estimates.
+  - FEATURE: CW beacon option -- new 'cw' engine in beacon form. Synthesizes
+    Morse code tones (800Hz, configurable WPM) via numpy, PTTs the rig and
+    plays. Callsign appended as DE <CALL> AR automatically.
+  - FEATURE: Schedule cron helper -- visual cron builder with minute/hour/DOM/
+    month/DOW fields, common preset dropdown, human-readable preview.
+  - FEATURE: Schedule sound file -- new CLIP type on schedule form; choose any
+    file from Clips list; plays via PTT+aplay at schedule time, same as
+    beacon CW path.
 
 v2.12.31 changes:
   - FEATURE: Clips default directory changed from /opt/riggpt/clips to /sounds.
@@ -326,7 +341,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.31'
+VERSION        = 'v2.12.32'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -2262,29 +2277,124 @@ _NATO = {
 def _phonetic(callsign):
     return ' '.join(_NATO.get(c.upper(), c) for c in callsign if c.strip())
 
+# ── CW / Morse synthesis ─────────────────────────────────────
+_MORSE_TABLE = {
+    'A':'.-',   'B':'-...', 'C':'-.-.', 'D':'-..',  'E':'.',    'F':'..-.',
+    'G':'--.',  'H':'....', 'I':'..',   'J':'.---', 'K':'-.-',  'L':'.-..',
+    'M':'--',   'N':'-.',   'O':'---',  'P':'.--.', 'Q':'--.-', 'R':'.-.',
+    'S':'...',  'T':'-',    'U':'..-',  'V':'...-', 'W':'.--',  'X':'-..-',
+    'Y':'-.--', 'Z':'--..',
+    '0':'-----','1':'.----','2':'..---','3':'...--','4':'....-','5':'.....',
+    '6':'-....','7':'--...','8':'---..',  '9':'----.',
+    '.':'.-.-.-', ',':'--..--', '?':'..--..', '/':'-..-.', 'AR':'.-.-.',
+    'SK':'...-.-', 'BT':'-...-', '+':'.-.-.',
+}
+
+def _cw_synthesize(text: str, wpm: int = 20, tone_hz: int = 700,
+                   sample_rate: int = 8000) -> bytes:
+    """Synthesize Morse CW as a raw 16-bit PCM WAV (returned as bytes)."""
+    import numpy as np, struct
+    unit = 1.2 / max(5, wpm)          # dit duration in seconds
+    dit  = int(unit * sample_rate)
+    dah  = dit * 3
+    iel  = dit                        # inter-element gap (between dots/dashes)
+    ich  = dit * 3                    # inter-character gap
+    iw   = dit * 7                    # inter-word gap
+
+    def tone(n_samples):
+        t = np.linspace(0, n_samples / sample_rate, n_samples, endpoint=False)
+        wave = (np.sin(2 * np.pi * tone_hz * t) * 32000 * 0.9).astype(np.int16)
+        return wave
+
+    silence = lambda n: np.zeros(n, dtype=np.int16)
+
+    samples = []
+    for word in text.upper().split():
+        for ci, char in enumerate(word):
+            code = _MORSE_TABLE.get(char)
+            if code is None:
+                continue
+            for ei, element in enumerate(code):
+                samples.append(tone(dah if element == '-' else dit))
+                if ei < len(code) - 1:
+                    samples.append(silence(iel))
+            if ci < len(word) - 1:
+                samples.append(silence(ich))
+        samples.append(silence(iw))
+
+    if not samples:
+        pcm = silence(sample_rate)  # 1s silence if nothing encoded
+    else:
+        pcm = np.concatenate(samples)
+
+    # Build WAV header
+    n_samples  = len(pcm)
+    data_bytes = pcm.tobytes()
+    fmt_chunk  = struct.pack('<4sIHHIIHH', b'fmt ', 16, 1, 1,
+                             sample_rate, sample_rate * 2, 2, 16)
+    data_chunk = b'data' + struct.pack('<I', len(data_bytes)) + data_bytes
+    riff       = b'RIFF' + struct.pack('<I', 4 + len(fmt_chunk) + len(data_chunk)) + b'WAVE'
+    return riff + fmt_chunk + data_chunk
+
+
+def _run_beacon_cw(bid, cfg):
+    """Transmit a CW beacon: synthesize tones and key PTT."""
+    text = cfg.get('text', '')
+    wpm  = int(cfg.get('cw_wpm', 20))
+    # Optionally append callsign
+    callsign = cfg.get('callsign', '').strip().upper()
+    if callsign:
+        text = f'{text} DE {callsign} AR'
+    try:
+        wav_bytes = _cw_synthesize(text, wpm=wpm)
+        _fd, wav_path = tempfile.mkstemp(suffix='_cw.wav')
+        os.close(_fd)
+        with open(wav_path, 'wb') as f:
+            f.write(wav_bytes)
+        ptt_agent = orchestrator.icom_agent
+        if orchestrator._connected:
+            ptt_agent.ptt_on()
+        import subprocess
+        dev = AUDIO_DEVICE or 'default'
+        subprocess.run(['aplay', '-D', dev, wav_path],
+                       timeout=300, capture_output=True)
+        if orchestrator._connected:
+            ptt_agent.ptt_off()
+    except Exception as e:
+        logger.error(f'CW beacon {bid} error: {e}')
+        try: orchestrator.icom_agent.ptt_off()
+        except Exception: pass
+    finally:
+        try: os.unlink(wav_path)
+        except Exception: pass
+
+
 def _run_beacon(bid):
     with _beacon_lock:
         if bid not in _beacons: return
         cfg = dict(_beacons[bid]['config'])
     callsign = cfg.get('callsign', '')
     text     = cfg['text']
-    if cfg.get('phonetic') and callsign:
-        full = f"{text} This is {_phonetic(callsign)}"
-    elif callsign:
-        full = f"{text} This is {callsign}"
+    if cfg.get('engine') == 'cw':
+        _run_beacon_cw(bid, cfg)
     else:
-        full = text
-    try:
-        result = orchestrator.execute(
-            full, engine=cfg.get('engine','piper'), voice=cfg.get('voice'),
-            preset=cfg.get('preset','normal'), roger_beep=cfg.get('roger_beep',True),
-        )
-        with _beacon_lock:
-            if bid in _beacons:
-                _beacons[bid]['last_tx']  = _now_utc()
-                _beacons[bid]['tx_count'] = _beacons[bid].get('tx_count', 0) + 1
-    except Exception as e:
-        logger.error(f"Beacon {bid} error: {e}")
+        if cfg.get('phonetic') and callsign:
+            full = f"{text} This is {_phonetic(callsign)}"
+        elif callsign:
+            full = f"{text} This is {callsign}"
+        else:
+            full = text
+        try:
+            orchestrator.execute(
+                full, engine=cfg.get('engine','piper'), voice=cfg.get('voice'),
+                preset=cfg.get('preset','normal'), roger_beep=cfg.get('roger_beep',True),
+            )
+        except Exception as e:
+            logger.error(f"Beacon {bid} error: {e}")
+    with _beacon_lock:
+        if bid in _beacons:
+            _beacons[bid]['last_tx']  = _now_utc()
+            _beacons[bid]['tx_count'] = _beacons[bid].get('tx_count', 0) + 1
 
 
 
@@ -2453,21 +2563,61 @@ def api_schedule_list():
 def api_schedule_add():
     if not scheduler:
         return jsonify({'error': 'Scheduler not available'}), 503
-    data = request.json or {}
-    text = data.get('text', '').strip()
-    cron = data.get('cron', '')
-    if not text or not cron:
-        return jsonify({'success': False, 'message': 'text and cron required'}), 400
+    data       = request.json or {}
+    cron       = data.get('cron', '').strip()
+    text       = data.get('text', '').strip()
+    sound_file = data.get('sound_file', '').strip()
+    if not cron:
+        return jsonify({'success': False, 'message': 'cron expression required'}), 400
+    if not text and not sound_file:
+        return jsonify({'success': False, 'message': 'text or sound_file required'}), 400
     try:
         engine = data.get('engine', 'piper')
         voice  = data.get('voice')
         preset = data.get('preset', 'normal')
-        job = scheduler.add_job(
-            lambda t=text, e=engine, v=voice, p=preset: orchestrator.execute(t, engine=e, voice=v, preset=p),
-            CronTrigger.from_crontab(cron),
-            id=f'sched_{int(time_module.time())}'
-        )
-        return jsonify({'success': True, 'job_id': job.id})
+        if sound_file:
+            def _play_clip(sf=sound_file):
+                """Play a Clips sound file over the air."""
+                cfg = _clips_cfg()
+                clips_dir = cfg.get('dir', CLIPS_DEFAULT_DIR)
+                local_path = os.path.join(clips_dir, sf)
+                # Also check S3 cache
+                s3_cache = '/tmp/riggpt_clips_cache'
+                cache_path = os.path.join(s3_cache, sf)
+                path = local_path if os.path.exists(local_path) else (cache_path if os.path.exists(cache_path) else None)
+                if not path:
+                    logger.error(f'Schedule clip not found: {sf}')
+                    return
+                try:
+                    ptt_agent = orchestrator.icom_agent
+                    if orchestrator._connected:
+                        ptt_agent.ptt_on()
+                    import subprocess
+                    dev = AUDIO_DEVICE or 'default'
+                    subprocess.run(['aplay', '-D', dev, path], timeout=300, capture_output=True)
+                    if orchestrator._connected:
+                        ptt_agent.ptt_off()
+                except Exception as e:
+                    logger.error(f'Schedule clip play error: {e}')
+                    try: orchestrator.icom_agent.ptt_off()
+                    except Exception: pass
+            job = scheduler.add_job(
+                _play_clip,
+                CronTrigger.from_crontab(cron),
+                id=f'sched_{int(time_module.time())}'
+            )
+            label = sound_file
+        else:
+            job = scheduler.add_job(
+                lambda t=text, e=engine, v=voice, p=preset: orchestrator.execute(t, engine=e, voice=v, preset=p),
+                CronTrigger.from_crontab(cron),
+                id=f'sched_{int(time_module.time())}'
+            )
+            label = text
+        # Store metadata for display
+        job.meta = {'text': label, 'engine': engine if not sound_file else 'clip',
+                    'sound_file': sound_file, 'cron': cron}
+        return jsonify({'success': True, 'job_id': job.id, 'label': label})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -2647,6 +2797,7 @@ def api_beacon_create():
         'interval_minutes': minutes, 'engine': data.get('engine', 'piper'),
         'voice': data.get('voice'), 'preset': data.get('preset', 'normal'),
         'roger_beep': bool(data.get('roger_beep', True)), 'created': _now_utc(),
+        'cw_wpm': int(data.get('cw_wpm', 20)),
     }
     try:
         job = scheduler.add_job(
@@ -2773,17 +2924,22 @@ def api_waterfall_transmit():
     if not _waterfall_ok:
         return jsonify({'success': False, 'message': 'waterfall_image module not loaded'}), 500
 
-    canned = request.form.get('canned', '')
-    if not canned and 'image' not in request.files:
-        return jsonify({'success': False, 'message': 'No image file or canned image specified'}), 400
+    # Accept both multipart/form-data and application/json
+    _jb = request.get_json(silent=True) or {}
+    def _get(key, default=''):
+        return request.form.get(key, _jb.get(key, default))
 
-    image_width  = int(request.form.get('image_width',   128))
-    image_height = int(request.form.get('image_height',   64))
-    base_freq    = float(request.form.get('base_freq',  200.0))
-    bandwidth    = float(request.form.get('bandwidth', 2400.0))
-    frame_dur    = float(request.form.get('frame_duration', 0.08))
-    add_markers  = request.form.get('add_markers', 'true').lower() == 'true'
-    proc         = _wf_proc_params(request.form)
+    canned = _get('canned', '')
+    if not canned and 'image' not in request.files:
+        return jsonify({'success': False, 'message': 'No image file or canned image specified. Click a canned image button first, then TX IMAGE.'}), 400
+
+    image_width  = int(_get('image_width',   128))
+    image_height = int(_get('image_height',   64))
+    base_freq    = float(_get('base_freq',  200.0))
+    bandwidth    = float(_get('bandwidth', 2700.0))
+    frame_dur    = float(_get('frame_duration', 0.08))
+    add_markers  = str(_get('add_markers', 'true')).lower() == 'true'
+    proc         = _wf_proc_params(request.form) if request.form else _wf_proc_params(_jb)
 
     if base_freq + bandwidth > 2800:
         return jsonify({'success': False,
