@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.50</span>
+    <span class="sb-label">v2.12.51</span>
   </div>
 </div>
 
@@ -2063,7 +2063,7 @@ hr.div  {
       <div class="panel-header"><span class="panel-title">TX PARAMETERS</span></div>
       <div class="form-row">
         <label>BW Hz</label>
-        <input type="number" id="wf-bw" value="2700" min="500" max="4000" style="flex:1">
+        <input type="number" id="wf-bw" value="2400" min="500" max="4000" style="flex:1">
       </div>
       <div class="form-row">
         <label>DURATION</label>
@@ -2789,6 +2789,13 @@ hr.div  {
     <span class="panel-title" style="color:var(--tx)">&#9760; SPECIAL OPERATIONS</span>
     <span style="font-size:9px;color:var(--text3)">automated radio chaos &mdash; you were warned</span>
     <span id="ghost-active-badge" style="display:none;margin-left:auto;font-size:9px;padding:2px 8px;border:1px solid var(--tx);color:var(--tx);font-family:var(--mono);animation:blink 1s step-end infinite">&#128123; POSSESSED: <span id="ghost-active-name"></span></span>
+    <button onclick="specopsStopAll()" style="
+      margin-left:auto;padding:6px 18px;font-size:11px;font-weight:700;
+      background:radial-gradient(circle at 40% 40%,#cc0000,#550000);
+      border:2px solid var(--tx);color:#fff;cursor:pointer;
+      letter-spacing:.1em;font-family:var(--font);
+      box-shadow:0 0 12px rgba(200,0,0,.4);
+    ">&#9632; STOP ALL</button>
   </div>
 
   <!-- ROW 1: Numbers Station, Solar Weather, Mystery TX, Auto-ID -->
@@ -3019,7 +3026,7 @@ hr.div  {
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:var(--s3);margin-bottom:var(--s3)">
 
       <!-- VFO Poltergeist -->
-      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1);display:flex;flex-direction:column">
         <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#128994; VFO POLTERGEIST</div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Randomly drifts the VFO frequency ±50&ndash;5000 Hz every 0.5&ndash;3s. Restores on stop.</div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
@@ -3031,62 +3038,62 @@ hr.div  {
           <span style="font-size:9px;color:var(--text3)">DURATION</span>
           <input type="number" id="ghost-poltergeist-dur" value="30" min="5" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
         </div>
-        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('poltergeist')">POSSESS</button>
+        <button class="btn sm" style="margin-top:auto;width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('poltergeist')">POSSESS</button>
       </div>
 
       <!-- Passband Possession -->
-      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1);display:flex;flex-direction:column">
         <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#127770; PASSBAND POSSESSION</div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Rapidly cycles IF filter 1→2→3→2→1. Audio breathes and pulses through bandwidth changes.</div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
           <span style="font-size:9px;color:var(--text3)">DURATION</span>
           <input type="number" id="ghost-passband-dur" value="30" min="5" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
         </div>
-        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('passband')">POSSESS</button>
+        <button class="btn sm" style="margin-top:auto;width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('passband')">POSSESS</button>
       </div>
 
       <!-- RF Power Wobble -->
-      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1);display:flex;flex-direction:column">
         <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#127926; RF POWER WOBBLE</div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Sinusoidal TX power modulation via CI-V 0x14/0x0A. Creates AM-like tremolo on the carrier.</div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
           <span style="font-size:9px;color:var(--text3)">DURATION</span>
           <input type="number" id="ghost-wobble-dur" value="30" min="5" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
         </div>
-        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('power_wobble')">POSSESS</button>
+        <button class="btn sm" style="margin-top:auto;width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('power_wobble')">POSSESS</button>
       </div>
 
       <!-- AGC Seizure -->
-      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1);display:flex;flex-direction:column">
         <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#9889; AGC SEIZURE</div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Rapid AGC cycling FAST→MID→SLOW→OFF. Gain hunting makes audio collapse and surge unpredictably.</div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
           <span style="font-size:9px;color:var(--text3)">DURATION</span>
           <input type="number" id="ghost-agc-dur" value="30" min="5" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
         </div>
-        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('agc_seizure')">POSSESS</button>
+        <button class="btn sm" style="margin-top:auto;width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('agc_seizure')">POSSESS</button>
       </div>
 
       <!-- Split Personality -->
-      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1);display:flex;flex-direction:column">
         <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#129394; SPLIT PERSONALITY</div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Enables SPLIT mode. VFO-B randomly offset ±1&ndash;10 kHz. TX and RX on different frequencies.</div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
           <span style="font-size:9px;color:var(--text3)">DURATION</span>
           <input type="number" id="ghost-split-dur" value="60" min="5" max="600" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
         </div>
-        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('split_personality')">POSSESS</button>
+        <button class="btn sm" style="margin-top:auto;width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('split_personality')">POSSESS</button>
       </div>
 
       <!-- Digital Ghost -->
-      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1);display:flex;flex-direction:column">
         <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#128315; DIGITAL GHOST</div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Keys PTT and transmits random CW fragments. Sounds like a haunted station calling CQ from nowhere.</div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
           <span style="font-size:9px;color:var(--text3)">DURATION</span>
           <input type="number" id="ghost-digital-dur" value="60" min="5" max="600" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
         </div>
-        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('digital_ghost')">POSSESS</button>
+        <button class="btn sm" style="margin-top:auto;width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('digital_ghost')">POSSESS</button>
       </div>
 
       <!-- THE EXORCIST -->
@@ -5731,7 +5738,7 @@ let _wfSelectedCanned = '';  // tracks the last canned image previewed
 
 async function loadCannedPreview(name) {
   _wfSelectedCanned = name;
-  const bw  = document.getElementById('wf-bw')?.value      || 2700;
+  const bw  = document.getElementById('wf-bw')?.value      || 2400;
   const ct  = document.getElementById('wf-contrast')?.value || 1.5;
   const dur = parseInt(document.getElementById('wf-dur')?.value || 30);
   // /api/waterfall/preview uses multipart form data, not JSON
@@ -5820,7 +5827,7 @@ async function wfTransmitText() {
 
 function wfGetProc() {
   return {
-    bandwidth:  parseInt(document.getElementById('wf-bw')?.value  || 2700),
+    bandwidth:  parseInt(document.getElementById('wf-bw')?.value  || 2400),
     duration:   parseInt(document.getElementById('wf-dur')?.value || 30),
     sideband:   document.getElementById('wf-sideband')?.value     || 'usb',
     contrast:   parseFloat(document.getElementById('wf-contrast')?.value || 1.5),
@@ -10678,6 +10685,36 @@ function _restoreAllSettings(s) {
 // =============================================================
 
 // ── Spec Ops voice autocomplete ───────────────────────────────────────────
+// ── STOP ALL — kill every running spec op + ghost + TX ────────────────────
+async function specopsStopAll() {
+  const ops = [
+    api('POST', '/api/numbers_station/stop'),
+    api('POST', '/api/pirate/stop'),
+    api('POST', '/api/mystery/stop'),
+    api('POST', '/api/autoid/stop'),
+    api('POST', '/api/ghost/stop'),
+    api('POST', '/api/tx/terminate'),
+    api('POST', '/api/ptt', {state: false}),
+  ];
+  await Promise.allSettled(ops);
+  // Reset all button states
+  const resets = [
+    ['ns-start-btn',     '\u25a0 START', ''],
+    ['pirate-start-btn', '\uD83D\uDD34 ON AIR', ''],
+    ['autoid-start-btn', 'START', ''],
+  ];
+  for (const [id, text, bg] of resets) {
+    const el = document.getElementById(id);
+    if (el) { el.innerHTML = text; el.style.background = bg; }
+  }
+  const mystEl = document.getElementById('mystery-next');
+  if (mystEl) mystEl.textContent = '—';
+  const badge = document.getElementById('ghost-active-badge');
+  if (badge) badge.style.display = 'none';
+  ghostPoll();
+  specopsRefreshStatus();
+}
+
 function specopsVoiceRefresh(prefix) {
   const keyMap = {ns:'numbers_station_voice', solar:'solar_voice', mystery:'mystery_voice',
                   autoid:'autoid_voice', pirate:'pirate_voice', ghost:'ghost_voice'};
