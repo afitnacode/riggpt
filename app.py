@@ -1339,12 +1339,30 @@ class SpeechifyTTSAgent:
             if resp.status_code == 200:
                 # Guard against Speechify returning HTTP 200 with a JSON error body
                 # instead of audio (happens with invalid voice_id or plan limits).
-                # MP3 files start with 0xFF 0xFB/0xF3/0xF2 (MPEG frame sync) or
-                # 0x49 0x44 0x33 (ID3 tag). Anything else is not audio.
                 content = resp.content
                 ct = resp.headers.get('Content-Type', '')
+
+                # Speechify may return JSON with base64-encoded audio in 'audio_data'
+                # field instead of raw audio bytes, even when we request audio/mpeg.
+                if 'application/json' in ct:
+                    try:
+                        jdata = resp.json()
+                        b64_audio = jdata.get('audio_data', '')
+                        if b64_audio:
+                            import base64
+                            content = base64.b64decode(b64_audio)
+                            logger.info(f'Speechify TTS: decoded {len(content)} bytes from JSON audio_data')
+                        else:
+                            err_msg = jdata.get('message', jdata.get('error', repr(jdata)[:200]))
+                            logger.error(f'Speechify TTS: JSON response with no audio_data: {err_msg}')
+                            return None
+                    except Exception as e:
+                        logger.error(f'Speechify TTS: failed to decode JSON audio response: {e}')
+                        return None
+
+                # MP3 files start with 0xFF 0xFB/0xF3/0xF2 (MPEG frame sync) or
+                # 0x49 0x44 0x33 (ID3 tag). Anything else is not audio.
                 is_audio = (
-                    'audio' in ct or
                     (len(content) >= 2 and content[0] == 0xFF and content[1] in (0xFB, 0xF3, 0xF2, 0xFA, 0xE3)) or
                     (len(content) >= 3 and content[:3] == b'ID3')
                 )

@@ -58,14 +58,15 @@ journalctl -u riggpt -n 50
 
 ## Tab structure (v2.12.46)
 ```
-CONSOLE(1) BEACON(2) WF ART(3) SSTV(4) SCHEDULE(5) LOG(6)
-CONFIG(7) SYSTEM(8) API CFG(9) AI  ACID TRIP(!)  CLIPS(📼)  SPEC OPS(☠)
+CONSOLE(1) WF ART(2) SSTV(3) SCHEDULE(4) LOG(5)
+CONFIG(6) SYSTEM(7) API CFG(8) AI(9)  ACID TRIP(!)  CLIPS(0)  SPEC OPS(#)
 ```
-- Pane IDs: `pane-dash`, `pane-beacon`, `pane-wfall`, `pane-sstv`,
+- Pane IDs: `pane-dash`, `pane-wfall`, `pane-sstv`,
   `pane-sched`, `pane-hist`, `pane-cfg`, `pane-system`, `pane-apicfg`,
   `pane-ai`, `pane-trip`, `pane-clips`, `pane-specops`
-- TABS constant in JS: `['dash','beacon','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops']`
+- TABS constant in JS: `['dash','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops']`
 - TX controls are embedded in `pane-dash` (Console tab), not a separate pane
+- BEACON was merged into SCHEDULE (50/50 split) in v2.12.46
 - `pane-dub` (Trenchtown FX) was removed in v2.12.34; FX/pads live in Clips tab
 
 ## Key app.py patterns

@@ -1648,32 +1648,29 @@ hr.div  {
   <button class="tab-btn active" onclick="showTab('dash')"   data-tab="dash">
     <span class="tab-num">1</span>CONSOLE
   </button>
-  <button class="tab-btn" onclick="showTab('beacon')" data-tab="beacon">
-    <span class="tab-num">2</span>BEACON
-  </button>
   <button class="tab-btn" onclick="showTab('wfall')"  data-tab="wfall">
-    <span class="tab-num">3</span>WF ART
+    <span class="tab-num">2</span>WF ART
   </button>
   <button class="tab-btn" onclick="showTab('sstv')"   data-tab="sstv">
-    <span class="tab-num">4</span>SSTV
+    <span class="tab-num">3</span>SSTV
   </button>
   <button class="tab-btn" onclick="showTab('sched')"  data-tab="sched">
-    <span class="tab-num">5</span>SCHEDULE
+    <span class="tab-num">4</span>SCHEDULE
   </button>
   <button class="tab-btn" onclick="showTab('hist')"   data-tab="hist">
-    <span class="tab-num">6</span>LOG
+    <span class="tab-num">5</span>LOG
   </button>
   <button class="tab-btn" onclick="showTab('cfg')"      data-tab="cfg">
-    <span class="tab-num">7</span>CONFIG
+    <span class="tab-num">6</span>CONFIG
   </button>
   <button class="tab-btn" onclick="showTab('system')"   data-tab="system">
-    <span class="tab-num">8</span>SYSTEM
+    <span class="tab-num">7</span>SYSTEM
   </button>
   <button class="tab-btn" onclick="showTab('apicfg')"   data-tab="apicfg">
-    <span class="tab-num">9</span>API CFG
+    <span class="tab-num">8</span>API CFG
   </button>
   <button class="tab-btn" onclick="showTab('ai')"       data-tab="ai">
-    &#129302; AI
+    <span class="tab-num">9</span>AI
   </button>
   <button class="tab-btn" onclick="showTab('trip')"     data-tab="trip"
     style="color:var(--amber)">
@@ -2022,93 +2019,6 @@ hr.div  {
 <!-- ══════════════════════
      PANE: BEACON
 ══════════════════════════ -->
-
-<!-- ══════════════════════
-     PANE: BEACON
-══════════════════════════ -->
-<div id="pane-beacon" class="pane">
-  <div style="display:grid;grid-template-columns:1fr 340px;height:100%;overflow:hidden">
-    <!-- Beacon list -->
-    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
-      <div class="panel-header">
-        <span class="panel-title">ACTIVE BEACONS</span>
-        <button class="btn sm" onclick="loadBeacons()">↺</button>
-      </div>
-      <div class="alert-strip" id="beacon-alert"></div>
-      <div class="scroll-body" id="beacon-list">
-        <div style="color:var(--text3);font-size:var(--fz-sm);padding:var(--s7) var(--s4)">Loading...</div>
-      </div>
-    </div>
-
-    <!-- New beacon form -->
-    <div style="display:flex;flex-direction:column;overflow:hidden">
-      <div class="panel-header"><span class="panel-title">NEW BEACON</span></div>
-      <div class="form-row">
-        <label>NAME</label>
-        <input type="text" id="bcn-name" placeholder="Hourly ID" style="flex:1">
-      </div>
-      <!-- Message (hidden when CLIP mode) -->
-      <div id="bcn-msg-row" style="padding:var(--s3) var(--s4);border-bottom:var(--b1)">
-        <div class="field">
-          <label>MESSAGE</label>
-          <textarea id="bcn-msg" placeholder="Beacon message..." rows="3"></textarea>
-        </div>
-      </div>
-      <!-- Clip file picker (shown when SOURCE=clip) -->
-      <div id="bcn-clip-row" style="padding:var(--s3) var(--s4);border-bottom:var(--b1);display:none">
-        <div class="field">
-          <label>CLIP FILE</label>
-          <div style="display:flex;gap:var(--s2)">
-            <select id="bcn-clip-sel" style="flex:1;font-size:var(--fz-xs)">
-              <option value="">(click &#8634; to load clips)</option>
-            </select>
-            <button class="btn sm" onclick="bcnRefreshClips()" title="Refresh clip list">&#8634;</button>
-          </div>
-        </div>
-      </div>
-      <div class="form-row">
-        <label>SOURCE/MODE</label>
-        <select id="bcn-engine" style="flex:1" onchange="bcnEngineChange()">
-          <option value="espeak">&#128172; eSpeak TTS</option>
-          <option value="piper">&#128172; Piper TTS</option>
-          <option value="edge">&#128172; Edge TTS</option>
-          <option value="gtts">&#128172; Google TTS</option>
-          <option value="pyttsx3">&#128172; System TTS</option>
-          <option value="elevenlabs">&#128172; ElevenLabs</option>
-          <option value="speechify">&#128172; Speechify</option>
-          <option value="openai">&#128172; OpenAI TTS</option>
-          <option value="fastkoko">&#128172; FastKoko (Local)</option>
-          <option value="cw">&#9671; CW (Morse Code)</option>
-          <option value="clip">&#128444; Clip File</option>
-        </select>
-      </div>
-      <!-- CW options (shown only when SOURCE=cw) -->
-      <div class="form-row" id="bcn-cw-row" style="display:none">
-        <label>WPM</label>
-        <input type="number" id="bcn-cw-wpm" value="20" min="5" max="60" style="flex:1">
-        <span style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap;padding:0 var(--s2)">wpm</span>
-      </div>
-      <!-- Voice (hidden when CW or CLIP) -->
-      <div class="form-row" id="bcn-voice-row">
-        <label>VOICE</label>
-        <input type="text" id="bcn-voice" placeholder="default" style="flex:1">
-      </div>
-      <div class="form-row">
-        <label>INTERVAL</label>
-        <input type="number" id="bcn-interval" value="60" min="1" max="1440" style="flex:1">
-        <span style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap;padding:0 var(--s2)">min</span>
-      </div>
-      <div class="form-row">
-        <label>REPEAT</label>
-        <input type="number" id="bcn-repeat" value="1" min="1" max="5" style="flex:1">
-      </div>
-      <div class="btn-row border-top" style="margin-top:auto">
-        <button class="btn primary" onclick="createBeacon()">+ CREATE BEACON</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- ══════════════════════
      PANE: WATERFALL TX
 ══════════════════════════ -->
@@ -2274,157 +2184,245 @@ hr.div  {
   </div>
 </div>
 
+
 <!-- ══════════════════════
-     PANE: SCHEDULE
+     PANE: SCHEDULE / BEACONS
 ══════════════════════════ -->
 <div id="pane-sched" class="pane">
-  <div style="display:grid;grid-template-columns:1fr 360px;height:100%;overflow:hidden">
+  <div style="display:grid;grid-template-columns:1fr 1fr;height:100%;overflow:hidden">
 
-    <!-- Schedule list -->
+    <!-- ═══ LEFT HALF: BEACONS ═══ -->
     <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
-      <div class="panel-header">
-        <span class="panel-title">SCHEDULED TRANSMISSIONS</span>
-        <button class="btn sm" onclick="loadSchedule()">&#8634;</button>
+      <div class="panel-header" style="display:flex;align-items:center;gap:var(--s3)">
+        <span class="panel-title">📡 BEACONS</span>
+        <button class="btn sm" onclick="loadBeacons()">↺</button>
+        <button class="btn sm warn" onclick="beaconPauseAll()" title="Pause all beacons" style="margin-left:auto">⏸ ALL</button>
+        <button class="btn sm ok" onclick="beaconResumeAll()" title="Resume all beacons">▶ ALL</button>
       </div>
-      <div class="alert-strip" id="sched-alert"></div>
-      <div class="scroll-body" id="sched-list">
+      <div class="alert-strip" id="beacon-alert"></div>
+
+      <!-- Beacon list -->
+      <div class="scroll-body" id="beacon-list" style="flex:1;min-height:0">
         <div style="color:var(--text3);font-size:var(--fz-sm);padding:var(--s7) var(--s4)">Loading...</div>
       </div>
-    </div>
 
-    <!-- New schedule form -->
-    <div style="display:flex;flex-direction:column;overflow-y:auto">
-      <div class="panel-header"><span class="panel-title">NEW SCHEDULE</span></div>
-
-      <!-- ── CRON HELPER ── -->
-      <div class="sec-head">CRON EXPRESSION</div>
-
-      <!-- Preset picker -->
-      <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1)">
-        <select id="sched-cron-preset" onchange="schedCronPreset(this.value)"
-                style="width:100%;font-size:var(--fz-xs)">
-          <option value="">&#9660; Quick presets...</option>
-          <option value="* * * * *">Every minute</option>
-          <option value="*/5 * * * *">Every 5 minutes</option>
-          <option value="*/15 * * * *">Every 15 minutes</option>
-          <option value="*/30 * * * *">Every 30 minutes</option>
-          <option value="0 * * * *">Every hour (top of hour)</option>
-          <option value="30 * * * *">Every hour (half past)</option>
-          <option value="0 */2 * * *">Every 2 hours</option>
-          <option value="0 */4 * * *">Every 4 hours</option>
-          <option value="0 6 * * *">Daily at 06:00</option>
-          <option value="0 12 * * *">Daily at noon</option>
-          <option value="0 18 * * *">Daily at 18:00</option>
-          <option value="0 20 * * *">Daily at 20:00</option>
-          <option value="0 8 * * 1">Every Monday at 08:00</option>
-          <option value="0 8 * * 1-5">Weekdays at 08:00</option>
-          <option value="0 9 * * 6,0">Weekends at 09:00</option>
-          <option value="0 0 1 * *">1st of every month</option>
-        </select>
+      <!-- Quick beacon templates -->
+      <div style="border-top:var(--b1);border-bottom:var(--b1);padding:var(--s2) var(--s4);display:flex;gap:var(--s2);align-items:center;flex-shrink:0">
+        <span style="font-size:8px;color:var(--text3);letter-spacing:.08em">QUICK:</span>
+        <button class="btn sm" onclick="bcnQuickTemplate('id')" title="Auto-ID beacon every 10min">🆔 ID</button>
+        <button class="btn sm" onclick="bcnQuickTemplate('cq')" title="CQ beacon every 30min">📢 CQ</button>
+        <button class="btn sm" onclick="bcnQuickTemplate('wx')" title="Weather announcement every 60min">🌡 WX</button>
+        <button class="btn sm" onclick="bcnQuickTemplate('test')" title="Quick 1-min test beacon">🧪 TEST</button>
       </div>
 
-      <!-- Visual field builder -->
-      <div style="padding:var(--s3) var(--s4);border-bottom:var(--b1)">
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s2);margin-bottom:var(--s2)">
-          <div class="field">
-            <label style="font-size:8px">MIN</label>
-            <input type="text" id="sched-f-min" value="0" oninput="schedFieldsToExpr()"
-                   style="font-size:9px;text-align:center">
-          </div>
-          <div class="field">
-            <label style="font-size:8px">HOUR</label>
-            <input type="text" id="sched-f-hour" value="*" oninput="schedFieldsToExpr()"
-                   style="font-size:9px;text-align:center">
-          </div>
-          <div class="field">
-            <label style="font-size:8px">DOM</label>
-            <input type="text" id="sched-f-dom" value="*" oninput="schedFieldsToExpr()"
-                   style="font-size:9px;text-align:center">
-          </div>
-          <div class="field">
-            <label style="font-size:8px">MON</label>
-            <input type="text" id="sched-f-mon" value="*" oninput="schedFieldsToExpr()"
-                   style="font-size:9px;text-align:center">
-          </div>
-          <div class="field">
-            <label style="font-size:8px">DOW</label>
-            <input type="text" id="sched-f-dow" value="*" oninput="schedFieldsToExpr()"
-                   style="font-size:9px;text-align:center">
-          </div>
+      <!-- New beacon form -->
+      <div style="display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;max-height:45%">
+        <div class="sec-head" style="padding:var(--s2) var(--s4);font-size:8px;letter-spacing:.1em">NEW BEACON</div>
+        <div class="form-row">
+          <label>NAME</label>
+          <input type="text" id="bcn-name" placeholder="Hourly ID" style="flex:1">
         </div>
-        <!-- Assembled expression (editable) -->
-        <div style="display:flex;align-items:center;gap:var(--s2)">
-          <input type="text" id="sched-cron" placeholder="0 * * * *"
-                 oninput="schedExprToFields()" style="flex:1;font-family:var(--font);font-size:var(--fz-sm)">
-          <button class="btn sm" onclick="schedValidateCron()" title="Check expression">&#10003;</button>
-        </div>
-        <!-- Human-readable description -->
-        <div id="sched-cron-desc"
-             style="font-size:9px;color:var(--cyan);margin-top:var(--s2);min-height:14px;line-height:1.4"></div>
-        <div style="font-size:8px;color:var(--text-dim);margin-top:var(--s1)">
-          Fields: MIN(0-59) HOUR(0-23) DOM(1-31) MON(1-12) DOW(0-7, 0=Sun)<br>
-          Use * = any &nbsp;·&nbsp; */N = every N &nbsp;·&nbsp; N,M = list &nbsp;·&nbsp; N-M = range
-        </div>
-      </div>
-
-      <!-- ── PAYLOAD TYPE ── -->
-      <div class="sec-head">WHAT TO TRANSMIT</div>
-      <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1)">
-        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s3)">
-          <button id="sched-type-tts-btn" class="btn sm primary"
-                  onclick="schedSetType('tts')">&#128172; TTS</button>
-          <button id="sched-type-clip-btn" class="btn sm"
-                  onclick="schedSetType('clip')">&#128444; CLIP</button>
-        </div>
-
-        <!-- TTS fields -->
-        <div id="sched-tts-fields">
-          <div class="field" style="margin-bottom:var(--s3)">
+        <!-- Message (hidden when CLIP mode) -->
+        <div id="bcn-msg-row" style="padding:var(--s3) var(--s4);border-bottom:var(--b1)">
+          <div class="field">
             <label>MESSAGE</label>
-            <textarea id="sched-msg" placeholder="Scheduled transmission text..." rows="3"></textarea>
-          </div>
-          <div class="form-row" style="padding:0;margin-bottom:var(--s2)">
-            <label style="min-width:48px">ENGINE</label>
-            <select id="sched-engine" style="flex:1;font-size:var(--fz-xs)">
-              <option value="espeak">eSpeak</option>
-              <option value="piper">Piper</option>
-              <option value="edge">Edge TTS</option>
-              <option value="gtts">Google TTS</option>
-              <option value="pyttsx3">System TTS</option>
-              <option value="elevenlabs">ElevenLabs</option>
-              <option value="speechify">Speechify</option>
-              <option value="openai">OpenAI TTS</option>
-              <option value="fastkoko">FastKoko (Local)</option>
-            </select>
-          </div>
-          <div class="form-row" style="padding:0">
-            <label style="min-width:48px">VOICE</label>
-            <input type="text" id="sched-voice" placeholder="default" style="flex:1;font-size:var(--fz-xs)">
+            <textarea id="bcn-msg" placeholder="Beacon message..." rows="2"></textarea>
           </div>
         </div>
-
-        <!-- Clip fields (hidden by default) -->
-        <div id="sched-clip-fields" style="display:none">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">
-            Select a file from the Clips library to play over the air.
+        <!-- Clip file picker (shown when SOURCE=clip) -->
+        <div id="bcn-clip-row" style="padding:var(--s3) var(--s4);border-bottom:var(--b1);display:none">
+          <div class="field">
+            <label>CLIP FILE</label>
+            <div style="display:flex;gap:var(--s2)">
+              <select id="bcn-clip-sel" style="flex:1;font-size:var(--fz-xs)">
+                <option value="">(click ↺ to load clips)</option>
+              </select>
+              <button class="btn sm" onclick="bcnRefreshClips()" title="Refresh clip list">↺</button>
+            </div>
           </div>
-          <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-            <select id="sched-clip-sel" style="flex:1;font-size:var(--fz-xs)">
-              <option value="">(loading clips...)</option>
-            </select>
-            <button class="btn sm" onclick="schedRefreshClips()" title="Refresh clip list">&#8634;</button>
-          </div>
-          <div id="sched-clip-info"
-               style="font-size:9px;color:var(--text3);min-height:14px"></div>
         </div>
-      </div>
-
-      <div class="btn-row border-top" style="margin-top:auto">
-        <button class="btn primary" onclick="createSchedule()">+ CREATE</button>
+        <div class="form-row">
+          <label>SOURCE</label>
+          <select id="bcn-engine" style="flex:1" onchange="bcnEngineChange()">
+            <option value="espeak">💬 eSpeak TTS</option>
+            <option value="piper">💬 Piper TTS</option>
+            <option value="edge">💬 Edge TTS</option>
+            <option value="gtts">💬 Google TTS</option>
+            <option value="pyttsx3">💬 System TTS</option>
+            <option value="elevenlabs">💬 ElevenLabs</option>
+            <option value="speechify">💬 Speechify</option>
+            <option value="openai">💬 OpenAI TTS</option>
+            <option value="fastkoko">💬 FastKoko (Local)</option>
+            <option value="cw">◇ CW (Morse Code)</option>
+            <option value="clip">🖼 Clip File</option>
+          </select>
+        </div>
+        <div class="form-row" id="bcn-cw-row" style="display:none">
+          <label>WPM</label>
+          <input type="number" id="bcn-cw-wpm" value="20" min="5" max="60" style="flex:1">
+        </div>
+        <div class="form-row" id="bcn-voice-row">
+          <label>VOICE</label>
+          <input type="text" id="bcn-voice" placeholder="default" style="flex:1">
+        </div>
+        <div class="form-row">
+          <label>INTERVAL</label>
+          <input type="number" id="bcn-interval" value="60" min="1" max="1440" style="flex:1">
+          <span style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap;padding:0 var(--s2)">min</span>
+        </div>
+        <div class="form-row">
+          <label>REPEAT</label>
+          <input type="number" id="bcn-repeat" value="1" min="1" max="5" style="flex:1">
+        </div>
+        <div class="btn-row border-top">
+          <button class="btn primary" onclick="createBeacon()">+ CREATE BEACON</button>
+        </div>
       </div>
     </div>
+
+    <!-- ═══ RIGHT HALF: SCHEDULED TX ═══ -->
+    <div style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="panel-header" style="display:flex;align-items:center;gap:var(--s3)">
+        <span class="panel-title">🕐 SCHEDULED TX</span>
+        <button class="btn sm" onclick="loadSchedule()">↺</button>
+        <span id="sched-count" style="font-size:9px;color:var(--text3);margin-left:auto"></span>
+      </div>
+      <div class="alert-strip" id="sched-alert"></div>
+
+      <!-- Schedule list -->
+      <div class="scroll-body" id="sched-list" style="flex:1;min-height:0">
+        <div style="color:var(--text3);font-size:var(--fz-sm);padding:var(--s7) var(--s4)">Loading...</div>
+      </div>
+
+      <!-- New schedule form -->
+      <div style="display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;max-height:55%">
+        <div class="sec-head" style="padding:var(--s2) var(--s4);font-size:8px;letter-spacing:.1em">NEW SCHEDULE</div>
+
+        <!-- Cron helper -->
+        <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1)">
+          <select id="sched-cron-preset" onchange="schedCronPreset(this.value)"
+                  style="width:100%;font-size:var(--fz-xs)">
+            <option value="">▼ Quick presets...</option>
+            <option value="* * * * *">Every minute</option>
+            <option value="*/5 * * * *">Every 5 minutes</option>
+            <option value="*/15 * * * *">Every 15 minutes</option>
+            <option value="*/30 * * * *">Every 30 minutes</option>
+            <option value="0 * * * *">Every hour (top of hour)</option>
+            <option value="30 * * * *">Every hour (half past)</option>
+            <option value="0 */2 * * *">Every 2 hours</option>
+            <option value="0 */4 * * *">Every 4 hours</option>
+            <option value="0 6 * * *">Daily at 06:00</option>
+            <option value="0 12 * * *">Daily at noon</option>
+            <option value="0 18 * * *">Daily at 18:00</option>
+            <option value="0 20 * * *">Daily at 20:00</option>
+            <option value="0 8 * * 1">Every Monday at 08:00</option>
+            <option value="0 8 * * 1-5">Weekdays at 08:00</option>
+            <option value="0 9 * * 6,0">Weekends at 09:00</option>
+            <option value="0 0 1 * *">1st of every month</option>
+          </select>
+        </div>
+
+        <!-- Visual cron builder -->
+        <div style="padding:var(--s3) var(--s4);border-bottom:var(--b1)">
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s2);margin-bottom:var(--s2)">
+            <div class="field">
+              <label style="font-size:8px">MIN</label>
+              <input type="text" id="sched-f-min" value="0" oninput="schedFieldsToExpr()"
+                     style="font-size:9px;text-align:center">
+            </div>
+            <div class="field">
+              <label style="font-size:8px">HOUR</label>
+              <input type="text" id="sched-f-hour" value="*" oninput="schedFieldsToExpr()"
+                     style="font-size:9px;text-align:center">
+            </div>
+            <div class="field">
+              <label style="font-size:8px">DOM</label>
+              <input type="text" id="sched-f-dom" value="*" oninput="schedFieldsToExpr()"
+                     style="font-size:9px;text-align:center">
+            </div>
+            <div class="field">
+              <label style="font-size:8px">MON</label>
+              <input type="text" id="sched-f-mon" value="*" oninput="schedFieldsToExpr()"
+                     style="font-size:9px;text-align:center">
+            </div>
+            <div class="field">
+              <label style="font-size:8px">DOW</label>
+              <input type="text" id="sched-f-dow" value="*" oninput="schedFieldsToExpr()"
+                     style="font-size:9px;text-align:center">
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--s2)">
+            <input type="text" id="sched-cron" placeholder="0 * * * *"
+                   oninput="schedExprToFields()" style="flex:1;font-family:var(--font);font-size:var(--fz-sm)">
+            <button class="btn sm" onclick="schedValidateCron()" title="Check expression">✓</button>
+          </div>
+          <div id="sched-cron-desc"
+               style="font-size:9px;color:var(--cyan);margin-top:var(--s2);min-height:14px;line-height:1.4"></div>
+          <div style="font-size:8px;color:var(--text-dim);margin-top:var(--s1)">
+            MIN(0-59) HOUR(0-23) DOM(1-31) MON(1-12) DOW(0-7, 0=Sun)<br>
+            * = any · */N = every N · N,M = list · N-M = range
+          </div>
+        </div>
+
+        <!-- Payload type -->
+        <div class="sec-head" style="padding:var(--s2) var(--s4);font-size:8px;letter-spacing:.1em">WHAT TO TRANSMIT</div>
+        <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1)">
+          <div style="display:flex;gap:var(--s2);margin-bottom:var(--s3)">
+            <button id="sched-type-tts-btn" class="btn sm primary"
+                    onclick="schedSetType('tts')">💬 TTS</button>
+            <button id="sched-type-clip-btn" class="btn sm"
+                    onclick="schedSetType('clip')">🖼 CLIP</button>
+          </div>
+          <!-- TTS fields -->
+          <div id="sched-tts-fields">
+            <div class="field" style="margin-bottom:var(--s3)">
+              <label>MESSAGE</label>
+              <textarea id="sched-msg" placeholder="Scheduled transmission text..." rows="2"></textarea>
+            </div>
+            <div class="form-row" style="padding:0;margin-bottom:var(--s2)">
+              <label style="min-width:48px">ENGINE</label>
+              <select id="sched-engine" style="flex:1;font-size:var(--fz-xs)">
+                <option value="espeak">eSpeak</option>
+                <option value="piper">Piper</option>
+                <option value="edge">Edge TTS</option>
+                <option value="gtts">Google TTS</option>
+                <option value="pyttsx3">System TTS</option>
+                <option value="elevenlabs">ElevenLabs</option>
+                <option value="speechify">Speechify</option>
+                <option value="openai">OpenAI TTS</option>
+                <option value="fastkoko">FastKoko (Local)</option>
+              </select>
+            </div>
+            <div class="form-row" style="padding:0">
+              <label style="min-width:48px">VOICE</label>
+              <input type="text" id="sched-voice" placeholder="default" style="flex:1;font-size:var(--fz-xs)">
+            </div>
+          </div>
+          <!-- Clip fields (hidden by default) -->
+          <div id="sched-clip-fields" style="display:none">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">
+              Select a file from the Clips library to play over the air.
+            </div>
+            <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+              <select id="sched-clip-sel" style="flex:1;font-size:var(--fz-xs)">
+                <option value="">(loading clips...)</option>
+              </select>
+              <button class="btn sm" onclick="schedRefreshClips()" title="Refresh clip list">↺</button>
+            </div>
+            <div id="sched-clip-info"
+                 style="font-size:9px;color:var(--text3);min-height:14px"></div>
+          </div>
+        </div>
+
+        <div class="btn-row border-top">
+          <button class="btn primary" onclick="createSchedule()">+ CREATE SCHEDULE</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
+
 
 <!-- ══════════════════════
      PANE: HISTORY / LOG
@@ -4255,7 +4253,7 @@ hr.div  {
 // ─────────────────────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────
-const TABS = ['dash','beacon','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops'];
+const TABS = ['dash','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops'];
 
 const CMD_PALETTE = [
   { name:'Connect radio',        key:'C',  action:()=>dashConnect() },
@@ -4266,18 +4264,17 @@ const CMD_PALETTE = [
   { name:'Set frequency…',       key:'F',  action:()=>showFreqModal() },
   { name:'Taco bell gong',       key:'G',  action:()=>tacoGong() },
   { name:'Go to Console',        key:'1',  action:()=>showTab('dash') },
-  { name:'Go to Beacon',         key:'2',  action:()=>showTab('beacon') },
-  { name:'Go to Waterfall',      key:'3',  action:()=>showTab('wfall') },
-  { name:'Go to SSTV',           key:'4',  action:()=>showTab('sstv') },
-  { name:'Go to Schedule',       key:'5',  action:()=>showTab('sched') },
-  { name:'Go to Log',            key:'6',  action:()=>showTab('hist') },
-  { name:'Go to Clips',          key:'7',  action:()=>showTab('clips') },
-  { name:'Go to Config',         key:'8',  action:()=>showTab('cfg') },
+  { name:'Go to Waterfall',      key:'2',  action:()=>showTab('wfall') },
+  { name:'Go to SSTV',           key:'3',  action:()=>showTab('sstv') },
+  { name:'Go to Schedule',       key:'4',  action:()=>showTab('sched') },
+  { name:'Go to Log',            key:'5',  action:()=>showTab('hist') },
+  { name:'Go to Config',         key:'6',  action:()=>showTab('cfg') },
+  { name:'Go to System',         key:'7',  action:()=>showTab('system') },
+  { name:'Go to API Config',     key:'8',  action:()=>showTab('apicfg') },
   { name:'Go to AI',             key:'9',  action:()=>showTab('ai') },
-  { name:'Go to Acid Trip',       key:'!',  action:()=>showTab('trip') },
-  { name:'Go to System',          key:'0',  action:()=>showTab('system') },
-  { name:'Go to API Config',      key:'@',  action:()=>showTab('apicfg') },
-  { name:'Go to Spec Ops',        key:'#',  action:()=>showTab('specops') },
+  { name:'Go to Acid Trip',      key:'!',  action:()=>showTab('trip') },
+  { name:'Go to Clips',          key:'0',  action:()=>showTab('clips') },
+  { name:'Go to Spec Ops',       key:'#',  action:()=>showTab('specops') },
   { name:'Probe radio',          key:'',   action:()=>dashProbe() },
   { name:'Export log CSV',       key:'',   action:()=>exportLog() },
   { name:'Clear log',            key:'',   action:()=>clearLog() },
@@ -4306,10 +4303,11 @@ function showTab(name) {
   const pane = document.getElementById('pane-' + name);
   if (pane) pane.classList.add('active');
   _activeTab = name;
+  // Persist active tab in URL hash so reload stays on the same tab
+  try { history.replaceState(null, '', '#' + name); } catch {}
   if (name === 'clips') { clipsLoad(); }
   if (name === 'hist')   { loadHistory(); loadHistoryStats(); }
-  if (name === 'beacon') loadBeacons();
-  if (name === 'sched')  loadSchedule();
+  if (name === 'sched')  { loadSchedule(); loadBeacons(); }
   if (name === 'wfall')  loadWaterfallCanned();
   if (name === 'cfg')    { loadGongPath(); loadDiscordStatus(); discordStartPolling(); loadCtrlStatus(); ctrlStartPolling(); }
   if (name === 'system') { loadAudioDevices(); loadHealth(); loadGongPath(); }
@@ -5476,6 +5474,64 @@ async function bcnRefreshClips() {
   } catch(e) {
     sel.innerHTML = '<option value="">(error loading clips)</option>';
   }
+}
+
+// Quick beacon templates — pre-fill form with common configs
+function bcnQuickTemplate(type) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  // Reset to TTS mode
+  const eng = document.getElementById('bcn-engine');
+  if (eng) { eng.value = 'espeak'; bcnEngineChange(); }
+  switch (type) {
+    case 'id':
+      set('bcn-name', 'Station ID');
+      set('bcn-msg', 'This is {CALLSIGN}, monitoring.');
+      set('bcn-interval', '10');
+      set('bcn-repeat', '1');
+      break;
+    case 'cq':
+      set('bcn-name', 'CQ Beacon');
+      set('bcn-msg', 'CQ CQ CQ, this is {CALLSIGN}, calling CQ and standing by.');
+      set('bcn-interval', '30');
+      set('bcn-repeat', '2');
+      break;
+    case 'wx':
+      set('bcn-name', 'Weather Report');
+      set('bcn-msg', 'Weather update: conditions normal. This is {CALLSIGN}.');
+      set('bcn-interval', '60');
+      set('bcn-repeat', '1');
+      break;
+    case 'test':
+      set('bcn-name', 'Quick Test');
+      set('bcn-msg', 'Test beacon, 1 2 3 4 5.');
+      set('bcn-interval', '1');
+      set('bcn-repeat', '1');
+      break;
+  }
+  showAlert('beacon-alert', `Template loaded: ${type.toUpperCase()} — edit & create`, 'ok', 3000);
+}
+
+// Bulk pause/resume all beacons
+async function beaconPauseAll() {
+  const r = await api('GET', '/api/beacon');
+  if (!r.beacons) return;
+  const active = Object.entries(r.beacons).filter(([,b]) => b.enabled !== false);
+  for (const [id] of active) {
+    await api('POST', `/api/beacon/${id}/pause`);
+  }
+  showAlert('beacon-alert', `Paused ${active.length} beacon(s)`, 'warn');
+  loadBeacons();
+}
+
+async function beaconResumeAll() {
+  const r = await api('GET', '/api/beacon');
+  if (!r.beacons) return;
+  const paused = Object.entries(r.beacons).filter(([,b]) => b.enabled === false);
+  for (const [id] of paused) {
+    await api('POST', `/api/beacon/${id}/pause`);
+  }
+  showAlert('beacon-alert', `Resumed ${paused.length} beacon(s)`, 'ok');
+  loadBeacons();
 }
 
 async function createBeacon() {
@@ -7657,8 +7713,7 @@ async function nudgeFreq(hz) {
 function refreshActive() {
   if (_activeTab === 'dash')   { loadDashStats(); pollStatus(); loadRadioModel(); }
   if (_activeTab === 'hist')   { loadHistory(); loadHistoryStats(); }
-  if (_activeTab === 'beacon') loadBeacons();
-  if (_activeTab === 'sched')  loadSchedule();
+  if (_activeTab === 'sched')  { loadSchedule(); loadBeacons(); }
   if (_activeTab === 'cfg')    { loadEngineStatus(); loadHealth(); loadLlmProviders(); loadDiscordStatus(); }
   if (_activeTab === 'sstv')   loadSSTVModes();
   if (_activeTab === 'ai')     loadAiConfig();
@@ -9981,6 +10036,11 @@ function tripClear() {
   clipsCartLoad();
   // Hide search/sort controls on load (CART view is default, FILES view only)
   document.querySelectorAll('.clips-files-only').forEach(el => el.style.display = 'none');
+  // Restore active tab from URL hash (survives reload)
+  const hashTab = location.hash.replace('#','');
+  if (hashTab && TABS.includes(hashTab) && hashTab !== 'dash') {
+    showTab(hashTab);
+  }
 })();
 
 // =============================================================
