@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.51</span>
+    <span class="sb-label">v2.12.52</span>
   </div>
 </div>
 
@@ -1969,6 +1969,16 @@ hr.div  {
             <label class="toggle-row"><input type="checkbox" id="tx-preview-only"> PREVIEW ONLY</label>
           </div>
         </div>
+
+        <!-- Recent TX Feed -->
+        <div class="sec-head" style="flex-shrink:0;display:flex;align-items:center;gap:var(--s3)">
+          RECENT TX
+          <span id="tx-feed-count" style="font-size:8px;color:var(--text3);margin-left:auto">0 transmissions</span>
+        </div>
+        <div id="tx-feed" style="flex:1;overflow-y:auto;padding:var(--s2) var(--s4);font-size:9px;font-family:var(--mono);line-height:1.7;color:var(--text3)">
+          <div style="color:var(--text3);padding:var(--s4) 0;text-align:center;font-style:italic">No recent transmissions</div>
+        </div>
+
       </div><!-- /left TX -->
 
       <!-- Right: TTS engine -->
@@ -4392,7 +4402,7 @@ function showTab(name) {
   if (name === 'apicfg') { loadEngineStatus(); loadLlmProviders(); }
   if (name === 'specops'){ ghostPoll(); specopsRefreshStatus(); }
   if (name === 'sstv')   loadSSTVModes();
-  if (name === 'dash')   { loadDashStats(); loadRadioModel(); }
+  if (name === 'dash')   { loadDashStats(); loadRadioModel(); _txFeedLoad(); }
   if (name === 'ai')     loadAiConfig();
   if (name === 'trip')   tripInit();
 }
@@ -5132,6 +5142,52 @@ function rowSelect(tr) {
   tr.classList.add('selected');
 }
 
+// ── Recent TX Feed (Console tab) ─────────────────────────────────────────
+let _txFeedItems = [];
+const _TX_FEED_MAX = 20;
+
+function _txFeedRender() {
+  const el = document.getElementById('tx-feed');
+  const ct = document.getElementById('tx-feed-count');
+  if (!el) return;
+  if (!_txFeedItems.length) {
+    el.innerHTML = '<div style="color:var(--text3);padding:var(--s4) 0;text-align:center;font-style:italic">No recent transmissions</div>';
+    if (ct) ct.textContent = '0 transmissions';
+    return;
+  }
+  if (ct) ct.textContent = _txFeedItems.length + ' transmission' + (_txFeedItems.length === 1 ? '' : 's');
+  el.innerHTML = _txFeedItems.map(r => {
+    const ts   = (r.timestamp || '').substring(11, 19) || '??:??:??';
+    const ok   = r.success !== false;
+    const dur  = r.duration ? Number(r.duration).toFixed(1) + 's' : '';
+    const eng  = r.engine || '?';
+    const msg  = escHtml((r.message || '').substring(0, 120));
+    const icon = ok ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">✗</span>';
+    return `<div style="padding:2px 0;border-bottom:1px solid var(--border);display:flex;gap:var(--s3);align-items:baseline">
+      <span style="color:var(--text3);flex-shrink:0">${ts}</span>
+      ${icon}
+      <span style="color:var(--cyan);flex-shrink:0">${escHtml(eng)}</span>
+      <span style="color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${msg}</span>
+      <span style="color:var(--text3);flex-shrink:0">${dur}</span>
+    </div>`;
+  }).join('');
+}
+
+function _txFeedPrepend(entry) {
+  _txFeedItems.unshift(entry);
+  if (_txFeedItems.length > _TX_FEED_MAX) _txFeedItems.pop();
+  _txFeedRender();
+}
+
+async function _txFeedLoad() {
+  try {
+    const r = await api('GET', '/api/log/transmissions?limit=15&offset=0');
+    const rows = r.transmissions || r || [];
+    _txFeedItems = rows.slice(0, _TX_FEED_MAX);
+    _txFeedRender();
+  } catch {}
+}
+
 // ─────────────────────────────────────────────────────────────
 // RADIO CONTROL
 // ─────────────────────────────────────────────────────────────
@@ -5356,8 +5412,15 @@ async function doTransmit() {
       delay_before_tx: delay, repeat, preview_only: preview
     });
     showAlert('tx-alert', r.message || (r.success?'Done':'Failed'), r.success?'ok':'err');
+    // Feed entry
+    _txFeedPrepend({
+      timestamp: new Date().toISOString(),
+      engine, message: text, success: r.success !== false,
+      duration: r.estimated_duration_s || r.duration || null,
+    });
   } catch(e) {
     showAlert('tx-alert','TX error: '+e.message,'err');
+    _txFeedPrepend({ timestamp: new Date().toISOString(), engine, message: text, success: false });
   } finally {
     setTxState(false);
   }
@@ -7842,7 +7905,7 @@ async function nudgeFreq(hz) {
 }
 
 function refreshActive() {
-  if (_activeTab === 'dash')   { loadDashStats(); pollStatus(); loadRadioModel(); }
+  if (_activeTab === 'dash')   { loadDashStats(); pollStatus(); loadRadioModel(); _txFeedLoad(); }
   if (_activeTab === 'hist')   { loadHistory(); loadHistoryStats(); }
   if (_activeTab === 'sched')  { loadSchedule(); loadBeacons(); }
   if (_activeTab === 'cfg')    { loadEngineStatus(); loadHealth(); loadLlmProviders(); loadDiscordStatus(); }
@@ -10083,6 +10146,7 @@ function tripClear() {
   await loadPorts();
   await pollStatus();
   await loadDashStats();
+  _txFeedLoad();
   await loadGongPath();   // caches window._appSettings for tripInit and other restores
   loadVoices();
   vfxPreset('normal');   // set default VFX preset and highlight CLEAN button
