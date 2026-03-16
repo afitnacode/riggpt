@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.36
+RigGPT v2.12.37
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -334,6 +334,13 @@ _clips_playing: bool = False # True while a clip TX is in progress
 _clips_proc = None           # Popen handle for the running player process
 _clips_s3_cache_dir = '/tmp/riggpt_clips_cache'
 
+# ── Special Ops state ───────────────────────────────────────────
+_numbers_station_job = None
+_mystery_job         = None
+_autoid_job          = None
+_solar_cache         = {'k': None, 'updated': None, 'last_announced': None}
+_solar_poller_job    = None
+
 
 
 # API key / integration manager
@@ -361,7 +368,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.36'
+VERSION        = 'v2.12.37'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3906,6 +3913,23 @@ def api_settings_post():
         'clips_dir', 'clips_poll_interval',
         'clips_s3_enabled', 'clips_s3_bucket',
         'clips_s3_region', 'clips_s3_prefix',
+        # Discord monitor
+        'discord_inject_target', 'discord_inject_format',
+        # Audio device
+        'audio_device',
+        # Waterfall ART
+        'wf_bw', 'wf_sideband', 'wf_contrast', 'wf_dur',
+        # SSTV
+        'sstv_vox',
+        # Beacon form defaults
+        'bcn_interval', 'bcn_repeat', 'bcn_engine',
+        # Special Ops
+        'numbers_station_interval', 'numbers_station_engine',
+        'solar_autotx_enabled', 'solar_kindex_threshold',
+        'mystery_window_start', 'mystery_window_end',
+        'autoid_callsign', 'autoid_interval', 'autoid_engine',
+        # Pirate Broadcast
+        'pirate_interval', 'pirate_engine',
     }
     updated = {}
     for k, v in patch.items():
@@ -7489,6 +7513,440 @@ def _auto_connect():
     logger.warning("Auto-connect: no serial port found -- connect manually via Settings tab")
 
 
+# =============================================================
+# SPECIAL OPS — Numbers Station, Solar Weather, Mystery TX, Auto-ID
+# =============================================================
+
+# ── Numbers Station ───────────────────────────────────────────────────────
+def _run_numbers_station():
+    """Transmit a Cold War-style numbers group over the air."""
+    import random
+    groups = '  '.join(
+        ' '.join(str(random.randint(0, 9)) for _ in range(5))
+        for _ in range(5)
+    )
+    intro = random.choice(['ATTENTION', 'STAND BY', 'THIS IS', 'RELAY RELAY', 'OSCAR LIMA'])
+    msg   = f'{intro}.  {groups}.  END TRANSMISSION.'
+    engine = _app_settings.get('numbers_station_engine', 'espeak')
+    try:
+        orchestrator.execute(msg, engine=engine, voice='en-us', preset='normal', roger_beep=False)
+        logger.info(f'numbers_station: transmitted {len(groups.split())} groups')
+    except Exception as e:
+        logger.error(f'numbers_station TX error: {e}')
+
+
+@app.route('/api/numbers_station/start', methods=['POST'])
+def api_numbers_station_start():
+    global _numbers_station_job
+    if not scheduler:
+        return jsonify({'success': False, 'message': 'Scheduler not available'}), 503
+    data     = request.json or {}
+    interval = max(1, int(data.get('interval_minutes',
+                          int(_app_settings.get('numbers_station_interval', 5)))))
+    engine   = data.get('engine', _app_settings.get('numbers_station_engine', 'espeak'))
+    _app_settings['numbers_station_interval'] = str(interval)
+    _app_settings['numbers_station_engine']   = engine
+    _save_app_settings(_app_settings)
+    try:
+        if _numbers_station_job:
+            try: _numbers_station_job.remove()
+            except Exception: pass
+        _numbers_station_job = scheduler.add_job(
+            _run_numbers_station,
+            CronTrigger.from_crontab(f'*/{interval} * * * *'),
+            id='numbers_station', replace_existing=True,
+        )
+        threading.Thread(target=_run_numbers_station, daemon=True, name='ns-initial').start()
+        return jsonify({'success': True,
+                        'message': f'Numbers station active every {interval}min (engine={engine})'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/numbers_station/stop', methods=['POST'])
+def api_numbers_station_stop():
+    global _numbers_station_job
+    if _numbers_station_job:
+        try: _numbers_station_job.remove()
+        except Exception: pass
+        _numbers_station_job = None
+    return jsonify({'success': True, 'message': 'Numbers station stopped'})
+
+
+@app.route('/api/numbers_station/status', methods=['GET'])
+def api_numbers_station_status():
+    return jsonify({
+        'active':   _numbers_station_job is not None,
+        'interval': _app_settings.get('numbers_station_interval', '5'),
+        'engine':   _app_settings.get('numbers_station_engine', 'espeak'),
+    })
+
+
+# ── Solar Weather ──────────────────────────────────────────────────────────
+def _solar_fetch_kindex():
+    """Fetch current planetary K-index from NOAA SWPC. Returns float or None."""
+    import urllib.request
+    try:
+        url = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json'
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            rows = json.loads(resp.read())
+        if rows:
+            return float(rows[-1][1])
+    except Exception as e:
+        logger.warning(f'solar: K-index fetch error: {e}')
+    return None
+
+
+def _solar_poll_and_announce():
+    """Fetch K-index and optionally auto-transmit an alert."""
+    k = _solar_fetch_kindex()
+    if k is None:
+        return
+    _solar_cache['k']       = k
+    _solar_cache['updated'] = _now_utc()
+    threshold = float(_app_settings.get('solar_kindex_threshold', '5'))
+    autotx    = _app_settings.get('solar_autotx_enabled', 'false') == 'true'
+    if not autotx or k < threshold:
+        return
+    # Rate-limit: one announcement per 30-minute window
+    last = _solar_cache.get('last_announced')
+    if last:
+        try:
+            from datetime import timedelta
+            last_dt = datetime.fromisoformat(last.replace('Z', '+00:00'))
+            if (datetime.now(timezone.utc) - last_dt).total_seconds() < 1800:
+                return
+        except Exception:
+            pass
+    cond_map = {8: 'EXTREME', 7: 'SEVERE', 6: 'STRONG', 5: 'MODERATE'}
+    cond = next((v for thr, v in sorted(cond_map.items(), reverse=True) if k >= thr), 'ACTIVE')
+    msg = (
+        f'ATTENTION ALL STATIONS.  GEOMAGNETIC STORM ALERT.  '
+        f'K INDEX IS NOW {k:.0f}.  CONDITION: {cond}.  '
+        f'PROPAGATION DISRUPTION POSSIBLE ON HIGHER BANDS.  '
+        f'THIS IS AN AUTOMATED ALERT.'
+    )
+    _solar_cache['last_announced'] = _now_utc()
+    try:
+        orchestrator.execute(msg, engine='espeak', voice='en-us', preset='normal', roger_beep=False)
+        logger.info(f'solar: K={k} alert transmitted (condition={cond})')
+    except Exception as e:
+        logger.error(f'solar: TX error: {e}')
+
+
+@app.route('/api/solar/status', methods=['GET'])
+def api_solar_status():
+    # Always fetch fresh on demand
+    k = _solar_fetch_kindex()
+    if k is not None:
+        _solar_cache['k']       = k
+        _solar_cache['updated'] = _now_utc()
+    return jsonify({
+        'k_index':       _solar_cache.get('k'),
+        'updated':       _solar_cache.get('updated'),
+        'last_announced': _solar_cache.get('last_announced'),
+        'autotx_enabled': _app_settings.get('solar_autotx_enabled', 'false') == 'true',
+        'threshold':      float(_app_settings.get('solar_kindex_threshold', '5')),
+    })
+
+
+@app.route('/api/solar/announce', methods=['POST'])
+def api_solar_announce():
+    """Force an immediate solar weather announcement."""
+    _solar_cache['last_announced'] = None  # bypass rate limit
+    threading.Thread(target=_solar_poll_and_announce, daemon=True, name='solar-force').start()
+    return jsonify({'success': True, 'message': 'Solar weather announcement queued'})
+
+
+# ── Mystery Transmission ───────────────────────────────────────────────
+_MYSTERY_LINES = [
+    'The frequency is clear.',
+    'We are watching.',
+    'Signal lost.  Signal found.',
+    'This message will not repeat.',
+    'Hello darkness.',
+    'You are not alone on this frequency.',
+    'The numbers do not lie.',
+    'Stand by for further instructions.',
+    'All stations.  All stations.  Silence please.',
+    'This is not a test.',
+]
+
+
+def _run_mystery_tx():
+    import random
+    with _clips_lock:
+        files = list(_clips_files)
+    if files:
+        clip = random.choice(files)
+        logger.info(f'mystery: transmitting clip: {clip["name"]}')
+        threading.Thread(target=_clips_play, args=(clip,), daemon=True, name='mystery-tx').start()
+    else:
+        msg = random.choice(_MYSTERY_LINES)
+        logger.info(f'mystery: transmitting line: {msg!r}')
+        try:
+            orchestrator.execute(msg, engine='espeak', voice='en-us', preset='cave', roger_beep=False)
+        except Exception as e:
+            logger.error(f'mystery TX error: {e}')
+
+
+@app.route('/api/mystery/schedule', methods=['POST'])
+def api_mystery_schedule():
+    global _mystery_job
+    if not scheduler:
+        return jsonify({'success': False, 'message': 'Scheduler not available'}), 503
+    import random
+    data         = request.json or {}
+    window_start = int(data.get('window_start_hour',
+                        int(_app_settings.get('mystery_window_start', 2))))
+    window_end   = int(data.get('window_end_hour',
+                        int(_app_settings.get('mystery_window_end', 4))))
+    window_end   = max(window_end, window_start + 1)
+    _app_settings['mystery_window_start'] = str(window_start)
+    _app_settings['mystery_window_end']   = str(window_end)
+    _save_app_settings(_app_settings)
+    hour   = random.randint(window_start, window_end - 1)
+    minute = random.randint(0, 59)
+    cron   = f'{minute} {hour} * * *'
+    try:
+        if _mystery_job:
+            try: _mystery_job.remove()
+            except Exception: pass
+        _mystery_job = scheduler.add_job(
+            _run_mystery_tx,
+            CronTrigger.from_crontab(cron),
+            id='mystery_tx', replace_existing=True,
+        )
+        return jsonify({'success': True,
+                        'message': f'Mystery TX scheduled for {hour:02d}:{minute:02d}',
+                        'scheduled_for': f'{hour:02d}:{minute:02d}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/mystery/stop', methods=['POST'])
+def api_mystery_stop():
+    global _mystery_job
+    if _mystery_job:
+        try: _mystery_job.remove()
+        except Exception: pass
+        _mystery_job = None
+    return jsonify({'success': True})
+
+
+@app.route('/api/mystery/fire', methods=['POST'])
+def api_mystery_fire():
+    threading.Thread(target=_run_mystery_tx, daemon=True, name='mystery-force').start()
+    return jsonify({'success': True, 'message': 'Mystery transmission fired'})
+
+
+@app.route('/api/mystery/status', methods=['GET'])
+def api_mystery_status():
+    return jsonify({
+        'active':       _mystery_job is not None,
+        'window_start': _app_settings.get('mystery_window_start', '2'),
+        'window_end':   _app_settings.get('mystery_window_end',   '4'),
+    })
+
+
+# ── Auto-ID ───────────────────────────────────────────────────────────────────
+def _run_autoid():
+    callsign = _app_settings.get('autoid_callsign', '').strip().upper()
+    if not callsign:
+        logger.warning('auto-id: no callsign configured')
+        return
+    engine = _app_settings.get('autoid_engine', 'cw')
+    logger.info(f'auto-id: transmitting {callsign} via {engine}')
+    if engine == 'cw':
+        cfg = {'text': callsign, 'cw_wpm': 20, 'callsign': callsign, 'sound_file': ''}
+        _run_beacon_cw('autoid', cfg)
+    else:
+        msg = f'This is {callsign}.'
+        try:
+            orchestrator.execute(msg, engine=engine, voice=None, preset='normal', roger_beep=False)
+        except Exception as e:
+            logger.error(f'auto-id TX error: {e}')
+
+
+@app.route('/api/autoid/start', methods=['POST'])
+def api_autoid_start():
+    global _autoid_job
+    if not scheduler:
+        return jsonify({'success': False, 'message': 'Scheduler not available'}), 503
+    data     = request.json or {}
+    callsign = data.get('callsign', _app_settings.get('autoid_callsign', '')).strip().upper()
+    if not callsign:
+        return jsonify({'success': False, 'message': 'Callsign required'}), 400
+    interval = max(1, int(data.get('interval_minutes',
+                          int(_app_settings.get('autoid_interval', 10)))))
+    engine   = data.get('engine', _app_settings.get('autoid_engine', 'cw'))
+    _app_settings['autoid_callsign'] = callsign
+    _app_settings['autoid_interval'] = str(interval)
+    _app_settings['autoid_engine']   = engine
+    _save_app_settings(_app_settings)
+    try:
+        if _autoid_job:
+            try: _autoid_job.remove()
+            except Exception: pass
+        _autoid_job = scheduler.add_job(
+            _run_autoid,
+            CronTrigger.from_crontab(f'*/{interval} * * * *'),
+            id='autoid', replace_existing=True,
+        )
+        threading.Thread(target=_run_autoid, daemon=True, name='autoid-initial').start()
+        return jsonify({'success': True,
+                        'message': f'Auto-ID: {callsign} every {interval}min via {engine}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/autoid/stop', methods=['POST'])
+def api_autoid_stop():
+    global _autoid_job
+    if _autoid_job:
+        try: _autoid_job.remove()
+        except Exception: pass
+        _autoid_job = None
+    return jsonify({'success': True, 'message': 'Auto-ID stopped'})
+
+
+@app.route('/api/autoid/status', methods=['GET'])
+def api_autoid_status():
+    return jsonify({
+        'active':    _autoid_job is not None,
+        'callsign':  _app_settings.get('autoid_callsign', ''),
+        'interval':  _app_settings.get('autoid_interval', '10'),
+        'engine':    _app_settings.get('autoid_engine',   'cw'),
+    })
+
+
+# ── Pirate Broadcast ──────────────────────────────────────────────────────────
+_pirate_job = None
+_PIRATE_HEADLINES = [
+    'BREAKING: Local man achieves enlightenment, refuses to explain it.',
+    'Scientists confirm the ocean is just a big wet hole. More at eleven.',
+    'Area dog elected mayor. First act: abolish Mondays.',
+    'Government announces new policy: vibes only. Details unclear.',
+    'Astronomers discover new planet made entirely of regret.',
+    'Man survives on radio waves alone for third consecutive week.',
+    'Weather service admits it has been guessing this entire time.',
+    'Experts warn that nobody is listening. Transmission continues anyway.',
+    'Breaking: static found to contain hidden messages. Contents: more static.',
+    'Local frequency experiencing unexplained phenomena. Listeners advised to remain calm.',
+    'Transmission origin unknown. Signal strength: maximum. Reason: unclear.',
+    'This broadcast is not authorized by anyone. That is the point.',
+    'New study finds that ninety percent of radio listeners are somewhere else.',
+    'Pigeon trained to carry secret messages found asleep on the job.',
+    'Time zones abolished by popular demand. Everyone is now on vibes time.',
+    'Shortwave listener reports hearing his own voice from three years ago.',
+    'Propagation conditions tonight: weird. Stay tuned.',
+    'All stations. All stations. Disregard previous transmission.',
+    'Signal acquired. Identity unknown. Mood: mysterious.',
+    'You are now part of the experiment. Results pending.',
+]
+
+
+def _run_pirate_broadcast():
+    import random
+    headline = random.choice(_PIRATE_HEADLINES)
+    engines  = ['espeak', 'espeak', 'espeak', 'gtts']
+    presets  = ['radio', 'telephone', 'broadcast', 'megaphone', 'cave', 'normal']
+    engine   = _app_settings.get('pirate_engine', random.choice(engines))
+    preset   = random.choice(presets)
+    intro    = random.choice([
+        'ATTENTION.', 'BREAKING NEWS.', 'THIS JUST IN.', 'SPECIAL REPORT.',
+        'WE INTERRUPT THIS SILENCE.', 'FLASH BULLETIN.'
+    ])
+    msg = f'{intro}  {headline}'
+    logger.info(f'pirate: broadcasting: {msg!r}')
+    try:
+        orchestrator.execute(msg, engine=engine, voice=None, preset=preset, roger_beep=False)
+    except Exception as e:
+        logger.error(f'pirate broadcast TX error: {e}')
+
+
+@app.route('/api/pirate/start', methods=['POST'])
+def api_pirate_start():
+    global _pirate_job
+    if not scheduler:
+        return jsonify({'success': False, 'message': 'Scheduler not available'}), 503
+    data     = request.json or {}
+    interval = max(1, int(data.get('interval_minutes',
+                          int(_app_settings.get('pirate_interval', 15)))))
+    engine   = data.get('engine', _app_settings.get('pirate_engine', 'espeak'))
+    _app_settings['pirate_interval'] = str(interval)
+    _app_settings['pirate_engine']   = engine
+    _save_app_settings(_app_settings)
+    try:
+        if _pirate_job:
+            try: _pirate_job.remove()
+            except Exception: pass
+        _pirate_job = scheduler.add_job(
+            _run_pirate_broadcast,
+            CronTrigger.from_crontab(f'*/{interval} * * * *'),
+            id='pirate_broadcast', replace_existing=True,
+        )
+        threading.Thread(target=_run_pirate_broadcast, daemon=True, name='pirate-initial').start()
+        return jsonify({'success': True,
+                        'message': f'Pirate broadcast every {interval}min (engine={engine})'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/pirate/stop', methods=['POST'])
+def api_pirate_stop():
+    global _pirate_job
+    if _pirate_job:
+        try: _pirate_job.remove()
+        except Exception: pass
+        _pirate_job = None
+    return jsonify({'success': True, 'message': 'Pirate broadcast stopped'})
+
+
+@app.route('/api/pirate/fire', methods=['POST'])
+def api_pirate_fire():
+    threading.Thread(target=_run_pirate_broadcast, daemon=True, name='pirate-force').start()
+    return jsonify({'success': True, 'message': 'Pirate bulletin fired'})
+
+
+@app.route('/api/pirate/status', methods=['GET'])
+def api_pirate_status():
+    return jsonify({
+        'active':   _pirate_job is not None,
+        'interval': _app_settings.get('pirate_interval', '15'),
+        'engine':   _app_settings.get('pirate_engine',   'espeak'),
+    })
+
+
+@app.route('/api/voice_roulette', methods=['POST'])
+def api_voice_roulette():
+    """Transmit text with a completely random engine + voice + FX preset combo."""
+    import random
+    data = request.json or {}
+    text = data.get('text', '').strip()
+    if not text:
+        return jsonify({'success': False, 'message': 'text required'}), 400
+    engines  = ['espeak', 'gtts', 'edge', 'pyttsx3']
+    presets  = ['normal', 'radio', 'telephone', 'robot', 'cave', 'alien',
+                'demon', 'chipmunk', 'underwater', 'psychedelic', 'horror',
+                'megaphone', 'stadium', 'lofi', 'distort', 'garage']
+    engine   = random.choice(engines)
+    preset   = random.choice(presets)
+    pitch    = random.randint(-12, 12)
+    speed    = round(random.uniform(0.6, 1.8), 1)
+    result   = orchestrator.execute(text, engine=engine, voice=None,
+                                    preset=preset, pitch=pitch,
+                                    speed=int(speed * 100), roger_beep=False)
+    return jsonify({
+        'success': result.get('success', False),
+        'engine':  engine,
+        'preset':  preset,
+        'pitch':   pitch,
+        'speed':   speed,
+        'message': f'Roulette: {engine} / {preset} / pitch {pitch:+d} / speed {speed}x',
+    })
+
+
 def _startup():
     """Initialise database, start the radio poller, and kick off auto-connect.
     _startup() is called at the end of app.py import, which runs once per
@@ -7504,6 +7962,14 @@ def _startup():
     threading.Thread(target=_discord_poller,       daemon=True, name='discord-poller').start()
     threading.Thread(target=_alexa_watcher,           daemon=True, name='alexa-watcher').start()
     threading.Thread(target=_clips_poller,            daemon=True, name='clips-poller').start()
+    # Solar weather poller: checks NOAA K-index every 10 minutes
+    def _solar_poller_loop():
+        import time as _t
+        while True:
+            try: _solar_poll_and_announce()
+            except Exception: pass
+            _t.sleep(600)
+    threading.Thread(target=_solar_poller_loop, daemon=True, name='solar-poller').start()
     threading.Thread(target=_ctrl_poller,          daemon=True, name='discord-ctrl-poller').start()
     threading.Thread(target=_ctrl_apply_config,    daemon=True, name='discord-ctrl-init').start()
     logger.info('=' * 50)

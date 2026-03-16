@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.36</span>
+    <span class="sb-label">v2.12.37</span>
   </div>
 </div>
 
@@ -3197,6 +3197,153 @@ hr.div  {
     </div>
     <div class="alert-strip" id="ctrl-alert" style="margin-top:var(--s2)"></div>
   </div>
+
+  <!-- ═══════════════════ SPECIAL OPS ═══════════════════ -->
+  <div style="border-top:2px solid var(--warn);background:var(--bg0);flex-shrink:0;padding:var(--s4)">
+    <div style="display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s3)">
+      <span class="panel-title" style="color:var(--warn)">&#9888; SPECIAL OPS</span>
+      <span style="font-size:9px;color:var(--text3)">automated radio events &mdash; use responsibly</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--s4)">
+
+      <!-- Numbers Station -->
+      <div style="border:1px solid var(--border2);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--cyan);letter-spacing:.1em;margin-bottom:var(--s2)">&#128359; NUMBERS STATION</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Transmits Cold War-style digit groups on a schedule.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="number" id="ns-interval" value="5" min="1" max="60" style="width:44px;font-size:9px" title="Interval in minutes">
+          <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
+          <select id="ns-engine" style="flex:1;font-size:9px">
+            <option value="espeak">eSpeak</option>
+            <option value="edge">Edge TTS</option>
+            <option value="gtts">gTTS</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn sm primary" id="ns-start-btn" onclick="nsStart()">&#9632; START</button>
+          <button class="btn sm warn" onclick="nsStop()">STOP</button>
+        </div>
+        <div class="alert-strip" id="ns-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- Solar Weather -->
+      <div style="border:1px solid var(--border2);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.1em;margin-bottom:var(--s2)">&#9728; SOLAR WEATHER</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">NOAA K-index alert via eSpeak when storm detected.</div>
+        <div style="display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2)">
+          <span style="font-size:9px;color:var(--text3)">K &ge;</span>
+          <input type="number" id="solar-threshold" value="5" min="1" max="9" style="width:36px;font-size:9px">
+          <label style="font-size:9px;display:flex;align-items:center;gap:3px;margin-left:auto">
+            <input type="checkbox" id="solar-autotx"> AUTO-TX
+          </label>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">K-index: <span id="solar-kval" style="color:var(--cyan)">—</span></div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn sm" onclick="solarCheck()">&#8634; CHECK</button>
+          <button class="btn sm warn" onclick="solarAnnounce()">&#128226; ANNOUNCE</button>
+          <button class="btn sm ok" onclick="solarSave()">SAVE</button>
+        </div>
+        <div class="alert-strip" id="solar-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- Mystery TX -->
+      <div style="border:1px solid var(--border2);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--purple);letter-spacing:.1em;margin-bottom:var(--s2)">&#128123; MYSTERY TX</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Transmits a random clip (or spooky AI line) at a random time in the configured window.</div>
+        <div style="display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2)">
+          <span style="font-size:9px;color:var(--text3)">Window</span>
+          <input type="number" id="mystery-start" value="2" min="0" max="23" style="width:36px;font-size:9px" title="Start hour (0-23)">
+          <span style="font-size:9px;color:var(--text3)">&#8594;</span>
+          <input type="number" id="mystery-end" value="4" min="0" max="23" style="width:36px;font-size:9px" title="End hour (0-23)">
+          <span style="font-size:9px;color:var(--text3)">hr</span>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Next: <span id="mystery-next" style="color:var(--cyan)">—</span></div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn sm primary" onclick="mysterySchedule()">SCHEDULE</button>
+          <button class="btn sm warn" onclick="mysteryStop()">CANCEL</button>
+          <button class="btn sm" onclick="mysteryFire()" title="Fire immediately for testing">&#9654; TEST</button>
+        </div>
+        <div class="alert-strip" id="mystery-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- Auto-ID -->
+      <div style="border:1px solid var(--border2);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--rx);letter-spacing:.1em;margin-bottom:var(--s2)">&#128225; AUTO-ID</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Transmits callsign identification automatically.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="text" id="autoid-callsign" placeholder="CALLSIGN" style="flex:1;font-size:9px;text-transform:uppercase">
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="number" id="autoid-interval" value="10" min="1" max="120" style="width:44px;font-size:9px" title="Interval minutes">
+          <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
+          <select id="autoid-engine" style="flex:1;font-size:9px">
+            <option value="cw">CW (Morse)</option>
+            <option value="espeak">eSpeak</option>
+            <option value="edge">Edge TTS</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn sm primary" id="autoid-start-btn" onclick="autoidStart()">START</button>
+          <button class="btn sm warn" onclick="autoidStop()">STOP</button>
+        </div>
+        <div class="alert-strip" id="autoid-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+    </div><!-- /special ops grid row 1 -->
+
+    <!-- Row 2: FULL CHAOS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s4);margin-top:var(--s4)">
+
+      <!-- Voice Roulette -->
+      <div style="border:2px solid #ff00ff;padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:#ff00ff;letter-spacing:.1em;margin-bottom:var(--s2)">&#127922; VOICE ROULETTE</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Transmits whatever is in the TX box using a totally random engine, voice, FX preset, pitch and speed. You have no idea what it will sound like.</div>
+        <div id="roulette-result" style="font-size:9px;color:#ff00ff;min-height:14px;margin-bottom:var(--s2);font-family:var(--font)"></div>
+        <button class="btn primary" style="width:100%;background:#3a003a;border-color:#ff00ff;color:#ff00ff;font-weight:700" onclick="voiceRoulette()">&#127922; SPIN &amp; TX</button>
+        <div class="alert-strip" id="roulette-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- Pirate Broadcast -->
+      <div style="border:2px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.1em;margin-bottom:var(--s2)">&#128308; PIRATE BROADCAST</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Periodically transmits absurd fake news headlines in a random voice. Unsolicited. Unpredictable. Unstoppable.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="number" id="pirate-interval" value="15" min="1" max="120" style="width:44px;font-size:9px" title="Minutes between bulletins">
+          <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
+          <select id="pirate-engine" style="flex:1;font-size:9px">
+            <option value="espeak">eSpeak (chaos mode)</option>
+            <option value="gtts">Google TTS</option>
+            <option value="edge">Edge TTS</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn sm primary" style="background:#3a0000;border-color:var(--tx);color:var(--tx)" onclick="pirateStart()">&#128308; ON AIR</button>
+          <button class="btn sm warn" onclick="pirateStop()">SIGN OFF</button>
+          <button class="btn sm" onclick="pirateFire()" title="Fire one bulletin now">&#9654; BULLETIN</button>
+        </div>
+        <div class="alert-strip" id="pirate-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- CHAOS BUTTON -->
+      <div style="border:2px solid var(--warn);padding:var(--s3);background:var(--bg1);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+        <div style="font-size:9px;font-weight:700;color:var(--warn);letter-spacing:.1em;margin-bottom:var(--s3)">&#127755; CHAOS BUTTON</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s4)">Fires a random special op. Could be anything. Good luck.</div>
+        <button onclick="chaosButton()" style="
+          width:80px;height:80px;border-radius:50%;
+          background:radial-gradient(circle at 35% 35%,#ff4444,#7a0000);
+          border:3px solid var(--warn);color:#fff;
+          font-size:24px;cursor:pointer;
+          box-shadow:0 0 20px rgba(255,100,0,.5);
+          transition:transform 80ms,box-shadow 80ms;
+          font-family:var(--font);
+        " onmousedown="this.style.transform='scale(.94)'" onmouseup="this.style.transform=''">
+          &#127755;
+        </button>
+        <div id="chaos-result" style="font-size:9px;color:var(--warn);margin-top:var(--s3);min-height:14px"></div>
+      </div>
+
+    </div><!-- /special ops row 2 -->
+  </div><!-- /special ops -->
 
   <!-- CONFIG IMPORT / EXPORT footer strip -->
   <div style="display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s4);border-top:var(--b1);background:var(--bg1);flex-shrink:0">
@@ -7925,6 +8072,8 @@ async function loadGongPath() {
     alexaRestoreSettings();
     // Restore Clips config panel
     clipsRestoreSettings();
+    // Restore all other persisted fields
+    _restoreAllSettings(r);
   } catch {}
 }
 
@@ -9069,6 +9218,38 @@ async function cfgFlushPresets() {
     tx_voice:  get('tx-voice'),
     tx_delay:  parseFloat(get('tx-delay')) || 0,
     tx_repeat: parseFloat(get('tx-repeat')) || 1,
+    // Trip gap (already in allowed but was missing from flush)
+    trip_gap_min:  get('trip-gap-min'),
+    trip_gap_max:  get('trip-gap-max'),
+    trip_hesitate: checked('trip-hesitate') ? 'true' : 'false',
+    // Discord monitor
+    discord_inject_target: get('discord-inject-target'),
+    discord_inject_format: get('discord-inject-format'),
+    // WF ART
+    wf_bw:       get('wf-bw'),
+    wf_sideband: get('wf-sideband'),
+    wf_contrast: get('wf-contrast'),
+    wf_dur:      get('wf-dur'),
+    // SSTV
+    sstv_vox: checked('sstv-vox') ? 'true' : 'false',
+    // Beacon form defaults
+    bcn_interval: get('bcn-interval'),
+    bcn_repeat:   get('bcn-repeat'),
+    bcn_engine:   get('bcn-engine'),
+    // Audio device
+    audio_device: get('set-audio-device'),
+    // Special Ops
+    numbers_station_interval: get('ns-interval'),
+    numbers_station_engine:   get('ns-engine'),
+    solar_kindex_threshold:   get('solar-threshold'),
+    solar_autotx_enabled:     checked('solar-autotx') ? 'true' : 'false',
+    mystery_window_start:     get('mystery-start'),
+    mystery_window_end:       get('mystery-end'),
+    autoid_callsign:          get('autoid-callsign'),
+    autoid_interval:          get('autoid-interval'),
+    autoid_engine:            get('autoid-engine'),
+    pirate_interval:          get('pirate-interval'),
+    pirate_engine:            get('pirate-engine'),
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -10583,6 +10764,212 @@ async function clipsSlotDrop(event, slot) {
   }
 }
 
+// =============================================================
+// SETTINGS RESTORE
+// =============================================================
+function _restoreAllSettings(s) {
+  if (!s) return;
+  const set = (id, v) => { if (v == null || v === '') return; const el = document.getElementById(id); if (el) el.value = v; };
+  const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = (v === 'true' || v === true); };
+  // Discord monitor
+  set('discord-inject-target', s.discord_inject_target);
+  set('discord-inject-format', s.discord_inject_format);
+  // WF ART
+  set('wf-bw',       s.wf_bw);
+  set('wf-sideband', s.wf_sideband);
+  set('wf-contrast', s.wf_contrast);
+  set('wf-dur',      s.wf_dur);
+  if (s.wf_contrast) {
+    const v = document.getElementById('wf-contrast-val');
+    if (v) v.textContent = s.wf_contrast;
+  }
+  // SSTV
+  chk('sstv-vox', s.sstv_vox);
+  // Beacon form defaults
+  set('bcn-interval', s.bcn_interval);
+  set('bcn-repeat',   s.bcn_repeat);
+  set('bcn-engine',   s.bcn_engine);
+  // Audio device (note: select populated async, so just store and apply after populate)
+  if (s.audio_device) window._savedAudioDevice = s.audio_device;
+  // Special Ops
+  set('ns-interval',      s.numbers_station_interval);
+  set('ns-engine',        s.numbers_station_engine);
+  set('solar-threshold',  s.solar_kindex_threshold);
+  chk('solar-autotx',     s.solar_autotx_enabled);
+  set('mystery-start',    s.mystery_window_start);
+  set('mystery-end',      s.mystery_window_end);
+  set('autoid-callsign',  s.autoid_callsign);
+  set('autoid-interval',  s.autoid_interval);
+  set('autoid-engine',    s.autoid_engine);
+  set('pirate-interval',  s.pirate_interval);
+  set('pirate-engine',    s.pirate_engine);
+}
+
+// =============================================================
+// SPECIAL OPS JS
+// =============================================================
+
+// ── Numbers Station ─────────────────────────────────────────────────────────
+async function nsStart() {
+  const interval = parseInt(document.getElementById('ns-interval')?.value) || 5;
+  const engine   = document.getElementById('ns-engine')?.value || 'espeak';
+  const r = await api('POST', '/api/numbers_station/start', { interval_minutes: interval, engine });
+  showAlert('ns-alert', r.message || (r.success ? 'Active' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success) {
+    const btn = document.getElementById('ns-start-btn');
+    if (btn) { btn.textContent = '\u25cf ACTIVE'; btn.style.background = 'var(--dim-tx)'; }
+    cfgFlushPresets();
+  }
+}
+async function nsStop() {
+  const r = await api('POST', '/api/numbers_station/stop');
+  showAlert('ns-alert', r.message || 'Stopped', 'warn');
+  const btn = document.getElementById('ns-start-btn');
+  if (btn) { btn.textContent = '\u25a0 START'; btn.style.background = ''; }
+}
+
+// ── Solar Weather ─────────────────────────────────────────────────────────
+async function solarCheck() {
+  showAlert('solar-alert', 'Fetching K-index…', 'warn', 0);
+  const r = await api('GET', '/api/solar/status');
+  const k = r.k_index;
+  const kEl = document.getElementById('solar-kval');
+  if (kEl) {
+    kEl.textContent = k != null ? k.toFixed(1) : '?';
+    kEl.style.color = k >= 5 ? 'var(--warn)' : k >= 3 ? 'var(--cyan)' : 'var(--rx)';
+  }
+  const cond = k >= 8 ? 'EXTREME' : k >= 7 ? 'SEVERE' : k >= 6 ? 'STRONG' :
+               k >= 5 ? 'MODERATE' : k >= 3 ? 'UNSETTLED' : 'QUIET';
+  showAlert('solar-alert', `K=${k != null ? k.toFixed(1) : '?'} — ${cond}${r.autotx_enabled ? ' • AUTO-TX ON' : ''}`, 'ok', 6000);
+}
+async function solarSave() {
+  const threshold = document.getElementById('solar-threshold')?.value || '5';
+  const autotx    = document.getElementById('solar-autotx')?.checked ? 'true' : 'false';
+  const r = await api('POST', '/api/settings', { solar_kindex_threshold: threshold, solar_autotx_enabled: autotx });
+  showAlert('solar-alert', r.success ? 'Saved' : 'Failed', r.success ? 'ok' : 'err');
+}
+async function solarAnnounce() {
+  showAlert('solar-alert', 'Transmitting…', 'warn', 0);
+  const r = await api('POST', '/api/solar/announce');
+  showAlert('solar-alert', r.message || (r.success ? 'Queued' : 'Failed'), r.success ? 'ok' : 'err');
+}
+
+// ── Mystery TX ────────────────────────────────────────────────────────────
+async function mysterySchedule() {
+  const ws = parseInt(document.getElementById('mystery-start')?.value) || 2;
+  const we = parseInt(document.getElementById('mystery-end')?.value)   || 4;
+  const r  = await api('POST', '/api/mystery/schedule', { window_start_hour: ws, window_end_hour: we });
+  showAlert('mystery-alert', r.message || (r.success ? 'Scheduled' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success && r.scheduled_for) {
+    const el = document.getElementById('mystery-next');
+    if (el) el.textContent = r.scheduled_for;
+    cfgFlushPresets();
+  }
+}
+async function mysteryStop() {
+  const r = await api('POST', '/api/mystery/stop');
+  showAlert('mystery-alert', 'Cancelled', 'warn');
+  const el = document.getElementById('mystery-next');
+  if (el) el.textContent = '—';
+}
+async function mysteryFire() {
+  showAlert('mystery-alert', 'Firing…', 'warn', 0);
+  const r = await api('POST', '/api/mystery/fire');
+  showAlert('mystery-alert', r.message || 'Fired', 'ok', 4000);
+}
+
+// ── Auto-ID ───────────────────────────────────────────────────────────────
+async function autoidStart() {
+  const callsign = document.getElementById('autoid-callsign')?.value.trim().toUpperCase();
+  if (!callsign) { showAlert('autoid-alert', 'Enter a callsign', 'warn'); return; }
+  const interval = parseInt(document.getElementById('autoid-interval')?.value) || 10;
+  const engine   = document.getElementById('autoid-engine')?.value || 'cw';
+  const r = await api('POST', '/api/autoid/start', { callsign, interval_minutes: interval, engine });
+  showAlert('autoid-alert', r.message || (r.success ? 'Active' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success) {
+    const btn = document.getElementById('autoid-start-btn');
+    if (btn) { btn.textContent = '\u25cf ACTIVE'; btn.style.background = 'var(--dim-rx)'; }
+    cfgFlushPresets();
+  }
+}
+async function autoidStop() {
+  const r = await api('POST', '/api/autoid/stop');
+  showAlert('autoid-alert', r.message || 'Stopped', 'warn');
+  const btn = document.getElementById('autoid-start-btn');
+  if (btn) { btn.textContent = 'START'; btn.style.background = ''; }
+}
+
+// ── Voice Roulette ───────────────────────────────────────────────────────
+async function voiceRoulette() {
+  const text = document.getElementById('tx-text')?.value?.trim();
+  if (!text) { showAlert('roulette-alert', 'Enter text in TX tab first', 'warn'); return; }
+  showAlert('roulette-alert', 'Spinning… \uD83C\uDFB2', 'warn', 0);
+  const r = await api('POST', '/api/voice_roulette', { text });
+  const result = document.getElementById('roulette-result');
+  if (r.success) {
+    const info = `${r.engine} / ${r.preset} / pitch ${r.pitch > 0 ? '+' : ''}${r.pitch} / ${r.speed}x`;
+    if (result) result.textContent = info;
+    showAlert('roulette-alert', '\uD83C\uDFB2 ' + info, 'ok', 8000);
+  } else {
+    showAlert('roulette-alert', r.message || 'Failed', 'err');
+  }
+}
+
+// ── Pirate Broadcast ──────────────────────────────────────────────────────
+async function pirateStart() {
+  const interval = parseInt(document.getElementById('pirate-interval')?.value) || 15;
+  const engine   = document.getElementById('pirate-engine')?.value || 'espeak';
+  const r = await api('POST', '/api/pirate/start', { interval_minutes: interval, engine });
+  showAlert('pirate-alert', r.message || (r.success ? 'On air!' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success) cfgFlushPresets();
+}
+async function pirateStop() {
+  const r = await api('POST', '/api/pirate/stop');
+  showAlert('pirate-alert', r.message || 'Signed off', 'warn');
+}
+async function pirateFire() {
+  showAlert('pirate-alert', 'Firing bulletin…', 'warn', 0);
+  const r = await api('POST', '/api/pirate/fire');
+  showAlert('pirate-alert', r.message || 'Fired', 'ok', 5000);
+}
+
+// ── Chaos Button ───────────────────────────────────────────────────────────
+async function chaosButton() {
+  const el  = document.getElementById('chaos-result');
+  if (el) el.textContent = 'UNLEASHING\u2026';
+  const opts = [
+    async () => { await api('POST','/api/numbers_station/start',{interval_minutes:1,engine:'espeak'}); return '\u{1F5CE} Numbers station activated at 1min intervals'; },
+    async () => { const r=await api('POST','/api/pirate/fire'); return '\uD83D\uDCC1 '+r.message; },
+    async () => { const r=await api('POST','/api/mystery/fire'); return '\uD83D\uDC7B '+r.message; },
+    async () => {
+      const lines = ['You have been chosen.','This frequency is compromised.','Stand by for the signal.','End of days. Or maybe just Tuesday.','Hello. Is this thing on.'];
+      const msg = lines[Math.floor(Math.random()*lines.length)];
+      const r = await api('POST','/api/voice_roulette',{text:msg});
+      return '\uD83C\uDFB2 '+r.message;
+    },
+    async () => { const r=await api('POST','/api/solar/announce'); return '\u2600\uFE0F '+r.message; },
+    async () => {
+      const callsign=document.getElementById('autoid-callsign')?.value?.trim()||'N0CALL';
+      const r=await api('POST','/api/autoid/start',{callsign,interval_minutes:1,engine:'cw'});
+      return '\uD83D\uDCE1 Auto-ID every 1min: '+callsign;
+    },
+    async () => {
+      dubPreset(['dub','robot','alien','demon','psychedelic','horror','underwater'][Math.floor(Math.random()*7)]);
+      const text=document.getElementById('tx-text')?.value?.trim()||'Chaos.';
+      const r=await api('POST','/api/transmit',{text,engine:'espeak',preset:'alien',roger_beep:false});
+      return '\uD83D\uDD25 FX blast: '+r.message;
+    },
+  ];
+  const fn = opts[Math.floor(Math.random()*opts.length)];
+  try {
+    const msg = await fn();
+    if (el) el.textContent = msg;
+  } catch(e) {
+    if (el) el.textContent = 'Chaos error: '+e.message;
+  }
+}
+
+// =============================================================
 // Save S3 credentials from Config tab
 async function saveS3Keys() {
   const ak = document.getElementById('set-s3-access-key')?.value.trim();
