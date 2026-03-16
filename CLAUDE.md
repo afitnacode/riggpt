@@ -56,15 +56,17 @@ journalctl -u riggpt -n 50
 - `app.py` (~360KB): grep only, never full read
 - Both change frequently — always grep for exact text before any edit
 
-## Tab structure (v2.12.38)
+## Tab structure (v2.12.45)
 ```
-CONSOLE(1) TX(2) BEACON(3) WF ART(4) SSTV(5) SCHEDULE(6) LOG(7)
-CONFIG(8) SYSTEM(9) API CFG(0) AI  ACID TRIP(!)  CLIPS(📼)  SPEC OPS(☠)
+CONSOLE(1) BEACON(2) WF ART(3) SSTV(4) SCHEDULE(5) LOG(6)
+CONFIG(7) SYSTEM(8) API CFG(9) AI  ACID TRIP(!)  CLIPS(📼)  SPEC OPS(☠)
 ```
-- Pane IDs: `pane-dash`, `pane-tx`, `pane-beacon`, `pane-wfall`, `pane-sstv`,
+- Pane IDs: `pane-dash`, `pane-beacon`, `pane-wfall`, `pane-sstv`,
   `pane-sched`, `pane-hist`, `pane-cfg`, `pane-system`, `pane-apicfg`,
   `pane-ai`, `pane-trip`, `pane-clips`, `pane-specops`
-- TABS constant in JS: `['dash','tx','beacon','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops']`
+- TABS constant in JS: `['dash','beacon','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops']`
+- TX controls are embedded in `pane-dash` (Console tab), not a separate pane
+- `pane-dub` (Trenchtown FX) was removed in v2.12.34; FX/pads live in Clips tab
 
 ## Key app.py patterns
 - Settings: `POST /api/settings` with allowed-key whitelist → `app_settings.json`

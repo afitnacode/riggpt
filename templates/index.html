@@ -2486,398 +2486,6 @@ hr.div  {
 </div>
 
 <!-- ══════════════════════
-     PANE: DUB FX (Trenchtown)
-══════════════════════════ -->
-<!-- pane-dub removed: Trenchtown FX/pads moved into Clips tab -->
-<div id="pane-dub" class="pane" style="display:none"><!-- tombstone: removed v2.12.34 -->
-    <!-- Left: FX controls -->
-    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
-      <div class="panel-header">
-        <span class="panel-title">TRENCHTOWN DUB STUDIO</span>
-        <span style="font-size:var(--fz-xs);color:var(--text3)">ffmpeg FX CHAIN</span>
-        <label class="toggle-row" style="font-size:var(--fz-xs);gap:4px;margin-left:auto" title="Normalize output loudness (loudnorm EBU R128)">
-          <input type="checkbox" id="dub-normalize"> NORM
-        </label>
-      </div>
-
-      <!-- Preset strip -->
-      <div class="preset-strip" style="flex-shrink:0;flex-wrap:wrap;gap:2px;row-gap:2px">
-        <button class="preset-btn active" id="dub-preset-btn-clean"       onclick="dubPreset('clean')">CLEAN</button>
-        <button class="preset-btn" id="dub-preset-btn-dub"                onclick="dubPreset('dub')">DUB</button>
-        <button class="preset-btn" id="dub-preset-btn-radio"              onclick="dubPreset('radio')">RADIO</button>
-        <button class="preset-btn" id="dub-preset-btn-telephone"          onclick="dubPreset('telephone')">PHONE</button>
-        <button class="preset-btn" id="dub-preset-btn-broadcast"          onclick="dubPreset('broadcast')">BROADCAST</button>
-        <button class="preset-btn" id="dub-preset-btn-cave"               onclick="dubPreset('cave')">CAVE</button>
-        <button class="preset-btn" id="dub-preset-btn-stadium"            onclick="dubPreset('stadium')">STADIUM</button>
-        <button class="preset-btn" id="dub-preset-btn-underwater"         onclick="dubPreset('underwater')">UNDERWATER</button>
-        <button class="preset-btn" id="dub-preset-btn-distort"            onclick="dubPreset('distort')">DISTORT</button>
-        <button class="preset-btn" id="dub-preset-btn-robot"              onclick="dubPreset('robot')">ROBOT</button>
-        <button class="preset-btn" id="dub-preset-btn-alien"              onclick="dubPreset('alien')">ALIEN</button>
-        <button class="preset-btn" id="dub-preset-btn-demon"              onclick="dubPreset('demon')">DEMON</button>
-        <button class="preset-btn" id="dub-preset-btn-chipmunk"           onclick="dubPreset('chipmunk')">CHIPMUNK</button>
-        <button class="preset-btn" id="dub-preset-btn-vinyl"              onclick="dubPreset('vinyl')">VINYL</button>
-        <button class="preset-btn" id="dub-preset-btn-psychedelic"        onclick="dubPreset('psychedelic')">PSYCHEDELIC</button>
-        <button class="preset-btn" id="dub-preset-btn-garage"             onclick="dubPreset('garage')">GARAGE</button>
-        <button class="preset-btn" id="dub-preset-btn-lofi"               onclick="dubPreset('lofi')">LO-FI</button>
-        <button class="preset-btn" id="dub-preset-btn-megaphone"          onclick="dubPreset('megaphone')">MEGAPHONE</button>
-        <button class="preset-btn" id="dub-preset-btn-horror"             onclick="dubPreset('horror')">HORROR</button>
-        <button class="preset-btn" id="dub-preset-btn-newsroom"           onclick="dubPreset('newsroom')">NEWSROOM</button>
-        <button class="preset-btn" id="dub-preset-btn-stutter"            onclick="dubPreset('stuttered')">STUTTER</button>
-        <button class="preset-btn" id="dub-preset-btn-wide"               onclick="dubPreset('wide')">WIDE STEREO</button>
-      </div>
-
-      <!-- Waveform preview -->
-      <canvas id="dub-waveform" class="waveform-canvas"></canvas>
-      <div id="dub-waveform-time" style="font-size:9px;color:var(--text3);text-align:center;padding:1px 0;flex-shrink:0;min-height:13px"></div>
-
-      <!-- Effect groups -->
-      <div class="scroll-body">
-        <div class="fx-grid">
-          <!-- Dynamics -->
-          <div class="fx-group">
-            <div class="fx-group-title">DYNAMICS</div>
-            <div class="fx-knob-row">
-              <div class="fx-knob">
-                <label>VOL</label>
-                <input type="range" id="dub-vol" min="0" max="200" value="100" oninput="dubUpdate('vol',this.value)">
-                <span class="fx-val" id="dv-vol">100%</span>
-              </div>
-              <div class="fx-knob">
-                <label>COMP</label>
-                <input type="range" id="dub-compress" min="0" max="100" value="0" oninput="dubUpdate('compress',this.value)">
-                <span class="fx-val" id="dv-compress">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>GATE</label>
-                <input type="range" id="dub-gate" min="0" max="100" value="0" oninput="dubUpdate('gate',this.value)">
-                <span class="fx-val" id="dv-gate">OFF</span>
-              </div>
-            </div>
-          </div>
-          <!-- Tone / EQ -->
-          <div class="fx-group">
-            <div class="fx-group-title">TONE / EQ</div>
-            <div class="fx-knob-row">
-              <div class="fx-knob">
-                <label>LPF</label>
-                <input type="range" id="dub-lpf" min="200" max="20000" value="20000" oninput="dubUpdate('lpf',this.value)">
-                <span class="fx-val" id="dv-lpf">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>HPF</label>
-                <input type="range" id="dub-hpf" min="0" max="4000" value="0" oninput="dubUpdate('hpf',this.value)">
-                <span class="fx-val" id="dv-hpf">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>BASS</label>
-                <input type="range" id="dub-bass" min="-20" max="20" value="0" oninput="dubUpdate('bass',this.value)">
-                <span class="fx-val" id="dv-bass">0 dB</span>
-              </div>
-              <div class="fx-knob">
-                <label>MID</label>
-                <input type="range" id="dub-mid" min="-20" max="20" value="0" oninput="dubUpdate('mid',this.value)">
-                <span class="fx-val" id="dv-mid">0 dB</span>
-              </div>
-              <div class="fx-knob">
-                <label>TREBLE</label>
-                <input type="range" id="dub-treble" min="-20" max="20" value="0" oninput="dubUpdate('treble',this.value)">
-                <span class="fx-val" id="dv-treble">0 dB</span>
-              </div>
-            </div>
-          </div>
-          <!-- Pitch/Speed -->
-          <div class="fx-group">
-            <div class="fx-group-title">PITCH / TIME</div>
-            <div class="fx-knob-row">
-              <div class="fx-knob">
-                <label>PITCH</label>
-                <input type="range" id="dub-pitch" min="-24" max="24" value="0" oninput="dubUpdate('pitch',this.value)">
-                <span class="fx-val" id="dv-pitch">0 st</span>
-              </div>
-              <div class="fx-knob">
-                <label>SPEED</label>
-                <input type="range" id="dub-speed" min="0" max="400" value="100" oninput="dubUpdate('speed',this.value)">
-                <span class="fx-val" id="dv-speed">1.0x</span>
-              </div>
-            </div>
-          </div>
-          <!-- Distortion -->
-          <div class="fx-group">
-            <div class="fx-group-title">DISTORTION / WARP</div>
-            <div class="fx-knob-row">
-              <div class="fx-knob">
-                <label>DRIVE</label>
-                <input type="range" id="dub-overdrive" min="0" max="100" value="0" oninput="dubUpdate('overdrive',this.value)">
-                <span class="fx-val" id="dv-overdrive">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>CRUSH</label>
-                <input type="range" id="dub-bitcrush" min="0" max="14" value="0" oninput="dubUpdate('bitcrush',this.value)">
-                <span class="fx-val" id="dv-bitcrush">OFF</span>
-              </div>
-              <div class="fx-knob" title="Stutter: chops the audio into repeating slices">
-                <label>STUTTER</label>
-                <input type="range" id="dub-stutter" min="0" max="100" value="0" oninput="dubUpdate('stutter',this.value)">
-                <span class="fx-val" id="dv-stutter">OFF</span>
-              </div>
-              <div class="fx-knob" title="Stereo width (0=mono, 100=normal, 200=wide, requires stereo output)">
-                <label>WIDTH</label>
-                <input type="range" id="dub-width" min="0" max="200" value="100" oninput="dubUpdate('width',this.value)">
-                <span class="fx-val" id="dv-width">100%</span>
-              </div>
-            </div>
-          </div>
-          <!-- Modulation -->
-          <div class="fx-group">
-            <div class="fx-group-title">MODULATION</div>
-            <div class="fx-knob-row">
-              <div class="fx-knob">
-                <label>CHORUS</label>
-                <input type="range" id="dub-chorus" min="0" max="100" value="0" oninput="dubUpdate('chorus',this.value)">
-                <span class="fx-val" id="dv-chorus">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>FLANG</label>
-                <input type="range" id="dub-flanger" min="0" max="100" value="0" oninput="dubUpdate('flanger',this.value)">
-                <span class="fx-val" id="dv-flanger">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>PHAS</label>
-                <input type="range" id="dub-phaser" min="0" max="100" value="0" oninput="dubUpdate('phaser',this.value)">
-                <span class="fx-val" id="dv-phaser">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>TREM</label>
-                <input type="range" id="dub-tremolo" min="0" max="100" value="0" oninput="dubUpdate('tremolo',this.value)">
-                <span class="fx-val" id="dv-tremolo">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>VIB</label>
-                <input type="range" id="dub-vibrato" min="0" max="100" value="0" oninput="dubUpdate('vibrato',this.value)">
-                <span class="fx-val" id="dv-vibrato">OFF</span>
-              </div>
-            </div>
-          </div>
-          <!-- Space -->
-          <div class="fx-group">
-            <div class="fx-group-title">SPACE</div>
-            <div class="fx-knob-row">
-              <div class="fx-knob">
-                <label>REVERB</label>
-                <input type="range" id="dub-reverb" min="0" max="100" value="0" oninput="dubUpdate('reverb',this.value)">
-                <span class="fx-val" id="dv-reverb">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>ECHO</label>
-                <input type="range" id="dub-echo" min="0" max="1200" value="0" oninput="dubUpdate('echo',this.value)">
-                <span class="fx-val" id="dv-echo">OFF</span>
-              </div>
-              <div class="fx-knob">
-                <label>ECHO FB</label>
-                <input type="range" id="dub-echo-fb" min="0" max="90" value="40" oninput="dubUpdate('echo-fb',this.value)">
-                <span class="fx-val" id="dv-echo-fb">40%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Chain display -->
-      <div class="chain-display" id="dub-chain">Chain: <span style="color:var(--text3)">clean (no effects)</span></div>
-
-      <div class="btn-row border-top" style="flex-shrink:0">
-        <button class="btn xl primary" onclick="dubTransmit()">⬛ TX WITH FX</button>
-        <button class="btn lg ok" onclick="dubPreview()">▶ PREVIEW</button>
-        <button class="btn sm warn" onclick="terminateTx()">⛔ ABORT</button>
-        <button class="btn sm" onclick="dubReset()">↺ RESET</button>
-        <button class="btn sm" onclick="dubCopyChain()" title="Copy FX settings as JSON to clipboard">📋 COPY</button>
-        <button class="btn sm" onclick="dubSaveUserPreset()" title="Save current FX settings as a named user preset">💾 SAVE</button>
-        <button class="btn sm" onclick="dubLoadUserPreset()" title="Load a previously saved user preset">📂 LOAD</button>
-      </div>
-
-      <div class="preview-player" id="dub-preview-player">
-        <audio id="dub-audio" controls style="width:100%;height:28px"></audio>
-      </div>
-      <div class="alert-strip" id="dub-alert"></div>
-    </div>
-
-    <!-- Right: TRENCHTOWN LIVE SAMPLER ─────────────────── -->
-    <div style="display:flex;flex-direction:column;overflow:hidden;height:100%">
-      <div class="panel-header" style="background:linear-gradient(90deg,#0a1a0a,#001a00);border-bottom:1px solid #1a5a1a">
-        <span class="panel-title" style="color:#39ff14;letter-spacing:.12em">LIVE SAMPLER</span>
-        <span style="font-size:9px;color:#1a7a1a;margin-left:auto">TRENCHTOWN STUDIO</span>
-      </div>
-
-      <!-- ── TTS SEND ─────────────────────────────────── -->
-      <div class="sec-head" style="flex-shrink:0;color:#39ff14;border-color:#1a5a1a">VOICE SEND</div>
-      <div style="padding:var(--s2) var(--s3);flex-shrink:0">
-        <textarea id="dub-text" placeholder="Type a message… FX chain applies on SEND" rows="3"
-          style="width:100%;resize:none;font-size:var(--fz-xs);border-color:#1a5a1a;background:#030d03"></textarea>
-      </div>
-      <div class="form-row" style="flex-shrink:0;padding:0 var(--s3) var(--s1)">
-        <select id="dub-engine" style="flex:1;font-size:var(--fz-xs)" onchange="dubLoadVoices()">
-          <option value="espeak">eSpeak</option>
-          <option value="piper">Piper</option>
-          <option value="edge">Edge TTS</option>
-          <option value="gtts">Google TTS</option>
-          <option value="pyttsx3">System TTS</option>
-          <option value="elevenlabs">ElevenLabs</option>
-          <option value="speechify">Speechify</option>
-          <option value="openai">OpenAI TTS</option>
-          <option value="fastkoko">FastKoko (Local)</option>
-        </select>
-        <select id="dub-voice-sel" style="flex:1;display:none;font-size:var(--fz-xs)"></select>
-        <input type="text" id="dub-voice" placeholder="voice" style="flex:1;font-size:var(--fz-xs)">
-        <button class="btn sm" onclick="dubLoadVoices()" title="Reload voices" style="flex-shrink:0">↺</button>
-      </div>
-      <div id="dub-voice-hint" style="font-size:9px;color:var(--text3);padding:0 var(--s3) var(--s1);min-height:10px"></div>
-      <div class="btn-row" style="flex-shrink:0;padding:0 var(--s3) var(--s2);gap:var(--s2)">
-        <button class="btn primary" onclick="dubTransmit()" style="flex:1;background:#003300;border-color:#1a7a1a;color:#39ff14">⬛ TX+FX</button>
-        <button class="btn ok" onclick="dubPreview()" style="flex:1;font-size:var(--fz-xs)">▶ PREVIEW</button>
-      </div>
-
-      <!-- ── FILE SAMPLE ───────────────────────────────── -->
-      <div class="sec-head" style="flex-shrink:0;color:#39ff14;border-color:#1a5a1a">FILE SAMPLE</div>
-      <div style="border:1px dashed #1a5a1a;margin:var(--s2) var(--s3);padding:var(--s2);text-align:center;cursor:pointer;color:var(--text3);font-size:9px;flex-shrink:0;position:relative"
-        id="dub-drop-zone"
-        ondragover="dubFileDrag(event,true)" ondragleave="dubFileDrag(event,false)" ondrop="dubFileDrop(event)"
-        onclick="dubFilePick()">
-        DROP WAV/MP3/FLAC · click to browse
-        <div id="dub-file-name" style="color:#39ff14;margin-top:2px;font-size:9px"></div>
-      </div>
-      <input type="file" id="dub-file-inp" style="display:none" accept="audio/wav,audio/mp3,audio/mpeg,audio/flac,.wav,.mp3,.flac" onchange="dubLoadFile(this.files[0])">
-      <div style="padding:0 var(--s3) var(--s1);flex-shrink:0">
-        <button class="btn sm" onclick="dubClearFile()" id="dub-clear-file-btn" style="display:none;font-size:9px">✕ CLEAR</button>
-      </div>
-
-      <!-- ── DRY/WET ───────────────────────────────────── -->
-      <div class="form-row" style="flex-shrink:0;padding:var(--s1) var(--s3)">
-        <label style="flex-shrink:0;white-space:nowrap;font-size:9px;color:#39ff14">DRY/WET</label>
-        <input type="range" id="dub-wet" min="0" max="100" value="100" style="flex:1"
-          oninput="document.getElementById('dv-wet').textContent=this.value+'%'">
-        <span id="dv-wet" style="color:#39ff14;font-size:9px;width:30px;flex-shrink:0">100%</span>
-      </div>
-
-      <!-- ── SOUND FX PAD ───────────────────────────────── -->
-      <div class="sec-head" style="flex-shrink:0;color:#39ff14;border-color:#1a5a1a">SOUND FX PAD</div>
-      <div style="padding:var(--s2) var(--s3);flex:1;overflow-y:auto;min-height:0">
-
-        <!-- Pad label row -->
-        <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-shrink:0">
-          <span style="font-size:9px;color:#1a7a1a;flex:1">tap pad → play locally · TX → send through FX chain</span>
-          <label style="font-size:9px;display:flex;align-items:center;gap:3px;color:var(--amber);cursor:pointer">
-            <input type="checkbox" id="dub-pad-tx" style="width:10px;height:10px"> AUTO-TX
-          </label>
-        </div>
-
-        <!-- Pad grid — 4 columns × 4 rows = 16 pads -->
-        <div id="dub-pad-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex-shrink:0">
-
-          <!-- ROW 1: RHYTHM -->
-          <button class="pad-btn" data-cat="rhythm" data-pad="kick"
-            onclick="dubPad('kick')" style="--pad-col:#ff6b00">
-            <span class="pad-icon">🥁</span><span class="pad-lbl">KICK</span>
-          </button>
-          <button class="pad-btn" data-cat="rhythm" data-pad="snare"
-            onclick="dubPad('snare')" style="--pad-col:#ff6b00">
-            <span class="pad-icon">🪘</span><span class="pad-lbl">SNARE</span>
-          </button>
-          <button class="pad-btn" data-cat="rhythm" data-pad="hihat"
-            onclick="dubPad('hihat')" style="--pad-col:#ff6b00">
-            <span class="pad-icon">🔔</span><span class="pad-lbl">HI-HAT</span>
-          </button>
-          <button class="pad-btn" data-cat="rhythm" data-pad="clap"
-            onclick="dubPad('clap')" style="--pad-col:#ff6b00">
-            <span class="pad-icon">👏</span><span class="pad-lbl">CLAP</span>
-          </button>
-
-          <!-- ROW 2: DUB BASS -->
-          <button class="pad-btn" data-cat="bass" data-pad="bassdrop"
-            onclick="dubPad('bassdrop')" style="--pad-col:#39ff14">
-            <span class="pad-icon">💥</span><span class="pad-lbl">BASS DROP</span>
-          </button>
-          <button class="pad-btn" data-cat="bass" data-pad="dubsub"
-            onclick="dubPad('dubsub')" style="--pad-col:#39ff14">
-            <span class="pad-icon">〰️</span><span class="pad-lbl">SUB BASS</span>
-          </button>
-          <button class="pad-btn" data-cat="bass" data-pad="reggaebell"
-            onclick="dubPad('reggaebell')" style="--pad-col:#39ff14">
-            <span class="pad-icon">🎵</span><span class="pad-lbl">RIDDIM</span>
-          </button>
-          <button class="pad-btn" data-cat="bass" data-pad="springreverb"
-            onclick="dubPad('springreverb')" style="--pad-col:#39ff14">
-            <span class="pad-icon">🌀</span><span class="pad-lbl">SPRING</span>
-          </button>
-
-          <!-- ROW 3: HORNS & SIRENS -->
-          <button class="pad-btn" data-cat="horn" data-pad="airhorn"
-            onclick="dubPad('airhorn')" style="--pad-col:#00cfff">
-            <span class="pad-icon">📯</span><span class="pad-lbl">AIR HORN</span>
-          </button>
-          <button class="pad-btn" data-cat="horn" data-pad="foghorn"
-            onclick="dubPad('foghorn')" style="--pad-col:#00cfff">
-            <span class="pad-icon">🚢</span><span class="pad-lbl">FOG HORN</span>
-          </button>
-          <button class="pad-btn" data-cat="horn" data-pad="dubsiren"
-            onclick="dubPad('dubsiren')" style="--pad-col:#00cfff">
-            <span class="pad-icon">🚨</span><span class="pad-lbl">DUB SIREN</span>
-          </button>
-          <button class="pad-btn" data-cat="horn" data-pad="policewhistle"
-            onclick="dubPad('policewhistle')" style="--pad-col:#00cfff">
-            <span class="pad-icon">🎺</span><span class="pad-lbl">WHISTLE</span>
-          </button>
-
-          <!-- ROW 4: SCI-FI / WILD -->
-          <button class="pad-btn" data-cat="scifi" data-pad="laser"
-            onclick="dubPad('laser')" style="--pad-col:#ff00ff">
-            <span class="pad-icon">⚡</span><span class="pad-lbl">LASER</span>
-          </button>
-          <button class="pad-btn" data-cat="scifi" data-pad="echobomb"
-            onclick="dubPad('echobomb')" style="--pad-col:#ff00ff">
-            <span class="pad-icon">💣</span><span class="pad-lbl">ECHO BOMB</span>
-          </button>
-          <button class="pad-btn" data-cat="scifi" data-pad="vinylscratch"
-            onclick="dubPad('vinylscratch')" style="--pad-col:#ff00ff">
-            <span class="pad-icon">💿</span><span class="pad-lbl">SCRATCH</span>
-          </button>
-          <button class="pad-btn" data-cat="scifi" data-pad="subping"
-            onclick="dubPad('subping')" style="--pad-col:#ff00ff">
-            <span class="pad-icon">🔦</span><span class="pad-lbl">PING</span>
-          </button>
-
-        </div><!-- /pad grid -->
-
-        <!-- ── LOOP BUTTONS ─────────────────────────────── -->
-        <div style="margin-top:6px;border-top:1px solid #1a5a1a;padding-top:6px;flex-shrink:0">
-          <div style="font-size:9px;color:#1a7a1a;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">LOOP ENGINE</div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
-            <button class="pad-btn loop-btn" id="loop-kick"  onclick="dubLoopToggle('kick')"  style="--pad-col:#ff6b00;font-size:9px;padding:4px 2px">
-              <span class="pad-lbl">KICK</span><span id="loop-dot-kick"  class="loop-dot"></span>
-            </button>
-            <button class="pad-btn loop-btn" id="loop-hihat" onclick="dubLoopToggle('hihat')" style="--pad-col:#ff6b00;font-size:9px;padding:4px 2px">
-              <span class="pad-lbl">HI-HAT</span><span id="loop-dot-hihat" class="loop-dot"></span>
-            </button>
-            <button class="pad-btn loop-btn" id="loop-dub"   onclick="dubLoopToggle('dubsub')" style="--pad-col:#39ff14;font-size:9px;padding:4px 2px">
-              <span class="pad-lbl">SUB</span><span id="loop-dot-dubsub" class="loop-dot"></span>
-            </button>
-            <button class="pad-btn loop-btn" id="loop-siren" onclick="dubLoopToggle('dubsiren')" style="--pad-col:#00cfff;font-size:9px;padding:4px 2px">
-              <span class="pad-lbl">SIREN</span><span id="loop-dot-dubsiren" class="loop-dot"></span>
-            </button>
-          </div>
-          <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
-            <span style="font-size:9px;color:#1a7a1a">BPM</span>
-            <input type="range" id="dub-bpm" min="60" max="160" value="90" style="flex:1;accent-color:#39ff14"
-              oninput="document.getElementById('dub-bpm-lbl').textContent=this.value">
-            <span id="dub-bpm-lbl" style="font-size:9px;color:#39ff14;width:24px">90</span>
-            <button class="btn sm" onclick="dubLoopStopAll()" style="font-size:9px;background:#1a0000;border-color:#7a1a1a;color:#ff4444">■ ALL OFF</button>
-          </div>
-        </div>
-
-      </div><!-- /right scroll -->
-    </div>
-  </div>
-</div>
-<!-- ══════════════════════
      PANE: CONFIG
      Radio connection, Discord integration, import/export
 ══════════════════════════ -->
@@ -3186,8 +2794,7 @@ hr.div  {
   </div>
 
   <!-- ROW 1: Numbers Station, Solar Weather, Mystery TX, Auto-ID -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--s4);padding:var(--s4);border-bottom:var(--b1)">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--s4)">
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--s4);padding:var(--s4);border-bottom:var(--b1)">
 
       <!-- Numbers Station -->
       <div style="border:1px solid var(--border2);padding:var(--s3);background:var(--bg1)">
@@ -3275,7 +2882,7 @@ hr.div  {
   </div><!-- /row 1 -->
 
   <!-- ROW 2: Voice Roulette, Pirate Broadcast, Chaos Button -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s4);padding:var(--s4);border-bottom:var(--b1)">
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--s4);padding:var(--s4);border-bottom:var(--b1)">
 
       <!-- Voice Roulette -->
       <div style="border:2px solid #ff00ff;padding:var(--s3);background:var(--bg1)">
@@ -3300,7 +2907,7 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2)">
-          <button class="btn sm primary" style="background:#3a0000;border-color:var(--tx);color:var(--tx)" onclick="pirateStart()">&#128308; ON AIR</button>
+          <button class="btn sm primary" id="pirate-start-btn" style="background:#3a0000;border-color:var(--tx);color:var(--tx)" onclick="pirateStart()">&#128308; ON AIR</button>
           <button class="btn sm warn" onclick="pirateStop()">SIGN OFF</button>
           <button class="btn sm" onclick="pirateFire()" title="Fire one bulletin now">&#9654; BULLETIN</button>
         </div>
@@ -3334,7 +2941,7 @@ hr.div  {
       <span style="font-size:9px;color:var(--text3)">directly manipulates radio hardware via CI-V serial commands &mdash; requires connected radio</span>
       <button class="btn sm warn" onclick="ghostStop()" style="margin-left:auto">&#9632; EXORCISE</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:var(--s3);margin-bottom:var(--s3)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:var(--s3);margin-bottom:var(--s3)">
 
       <!-- VFO Poltergeist -->
       <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
@@ -3432,13 +3039,12 @@ hr.div  {
         <span style="font-size:9px;color:var(--tx);font-weight:700;letter-spacing:.08em">POSSESSION LOG</span>
         <button class="btn sm" onclick="ghostPoll()" style="margin-left:auto">&#8634; REFRESH</button>
       </div>
-      <div id="ghost-log" style="font-size:9px;font-family:var(--mono);color:var(--text3);max-height:80px;overflow-y:auto;line-height:1.8">
+      <div id="ghost-log" style="font-size:9px;font-family:var(--mono);color:var(--text3);max-height:150px;overflow-y:auto;line-height:1.8">
         <span style="color:var(--text3)">No ghost activity. Radio is... for now... yours.</span>
       </div>
     </div>
   </div><!-- /ghost row -->
 
-</div><!-- /rows-container -->
 </div><!-- /pane-specops -->
 
 <!-- ══════════════════════
@@ -4669,6 +4275,9 @@ const CMD_PALETTE = [
   { name:'Go to Config',         key:'8',  action:()=>showTab('cfg') },
   { name:'Go to AI',             key:'9',  action:()=>showTab('ai') },
   { name:'Go to Acid Trip',       key:'!',  action:()=>showTab('trip') },
+  { name:'Go to System',          key:'0',  action:()=>showTab('system') },
+  { name:'Go to API Config',      key:'@',  action:()=>showTab('apicfg') },
+  { name:'Go to Spec Ops',        key:'#',  action:()=>showTab('specops') },
   { name:'Probe radio',          key:'',   action:()=>dashProbe() },
   { name:'Export log CSV',       key:'',   action:()=>exportLog() },
   { name:'Clear log',            key:'',   action:()=>clearLog() },
@@ -4705,7 +4314,7 @@ function showTab(name) {
   if (name === 'cfg')    { loadGongPath(); loadDiscordStatus(); discordStartPolling(); loadCtrlStatus(); ctrlStartPolling(); }
   if (name === 'system') { loadAudioDevices(); loadHealth(); loadGongPath(); }
   if (name === 'apicfg') { loadEngineStatus(); loadLlmProviders(); }
-  if (name === 'specops'){ ghostPoll(); }
+  if (name === 'specops'){ ghostPoll(); specopsRefreshStatus(); }
   if (name === 'sstv')   loadSSTVModes();
   if (name === 'dash')   { loadDashStats(); loadRadioModel(); }
   if (name === 'ai')     loadAiConfig();
@@ -10929,11 +10538,59 @@ function _restoreAllSettings(s) {
   set('autoid-engine',    s.autoid_engine);
   set('pirate-interval',  s.pirate_interval);
   set('pirate-engine',    s.pirate_engine);
+  // TX tab defaults (engine triggers async voice list load)
+  if (s.tx_engine) {
+    set('tx-engine', s.tx_engine);
+    loadVoices().then(() => { if (s.tx_voice) set('tx-voice', s.tx_voice); });
+  }
+  set('tx-delay',  s.tx_delay);
+  set('tx-repeat', s.tx_repeat);
+  // AI TX voice
+  set('ai-tx-engine', s.ai_tx_engine);
+  set('ai-tx-voice',  s.ai_tx_voice);
+  chk('ai-auto-tx',   s.ai_auto_tx);
 }
 
 // =============================================================
 // SPECIAL OPS JS
 // =============================================================
+
+// ── Spec Ops Status Refresh (on tab open / page load) ─────────────────────
+async function specopsRefreshStatus() {
+  try {
+    const [ns, pirate, mystery, autoid] = await Promise.all([
+      api('GET', '/api/numbers_station/status'),
+      api('GET', '/api/pirate/status'),
+      api('GET', '/api/mystery/status'),
+      api('GET', '/api/autoid/status'),
+    ]);
+    // Numbers Station
+    const nsBtn = document.getElementById('ns-start-btn');
+    if (nsBtn) {
+      if (ns.active) { nsBtn.textContent = '\u25cf ACTIVE'; nsBtn.style.background = 'var(--dim-tx)'; }
+      else           { nsBtn.textContent = '\u25a0 START';  nsBtn.style.background = ''; }
+    }
+    // Pirate Broadcast
+    const pirBtn = document.getElementById('pirate-start-btn');
+    if (pirBtn) {
+      if (pirate.active) { pirBtn.innerHTML = '\u25cf ON AIR'; pirBtn.style.background = 'var(--dim-tx)'; }
+      else               { pirBtn.innerHTML = '\uD83D\uDD34 ON AIR'; pirBtn.style.background = ''; }
+    }
+    // Mystery TX
+    if (mystery.active) {
+      const el = document.getElementById('mystery-next');
+      if (el && el.textContent === '—') el.textContent = 'scheduled';
+    }
+    // Auto-ID
+    const aidBtn = document.getElementById('autoid-start-btn');
+    if (aidBtn) {
+      if (autoid.active) { aidBtn.textContent = '\u25cf ACTIVE'; aidBtn.style.background = 'var(--dim-rx)'; }
+      else               { aidBtn.textContent = 'START';         aidBtn.style.background = ''; }
+    }
+  } catch(e) {
+    console.warn('specopsRefreshStatus:', e.message);
+  }
+}
 
 // ── Numbers Station ─────────────────────────────────────────────────────────
 async function nsStart() {
@@ -11047,11 +10704,17 @@ async function pirateStart() {
   const engine   = document.getElementById('pirate-engine')?.value || 'espeak';
   const r = await api('POST', '/api/pirate/start', { interval_minutes: interval, engine });
   showAlert('pirate-alert', r.message || (r.success ? 'On air!' : 'Failed'), r.success ? 'ok' : 'err');
-  if (r.success) cfgFlushPresets();
+  if (r.success) {
+    const btn = document.getElementById('pirate-start-btn');
+    if (btn) { btn.innerHTML = '\u25cf ON AIR'; btn.style.background = 'var(--dim-tx)'; }
+    cfgFlushPresets();
+  }
 }
 async function pirateStop() {
   const r = await api('POST', '/api/pirate/stop');
   showAlert('pirate-alert', r.message || 'Signed off', 'warn');
+  const btn = document.getElementById('pirate-start-btn');
+  if (btn) { btn.innerHTML = '\uD83D\uDD34 ON AIR'; btn.style.background = ''; }
 }
 async function pirateFire() {
   showAlert('pirate-alert', 'Firing bulletin…', 'warn', 0);

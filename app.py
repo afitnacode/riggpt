@@ -8168,7 +8168,7 @@ def _ghost_run_exorcist(stop: threading.Event, duration: int = 60):
 # Ghost HTTP routes
 @app.route('/api/ghost/start', methods=['POST'])
 def api_ghost_start():
-    global _ghost_stop_event, _ghost_active
+    global _ghost_stop_event, _ghost_active, _ghost_name
     if _ghost_active:
         return jsonify({'success': False, 'message': f'Ghost already active: {_ghost_name}'}), 409
     data     = request.json or {}
@@ -8189,6 +8189,9 @@ def api_ghost_start():
     fn = fn_map.get(ghost_fn)
     if not fn:
         return jsonify({'success': False, 'message': f'Unknown ghost: {ghost_fn}'}), 400
+    # Set active flag BEFORE spawning thread to prevent double-start race
+    _ghost_active = True
+    _ghost_name   = ghost_fn.upper().replace('_', ' ')
     def _auto_stop():
         time_module.sleep(duration)
         ev.set()
