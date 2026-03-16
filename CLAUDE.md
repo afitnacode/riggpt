@@ -1,56 +1,117 @@
-# CLAUDE.md
+# CLAUDE.md — RigGPT Project Guide
 
-## Purpose
-This repository should be explored efficiently and with minimal unnecessary file reads.
+## What this project is
+RigGPT is a Flask-based AI ham radio transmission platform for the Icom IC-7610 (and other CI-V compatible radios). It generates TTS speech, keys PTT via CI-V serial, and transmits over the air. Single-file Flask app with a large single-page frontend.
+
+## Repository layout
+```
+app.py                  Flask backend (~360KB) — all routes, CI-V, TTS, scheduling
+templates/index.html    Single-page frontend (~530KB, ~11000 lines) — all UI, JS
+INSTALL.sh              Debian installer / upgrade script
+requirements.txt        Python dependencies
+README.md               Full feature documentation
+api_keys.py             API key manager (not committed — lives on server)
+memory/                 Discord ingestion + Qdrant RAG pipeline
+waterfall_image.py      Waterfall art encoder
+CLAUDE.md               This file — read on startup
+```
+
+## Server details
+- **Host:** root@radio (192.168.40.10)
+- **Service:** `riggpt` (systemd, port 5000)
+- **Install dir:** `/opt/riggpt`
+- **Python:** 3.13, Debian 13
+- **Config files (never touched by installer):**
+  - `/home/riggpt/app_settings.json` — all settings
+  - `/home/riggpt/api_keys.json` — API credentials
+
+## Current version: v2.12.38
+
+## Version sync rule — ALWAYS update all 5 on every version bump
+1. `app.py` docstring header (`RigGPT vX.X.X`)
+2. `app.py` `VERSION = 'vX.X.X'` constant
+3. `requirements.txt` comment line 1
+4. `INSTALL.sh` comment line 1 + `VERSION="X.X.X"` variable
+5. `templates/index.html` `<span class="sb-label">vX.X.X</span>` in `#statusbar`
+
+## Deploy workflow
+```bash
+# From /opt/riggpt (already in the right place):
+git pull && bash INSTALL.sh
+
+# Check service after deploy:
+systemctl status riggpt
+journalctl -u riggpt -n 50
+```
 
 ## Working style
-- Prefer fast, targeted investigation over reading entire files.
-- First search, then inspect only the relevant code.
-- Summarize findings before expanding scope.
-- Avoid loading large files in full unless explicitly requested.
+- Surgical edits only — never rewrite whole files
+- Search before reading: `grep -n "pattern" app.py` before opening anything
+- For large files use head/tail/grep — do NOT attempt full reads
+- `index.html` is ~11000 lines — always grep for the exact anchor before editing
+- Preserve existing code style throughout
 
-## File-reading rules
-- Never read an entire file over 200 KB unless I explicitly ask.
-- Use `rg`, `git grep`, or equivalent search tools first.
-- Read only the matching sections and nearby context.
-- For large files, identify likely relevant functions, classes, routes, or config blocks before opening anything big.
-- If multiple files match, rank the most likely ones and inspect those first.
+## Large file warnings
+- `index.html` (~530KB, ~11000 lines): grep only, never full read
+- `app.py` (~360KB): grep only, never full read
+- Both change frequently — always grep for exact text before any edit
 
-## Preferred investigation workflow
-1. Search for symbols, strings, routes, function names, env vars, or config keys.
-2. Open only the most relevant files.
-3. Read small surrounding sections.
-4. Explain what you found.
-5. Only then continue to adjacent code if needed.
+## Tab structure (v2.12.38)
+```
+CONSOLE(1) TX(2) BEACON(3) WF ART(4) SSTV(5) SCHEDULE(6) LOG(7)
+CONFIG(8) SYSTEM(9) API CFG(0) AI  ACID TRIP(!)  CLIPS(📼)  SPEC OPS(☠)
+```
+- Pane IDs: `pane-dash`, `pane-tx`, `pane-beacon`, `pane-wfall`, `pane-sstv`,
+  `pane-sched`, `pane-hist`, `pane-cfg`, `pane-system`, `pane-apicfg`,
+  `pane-ai`, `pane-trip`, `pane-clips`, `pane-specops`
+- TABS constant in JS: `['dash','tx','beacon','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops']`
 
-## Priorities when helping
-- Be concise and surgical.
-- Prefer diffs over full-file rewrites when making changes.
-- Preserve existing style and structure unless there is a strong reason not to.
-- Call out assumptions before making broad changes.
-- For debugging, identify the likely root cause first, then propose the smallest fix.
+## Key app.py patterns
+- Settings: `POST /api/settings` with allowed-key whitelist → `app_settings.json`
+- All new setting keys must be added to the `allowed` set in `api_settings_post()`
+- State globals named with leading `_` (e.g. `_ghost_active`, `_pirate_job`)
+- Routes follow `@app.route` + `def api_<name>():` naming
+- New features need entries in `cfgFlushPresets()` JS AND `_restoreAllSettings()` JS
 
-## Repo-specific guidance
-- Start with `README.md` for overall behavior.
-- For application flow, inspect `app.py`, `api_keys.py`, `templates/`, `memory/`, and helper scripts only as needed.
-- Do not read generated, cached, or data-heavy files unless directly relevant.
-- When working on bugs, search for the exact route, function, template, or error string first.
+## Special Ops / Ghost-in-the-Machine
+Routes:
+- `POST /api/ghost/start {ghost, intensity, duration}` — start a ghost
+- `POST /api/ghost/stop` — stop active ghost
+- `GET /api/ghost/status` — {active, name, log}
+- Ghost names: `poltergeist`, `passband`, `power_wobble`, `agc_seizure`, `split_personality`, `digital_ghost`, `exorcist`
 
-## When asked to understand the app
-Prefer this order:
-1. `README.md`
-2. `requirements.txt`
-3. app entrypoints
-4. only the specific modules involved in the request
+Other Special Ops routes: `numbers_station`, `solar`, `mystery`, `autoid`, `pirate`, `voice_roulette`
 
-## When asked to make changes
-- Show a brief plan.
-- Make minimal edits.
-- Explain exactly what changed and why.
-- Mention any commands I should run to test.
+## IcomSerialAgent — available CI-V methods
+```python
+agent.set_frequency(freq_hz)          # cmd 0x05
+agent.set_mode(mode_name, filter_num) # cmd 0x06, filter 1/2/3
+agent.set_level(sub, value)           # cmd 0x14 (AF=0x01, TX power=0x0A)
+agent.set_function(sub, state)        # cmd 0x16
+agent.set_split(state)                # cmd 0x0F
+agent.set_vfo(vfo)                    # cmd 0x07 (A=0x00, B=0x01)
+agent.vfo_swap()                      # cmd 0x07 0xB0
+agent.vfo_a_to_b()                    # cmd 0x07 0xA0
+agent.set_att(level)                  # cmd 0x11 (0/6/12/18 dB)
+agent.set_preamp(level)               # cmd 0x16 0x02
+agent.set_agc(mode)                   # cmd 0x16 0x12 (1=fast, 2=mid, 3=slow, 0=off)
+agent.set_antenna(ant_num)            # cmd 0x12
+agent.read_frequency()
+agent.read_mode()
+agent.read_rf_power()
+agent.read_af_gain()
+agent.read_alc()
+agent.send_command(*bytes)            # raw CI-V
+```
+
+## Config persistence checklist
+When adding any new user-facing input field, ALWAYS:
+1. Add key to `allowed` set in `api_settings_post()` in `app.py`
+2. Add to `cfgFlushPresets()` in `index.html` (the JS that saves on export/change)
+3. Add to `_restoreAllSettings(s)` in `index.html` (the JS that restores on page load)
 
 ## Things to avoid
-- Dumping long file contents into context
-- Reading whole directories file-by-file without a reason
-- Refactoring unrelated code during a targeted fix
-- Making speculative changes without pointing out uncertainty
+- Never read entire index.html or app.py without a grep first
+- Never refactor unrelated code during a targeted fix
+- Never commit with diverged version strings across the 5 locations
+- Never touch `/home/riggpt/app_settings.json` or `api_keys.json` directly
