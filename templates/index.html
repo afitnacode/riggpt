@@ -1706,10 +1706,10 @@ hr.div  {
 <!-- ══════════════════════
      PANE: CONSOLE (DASH)
 ══════════════════════════ -->
-<div id="pane-dash" class="pane active">
+<div id="pane-dash" class="pane active" style="display:grid;grid-template-rows:2fr 3fr;overflow:hidden">
 
   <!-- ── TOP ROW: Radio Controls (40%) ────────────────────────────────── -->
-  <div style="flex:0 0 40%;min-height:0;display:grid;grid-template-columns:220px 1fr 220px;border-bottom:2px solid var(--border2);overflow:hidden">
+  <div style="display:grid;grid-template-columns:220px 1fr 220px;border-bottom:2px solid var(--border2);overflow:hidden;min-height:0">
 
     <!-- Col A: VFO / meters / quick ops (plain div, no dash-left class) -->
     <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow-y:auto;overflow-x:hidden">
@@ -1895,7 +1895,7 @@ hr.div  {
   </div><!-- /top row -->
 
   <!-- ── BOTTOM ROW: TX / TTS (60%) ─────────────────────────────────── -->
-  <div style="flex:1;min-height:0;display:grid;grid-template-columns:1fr 300px;overflow:hidden">
+  <div style="display:grid;grid-template-columns:1fr 300px;overflow:hidden;min-height:0">
 
     <!-- Left: message + fx + options -->
     <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
