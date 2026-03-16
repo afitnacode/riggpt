@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.12.46 -- Installer
+# RigGPT v2.12.47 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,7 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.12.46"
+VERSION="2.12.47"
 
 # -- Parse flags ------------------------------------------------
 # -y / --yes  : skip upgrade confirmation prompt (for scripted installs)
@@ -228,7 +228,7 @@ if [ -z "$GUNICORN_BIN" ]; then
     EXEC_START="/usr/bin/python3 ${INSTALL_DIR}/app.py"
 else
     echo "  Found gunicorn: $GUNICORN_BIN"
-    EXEC_START="${GUNICORN_BIN} --worker-class gevent --workers 1 --bind 0.0.0.0:5000 --timeout 300 --keep-alive 5 --log-level info --access-logfile - --error-logfile - app:app"
+    EXEC_START="${GUNICORN_BIN} --config gunicorn_conf.py --worker-class gevent --workers 1 --bind 0.0.0.0:5000 --timeout 300 --keep-alive 5 --log-level info --access-logfile - --error-logfile - app:app"
 fi
 
 cat > /etc/systemd/system/${SERVICE}.service << EOF

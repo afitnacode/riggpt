@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.46
+RigGPT v2.12.47
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -390,7 +390,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.46'
+VERSION        = 'v2.12.47'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3964,12 +3964,12 @@ def api_settings_post():
         # Beacon form defaults
         'bcn_interval', 'bcn_repeat', 'bcn_engine',
         # Special Ops
-        'numbers_station_interval', 'numbers_station_engine',
-        'solar_autotx_enabled', 'solar_kindex_threshold', 'solar_engine',
-        'mystery_window_start', 'mystery_window_end', 'mystery_engine',
-        'autoid_callsign', 'autoid_interval', 'autoid_engine',
+        'numbers_station_interval', 'numbers_station_engine', 'numbers_station_voice',
+        'solar_autotx_enabled', 'solar_kindex_threshold', 'solar_engine', 'solar_voice',
+        'mystery_window_start', 'mystery_window_end', 'mystery_engine', 'mystery_voice',
+        'autoid_callsign', 'autoid_interval', 'autoid_engine', 'autoid_voice',
         # Pirate Broadcast
-        'pirate_interval', 'pirate_engine',
+        'pirate_interval', 'pirate_engine', 'pirate_voice',
         # IRC mode
         'irc_mode',
     }
@@ -7570,8 +7570,9 @@ def _run_numbers_station():
     intro = random.choice(['ATTENTION', 'STAND BY', 'THIS IS', 'RELAY RELAY', 'OSCAR LIMA'])
     msg   = f'{intro}.  {groups}.  END TRANSMISSION.'
     engine = _app_settings.get('numbers_station_engine', 'espeak')
+    voice  = _app_settings.get('numbers_station_voice', '') or None
     try:
-        orchestrator.execute(msg, engine=engine, voice='en-us', preset='normal', roger_beep=False)
+        orchestrator.execute(msg, engine=engine, voice=voice, preset='normal', roger_beep=False)
         logger.info(f'numbers_station: transmitted {len(groups.split())} groups')
     except Exception as e:
         logger.error(f'numbers_station TX error: {e}')
@@ -7586,8 +7587,10 @@ def api_numbers_station_start():
     interval = max(1, int(data.get('interval_minutes',
                           int(_app_settings.get('numbers_station_interval', 5)))))
     engine   = data.get('engine', _app_settings.get('numbers_station_engine', 'espeak'))
+    voice    = data.get('voice', _app_settings.get('numbers_station_voice', ''))
     _app_settings['numbers_station_interval'] = str(interval)
     _app_settings['numbers_station_engine']   = engine
+    _app_settings['numbers_station_voice']    = voice
     _save_app_settings(_app_settings)
     try:
         if _numbers_station_job:
@@ -7639,27 +7642,30 @@ def _solar_fetch_kindex():
     return None
 
 
-def _solar_poll_and_announce():
-    """Fetch K-index and optionally auto-transmit an alert."""
+def _solar_poll_and_announce(force=False):
+    """Fetch K-index and transmit an alert. If force=True, always transmit regardless of autotx/threshold."""
     k = _solar_fetch_kindex()
     if k is None:
+        if force:
+            logger.warning('solar: could not fetch K-index for forced announce')
         return
     _solar_cache['k']       = k
     _solar_cache['updated'] = _now_utc()
     threshold = float(_app_settings.get('solar_kindex_threshold', '5'))
     autotx    = _app_settings.get('solar_autotx_enabled', 'false') == 'true'
-    if not autotx or k < threshold:
-        return
-    # Rate-limit: one announcement per 30-minute window
-    last = _solar_cache.get('last_announced')
-    if last:
-        try:
-            from datetime import timedelta
-            last_dt = datetime.fromisoformat(last.replace('Z', '+00:00'))
-            if (datetime.now(timezone.utc) - last_dt).total_seconds() < 1800:
-                return
-        except Exception:
-            pass
+    if not force:
+        if not autotx or k < threshold:
+            return
+        # Rate-limit: one announcement per 30-minute window
+        last = _solar_cache.get('last_announced')
+        if last:
+            try:
+                from datetime import timedelta
+                last_dt = datetime.fromisoformat(last.replace('Z', '+00:00'))
+                if (datetime.now(timezone.utc) - last_dt).total_seconds() < 1800:
+                    return
+            except Exception:
+                pass
     cond_map = {8: 'EXTREME', 7: 'SEVERE', 6: 'STRONG', 5: 'MODERATE'}
     cond = next((v for thr, v in sorted(cond_map.items(), reverse=True) if k >= thr), 'ACTIVE')
     msg = (
@@ -7670,8 +7676,9 @@ def _solar_poll_and_announce():
     )
     _solar_cache['last_announced'] = _now_utc()
     engine = _app_settings.get('solar_engine', 'espeak')
+    voice  = _app_settings.get('solar_voice', '') or None
     try:
-        orchestrator.execute(msg, engine=engine, voice=None, preset='normal', roger_beep=False)
+        orchestrator.execute(msg, engine=engine, voice=voice, preset='normal', roger_beep=False)
         logger.info(f'solar: K={k} alert transmitted (condition={cond})')
     except Exception as e:
         logger.error(f'solar: TX error: {e}')
@@ -7697,7 +7704,7 @@ def api_solar_status():
 def api_solar_announce():
     """Force an immediate solar weather announcement."""
     _solar_cache['last_announced'] = None  # bypass rate limit
-    threading.Thread(target=_solar_poll_and_announce, daemon=True, name='solar-force').start()
+    threading.Thread(target=_solar_poll_and_announce, kwargs={'force': True}, daemon=True, name='solar-force').start()
     return jsonify({'success': True, 'message': 'Solar weather announcement queued'})
 
 
@@ -7727,9 +7734,10 @@ def _run_mystery_tx():
     else:
         msg = random.choice(_MYSTERY_LINES)
         engine = _app_settings.get('mystery_engine', 'espeak')
+        voice  = _app_settings.get('mystery_voice', '') or None
         logger.info(f'mystery: transmitting line: {msg!r}')
         try:
-            orchestrator.execute(msg, engine=engine, voice=None, preset='cave', roger_beep=False)
+            orchestrator.execute(msg, engine=engine, voice=voice, preset='cave', roger_beep=False)
         except Exception as e:
             logger.error(f'mystery TX error: {e}')
 
@@ -7805,9 +7813,10 @@ def _run_autoid():
         cfg = {'text': callsign, 'cw_wpm': 20, 'callsign': callsign, 'sound_file': ''}
         _run_beacon_cw('autoid', cfg)
     else:
+        voice = _app_settings.get('autoid_voice', '') or None
         msg = f'This is {callsign}.'
         try:
-            orchestrator.execute(msg, engine=engine, voice=None, preset='normal', roger_beep=False)
+            orchestrator.execute(msg, engine=engine, voice=voice, preset='normal', roger_beep=False)
         except Exception as e:
             logger.error(f'auto-id TX error: {e}')
 
@@ -7824,9 +7833,11 @@ def api_autoid_start():
     interval = max(1, int(data.get('interval_minutes',
                           int(_app_settings.get('autoid_interval', 10)))))
     engine   = data.get('engine', _app_settings.get('autoid_engine', 'cw'))
+    voice    = data.get('voice', _app_settings.get('autoid_voice', ''))
     _app_settings['autoid_callsign'] = callsign
     _app_settings['autoid_interval'] = str(interval)
     _app_settings['autoid_engine']   = engine
+    _app_settings['autoid_voice']    = voice
     _save_app_settings(_app_settings)
     try:
         if _autoid_job:
@@ -8270,6 +8281,7 @@ def _run_pirate_broadcast():
     engines  = ['espeak', 'espeak', 'espeak', 'gtts']
     presets  = ['radio', 'telephone', 'broadcast', 'megaphone', 'cave', 'normal']
     engine   = _app_settings.get('pirate_engine', random.choice(engines))
+    voice    = _app_settings.get('pirate_voice', '') or None
     preset   = random.choice(presets)
     intro    = random.choice([
         'ATTENTION.', 'BREAKING NEWS.', 'THIS JUST IN.', 'SPECIAL REPORT.',
@@ -8278,7 +8290,7 @@ def _run_pirate_broadcast():
     msg = f'{intro}  {headline}'
     logger.info(f'pirate: broadcasting: {msg!r}')
     try:
-        orchestrator.execute(msg, engine=engine, voice=None, preset=preset, roger_beep=False)
+        orchestrator.execute(msg, engine=engine, voice=voice, preset=preset, roger_beep=False)
     except Exception as e:
         logger.error(f'pirate broadcast TX error: {e}')
 
@@ -8292,8 +8304,10 @@ def api_pirate_start():
     interval = max(1, int(data.get('interval_minutes',
                           int(_app_settings.get('pirate_interval', 15)))))
     engine   = data.get('engine', _app_settings.get('pirate_engine', 'espeak'))
+    voice    = data.get('voice', _app_settings.get('pirate_voice', ''))
     _app_settings['pirate_interval'] = str(interval)
     _app_settings['pirate_engine']   = engine
+    _app_settings['pirate_voice']    = voice
     _save_app_settings(_app_settings)
     try:
         if _pirate_job:

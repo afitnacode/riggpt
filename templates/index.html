@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.46</span>
+    <span class="sb-label">v2.12.47</span>
   </div>
 </div>
 
@@ -2813,6 +2813,9 @@ hr.div  {
             <option value="fastkoko">FastKoko</option>
           </select>
         </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="text" id="ns-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
+        </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="ns-start-btn" onclick="nsStart()">&#9632; START</button>
           <button class="btn sm warn" onclick="nsStop()">STOP</button>
@@ -2843,6 +2846,9 @@ hr.div  {
             <option value="openai">OpenAI TTS</option>
             <option value="fastkoko">FastKoko</option>
           </select>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="text" id="solar-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
         </div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">K-index: <span id="solar-kval" style="color:var(--cyan)">—</span></div>
         <div style="display:flex;gap:var(--s2)">
@@ -2877,6 +2883,9 @@ hr.div  {
             <option value="fastkoko">FastKoko</option>
           </select>
         </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="text" id="mystery-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
+        </div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Next: <span id="mystery-next" style="color:var(--cyan)">—</span></div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" onclick="mysterySchedule()">SCHEDULE</button>
@@ -2908,6 +2917,9 @@ hr.div  {
             <option value="openai">OpenAI TTS</option>
             <option value="fastkoko">FastKoko</option>
           </select>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="text" id="autoid-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="autoid-start-btn" onclick="autoidStart()">START</button>
@@ -2948,6 +2960,9 @@ hr.div  {
             <option value="openai">OpenAI TTS</option>
             <option value="fastkoko">FastKoko</option>
           </select>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="text" id="pirate-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="pirate-start-btn" style="background:#3a0000;border-color:var(--tx);color:var(--tx)" onclick="pirateStart()">&#128308; ON AIR</button>
@@ -6730,12 +6745,23 @@ function _renderLlmCard(p) {
     // Doing so causes saveLlmKey() to re-save the mask string (AIza****xxxx)
     // instead of the real key, corrupting stored credentials.
     const val  = isPass ? '' : escHtml(f.masked || '');
+    // For default_voice fields, add a browse button that fetches available voices
+    const isVoiceField = f.id === 'default_voice';
+    const voiceBrowseBtn = isVoiceField
+      ? ` <button class="btn sm" onclick="llmBrowseVoices('${p.id}','${fid}')" title="Browse available voices" style="flex-shrink:0">🔍</button>`
+      : '';
+    const listAttr = isVoiceField ? ` list="${fid}-list"` : '';
+    const datalist = isVoiceField ? `<datalist id="${fid}-list"></datalist>` : '';
     return `<div class="llm-field">
       <label>${escHtml(f.label)}</label>
-      <input type="${type}" id="${fid}" placeholder="${ph}"
-             value="${val}"
-             autocomplete="${isPass?'new-password':'off'}"
-             ${f.source==='env' ? 'disabled title="Set via environment variable"' : ''}>
+      <div style="display:flex;gap:var(--s2)">
+        <input type="${type}" id="${fid}" placeholder="${ph}"
+               value="${val}"${listAttr}
+               autocomplete="${isPass?'new-password':'off'}"
+               ${f.source==='env' ? 'disabled title="Set via environment variable"' : ''}
+               style="flex:1">
+        ${voiceBrowseBtn}
+      </div>${datalist}
     </div>${f.help ? `<div class="llm-help">${escHtml(f.help)}</div>` : ''}`;
   }).join('');
 
@@ -6755,6 +6781,41 @@ function _renderLlmCard(p) {
     </div>
     <div class="alert-strip" id="llm-alert-${p.id}"></div>
   </div>`;
+}
+
+// Browse available voices for a provider's default_voice field
+async function llmBrowseVoices(providerId, inputId) {
+  const engineMap = {
+    elevenlabs: 'elevenlabs', speechify: 'speechify', openai: 'openai',
+    fastkoko: 'fastkoko', piper: 'piper',
+  };
+  const engine = engineMap[providerId];
+  if (!engine) { showAlert(`llm-alert-${providerId}`, 'Voice browse not supported for this provider', 'warn'); return; }
+  showAlert(`llm-alert-${providerId}`, 'Fetching voices…', 'warn', 0);
+  const r = await api('GET', `/api/voices/${engine}`);
+  let voiceArr = [];
+  if (Array.isArray(r.voices)) {
+    voiceArr = r.voices.map(v => typeof v === 'object' ? v : {id: v, name: v});
+  } else if (r.voices && typeof r.voices === 'object') {
+    voiceArr = Object.entries(r.voices).map(([id, info]) => ({
+      id, name: typeof info === 'object' ? (info.name || id) : String(info),
+    }));
+  }
+  if (!voiceArr.length) {
+    showAlert(`llm-alert-${providerId}`, 'No voices found — is the engine running?', 'err');
+    return;
+  }
+  // Populate the datalist for autocomplete
+  const dl = document.getElementById(inputId + '-list');
+  if (dl) {
+    dl.innerHTML = voiceArr.map(v =>
+      `<option value="${escHtml(v.id)}">${escHtml(v.name)}${v.name !== v.id ? ' (' + escHtml(v.id) + ')' : ''}</option>`
+    ).join('');
+  }
+  // Focus the input to show datalist
+  const inp = document.getElementById(inputId);
+  if (inp) { inp.focus(); inp.click(); }
+  showAlert(`llm-alert-${providerId}`, `${voiceArr.length} voice(s) loaded — click the field to browse`, 'ok', 4000);
 }
 
 async function saveLlmKey(providerId) {
@@ -9078,17 +9139,22 @@ async function cfgFlushPresets() {
     // Special Ops
     numbers_station_interval: get('ns-interval'),
     numbers_station_engine:   get('ns-engine'),
+    numbers_station_voice:    get('ns-voice'),
     solar_kindex_threshold:   get('solar-threshold'),
     solar_autotx_enabled:     checked('solar-autotx') ? 'true' : 'false',
     solar_engine:             get('solar-engine'),
+    solar_voice:              get('solar-voice'),
     mystery_window_start:     get('mystery-start'),
     mystery_window_end:       get('mystery-end'),
     mystery_engine:           get('mystery-engine'),
+    mystery_voice:            get('mystery-voice'),
     autoid_callsign:          get('autoid-callsign'),
     autoid_interval:          get('autoid-interval'),
     autoid_engine:            get('autoid-engine'),
+    autoid_voice:             get('autoid-voice'),
     pirate_interval:          get('pirate-interval'),
     pirate_engine:            get('pirate-engine'),
+    pirate_voice:             get('pirate-voice'),
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -10638,17 +10704,22 @@ function _restoreAllSettings(s) {
   // Special Ops
   set('ns-interval',      s.numbers_station_interval);
   set('ns-engine',        s.numbers_station_engine);
+  set('ns-voice',         s.numbers_station_voice);
   set('solar-threshold',  s.solar_kindex_threshold);
   chk('solar-autotx',     s.solar_autotx_enabled);
   set('solar-engine',     s.solar_engine);
+  set('solar-voice',      s.solar_voice);
   set('mystery-start',    s.mystery_window_start);
   set('mystery-end',      s.mystery_window_end);
   set('mystery-engine',   s.mystery_engine);
+  set('mystery-voice',    s.mystery_voice);
   set('autoid-callsign',  s.autoid_callsign);
   set('autoid-interval',  s.autoid_interval);
   set('autoid-engine',    s.autoid_engine);
+  set('autoid-voice',     s.autoid_voice);
   set('pirate-interval',  s.pirate_interval);
   set('pirate-engine',    s.pirate_engine);
+  set('pirate-voice',     s.pirate_voice);
   // TX tab defaults (engine triggers async voice list load)
   if (s.tx_engine) {
     set('tx-engine', s.tx_engine);
@@ -10710,7 +10781,8 @@ async function specopsRefreshStatus() {
 async function nsStart() {
   const interval = parseInt(document.getElementById('ns-interval')?.value) || 5;
   const engine   = document.getElementById('ns-engine')?.value || 'espeak';
-  const r = await api('POST', '/api/numbers_station/start', { interval_minutes: interval, engine });
+  const voice    = document.getElementById('ns-voice')?.value || '';
+  const r = await api('POST', '/api/numbers_station/start', { interval_minutes: interval, engine, voice });
   showAlert('ns-alert', r.message || (r.success ? 'Active' : 'Failed'), r.success ? 'ok' : 'err');
   if (r.success) {
     const btn = document.getElementById('ns-start-btn');
@@ -10743,7 +10815,8 @@ async function solarSave() {
   const threshold = document.getElementById('solar-threshold')?.value || '5';
   const autotx    = document.getElementById('solar-autotx')?.checked ? 'true' : 'false';
   const engine    = document.getElementById('solar-engine')?.value || 'espeak';
-  const r = await api('POST', '/api/settings', { solar_kindex_threshold: threshold, solar_autotx_enabled: autotx, solar_engine: engine });
+  const voice     = document.getElementById('solar-voice')?.value || '';
+  const r = await api('POST', '/api/settings', { solar_kindex_threshold: threshold, solar_autotx_enabled: autotx, solar_engine: engine, solar_voice: voice });
   showAlert('solar-alert', r.success ? 'Saved' : 'Failed', r.success ? 'ok' : 'err');
 }
 async function solarAnnounce() {
@@ -10785,7 +10858,8 @@ async function autoidStart() {
   if (!callsign) { showAlert('autoid-alert', 'Enter a callsign', 'warn'); return; }
   const interval = parseInt(document.getElementById('autoid-interval')?.value) || 10;
   const engine   = document.getElementById('autoid-engine')?.value || 'cw';
-  const r = await api('POST', '/api/autoid/start', { callsign, interval_minutes: interval, engine });
+  const voice    = document.getElementById('autoid-voice')?.value || '';
+  const r = await api('POST', '/api/autoid/start', { callsign, interval_minutes: interval, engine, voice });
   showAlert('autoid-alert', r.message || (r.success ? 'Active' : 'Failed'), r.success ? 'ok' : 'err');
   if (r.success) {
     const btn = document.getElementById('autoid-start-btn');
@@ -10820,7 +10894,8 @@ async function voiceRoulette() {
 async function pirateStart() {
   const interval = parseInt(document.getElementById('pirate-interval')?.value) || 15;
   const engine   = document.getElementById('pirate-engine')?.value || 'espeak';
-  const r = await api('POST', '/api/pirate/start', { interval_minutes: interval, engine });
+  const voice    = document.getElementById('pirate-voice')?.value || '';
+  const r = await api('POST', '/api/pirate/start', { interval_minutes: interval, engine, voice });
   showAlert('pirate-alert', r.message || (r.success ? 'On air!' : 'Failed'), r.success ? 'ok' : 'err');
   if (r.success) {
     const btn = document.getElementById('pirate-start-btn');
