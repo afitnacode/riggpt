@@ -25,7 +25,7 @@ CLAUDE.md               This file — read on startup
   - `/home/riggpt/app_settings.json` — all settings
   - `/home/riggpt/api_keys.json` — API credentials
 
-## Current version: v2.12.45
+## Current version: v2.12.46
 
 ## Version sync rule — ALWAYS update all 5 on every version bump
 1. `app.py` docstring header (`RigGPT vX.X.X`)
@@ -56,7 +56,7 @@ journalctl -u riggpt -n 50
 - `app.py` (~360KB): grep only, never full read
 - Both change frequently — always grep for exact text before any edit
 
-## Tab structure (v2.12.45)
+## Tab structure (v2.12.46)
 ```
 CONSOLE(1) BEACON(2) WF ART(3) SSTV(4) SCHEDULE(5) LOG(6)
 CONFIG(7) SYSTEM(8) API CFG(9) AI  ACID TRIP(!)  CLIPS(📼)  SPEC OPS(☠)
