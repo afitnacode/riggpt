@@ -25,7 +25,7 @@ CLAUDE.md               This file — read on startup
   - `/home/riggpt/app_settings.json` — all settings
   - `/home/riggpt/api_keys.json` — API credentials
 
-## Current version: v2.12.39
+## Current version: v2.12.40
 
 ## Version sync rule — ALWAYS update all 5 on every version bump
 1. `app.py` docstring header (`RigGPT vX.X.X`)
