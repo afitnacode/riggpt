@@ -37,10 +37,35 @@ fi
 INSTALLED_VERSION=""
 IS_UPGRADE=0
 
-# Extract VERSION constant from the installed app.py (if it exists)
-if [ -f "$INSTALL_DIR/app.py" ]; then
-    INSTALLED_VERSION=$(grep -m1 "^VERSION" "$INSTALL_DIR/app.py" \
-        | sed "s/.*'\(.*\)'.*/\1/" 2>/dev/null || echo "")
+# Extract the RUNNING version -- NOT from app.py (which git pull already
+# overwrote) but from the live service API or the systemd unit description,
+# both of which reflect what was running before this upgrade started.
+#
+# Strategy (in order of preference):
+#   1. Ask the running service via HTTP (most reliable)
+#   2. Read the Description= line from the active systemd unit (set at last install)
+#   3. Read from the git reflog / previous commit's app.py (git-based installs)
+#   4. Give up and show 'unknown'
+
+if curl -s --max-time 3 "http://localhost:5000/api/status" 2>/dev/null \
+        | grep -o '"version":"[^"]*"' | head -1 | grep -q 'version'; then
+    INSTALLED_VERSION=$(
+        curl -s --max-time 3 "http://localhost:5000/api/status" 2>/dev/null \
+        | grep -o '"version":"[^"]*"' | head -1 \
+        | sed 's/"version":"//;s/"//'
+    )
+elif systemctl is-active --quiet "$SERVICE" 2>/dev/null || true; then
+    # Try reading from systemd unit Description (e.g. "RigGPT v2.12.36")
+    INSTALLED_VERSION=$(
+        systemctl show "$SERVICE" --property=Description 2>/dev/null \
+        | grep -o 'v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*' | head -1
+    )
+elif [ -d "$INSTALL_DIR/.git" ]; then
+    # Git-based install: read VERSION from the previous commit's app.py
+    INSTALLED_VERSION=$(
+        git -C "$INSTALL_DIR" show HEAD~1:app.py 2>/dev/null \
+        | grep -m1 "^VERSION" | sed "s/.*'\(.*\)'.*/\1/" || echo ""
+    )
 fi
 
 # Check whether the systemd unit exists (even if stopped)
@@ -276,7 +301,11 @@ STATUS=$(systemctl is-active "$SERVICE" 2>/dev/null || echo "unknown")
 echo ""
 echo "=============================================="
 if [ "$IS_UPGRADE" -eq 1 ]; then
-    echo "  Upgrade complete: ${INSTALLED_VERSION:-unknown} -> v${VERSION}"
+    if [ -n "$INSTALLED_VERSION" ] && [ "$INSTALLED_VERSION" != "v${VERSION}" ]; then
+        echo "  Upgrade complete: ${INSTALLED_VERSION} -> v${VERSION}"
+    else
+        echo "  Reinstall / same version: v${VERSION}"
+    fi
 else
     echo "  Fresh install complete: v${VERSION}"
 fi
