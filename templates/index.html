@@ -291,6 +291,8 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
 }
 .pane.active { display: flex; flex-direction: column; }
+/* Console pane: 2-row grid split (overrides flex via ID specificity) */
+#pane-dash { display: grid !important; grid-template-rows: 2fr 3fr; }
 
 /* ═══════════════════════════════════════════════════════════
    PANEL FRAME
@@ -1706,7 +1708,7 @@ hr.div  {
 <!-- ══════════════════════
      PANE: CONSOLE (DASH)
 ══════════════════════════ -->
-<div id="pane-dash" class="pane active" style="display:grid;grid-template-rows:2fr 3fr;overflow:hidden">
+<div id="pane-dash" class="pane active">
 
   <!-- ── TOP ROW: Radio Controls (40%) ────────────────────────────────── -->
   <div style="display:grid;grid-template-columns:220px 1fr 220px;border-bottom:2px solid var(--border2);overflow:hidden;min-height:0">
