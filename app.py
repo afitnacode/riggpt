@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.53
+RigGPT v2.12.54
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -390,7 +390,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.53'
+VERSION        = 'v2.12.54'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1282,11 +1282,11 @@ class EspeakTTSAgent:
             os.close(_fd)
         try:
             # Pass text via stdin (not as CLI arg) to avoid espeak phonetic
-            # interpretation of certain argument patterns.  --punct suppresses
-            # punctuation-as-speech; omitting '-m' ensures plain text mode.
+            # interpretation of certain argument patterns.  Plain text mode
+            # (no -m flag) — commas/periods create natural pauses.
             subprocess.run(
                 ['espeak-ng', '-v', voice, '-s', '150', '-p', '50',
-                 '--punct', '-w', output_path],
+                 '-w', output_path],
                 input=text.encode('utf-8'),
                 check=True, capture_output=True, timeout=20
             )
@@ -2132,7 +2132,7 @@ class WorkflowOrchestrator:
             elif engine == 'pyttsx3':
                 audio_file = self.pyttsx3_agent.synthesize(text, voice=voice)
             elif engine == 'espeak':
-                audio_file = self.espeak_agent.synthesize(text)
+                audio_file = self.espeak_agent.synthesize(text, voice=voice or 'en-us')
             else:
                 audio_file = self.piper_agent.synthesize(text, voice=voice)
 
@@ -7607,19 +7607,60 @@ def _auto_connect():
 
 # ── Numbers Station ───────────────────────────────────────────────────────
 def _run_numbers_station():
-    """Transmit a Cold War-style numbers group over the air."""
+    """Transmit a Cold War-style numbers group over the air.
+    
+    Cadence spec (authentic shortwave numbers station style):
+      - Digits spoken as words, ~1 digit per second
+      - Commas between digits within a 5-digit group (~300-600ms pause)
+      - Period + ellipsis between groups (~800-1500ms pause)
+      - Flat, emotionless, metronomic delivery
+      - Speed ~0.75x, low pitch variation
+      - Groups repeated once after 'REPEAT' for copyability
+    """
     import random
-    groups = '  '.join(
-        ' '.join(str(random.randint(0, 9)) for _ in range(5))
-        for _ in range(5)
-    )
-    intro = random.choice(['ATTENTION', 'STAND BY', 'THIS IS', 'RELAY RELAY', 'OSCAR LIMA'])
-    msg   = f'{intro}.  {groups}.  END TRANSMISSION.'
+
+    # Digit word map — 'niner' is traditional numbers station phonetic for 9
+    _DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four',
+                    'five', 'six', 'seven', 'eight', 'niner']
+
+    # Generate 5 groups of 5 random digits
+    num_groups = random.randint(4, 6)
+    raw_groups = []
+    for _ in range(num_groups):
+        raw_groups.append([random.randint(0, 9) for _ in range(5)])
+
+    # Format groups: commas between digits (short pause), period between groups (long pause)
+    def _fmt_groups(groups):
+        formatted = []
+        for grp in groups:
+            # Commas create ~300-500ms inter-digit pauses in TTS
+            formatted.append(', '.join(_DIGIT_WORDS[d] for d in grp))
+        # Period + space between groups creates ~800-1200ms pause
+        return '.  '.join(formatted)
+
+    body = _fmt_groups(raw_groups)
+
+    # Classic numbers station structure: intro, body, repeat, body, outro
+    intro = random.choice([
+        'Attention. Attention.',
+        'Message. Message.',
+        'Group count, {n}. Ready. Ready.'.format(n=_DIGIT_WORDS[num_groups]),
+    ])
+    msg = f'{intro}  ...  {body}.  ...  Repeat.  ...  {body}.  ...  End of message. End of transmission.'
+
     engine = _app_settings.get('numbers_station_engine', 'espeak')
     voice  = _app_settings.get('numbers_station_voice', '') or None
     try:
-        orchestrator.execute(msg, engine=engine, voice=voice, preset='normal', roger_beep=False)
-        logger.info(f'numbers_station: transmitted {len(groups.split())} groups')
+        # Slow, flat, metronomic delivery — the hallmark of numbers stations
+        orchestrator.execute(
+            msg, engine=engine, voice=voice,
+            preset='broadcast',   # slight radio filter for authenticity
+            pitch=-4,             # lower pitch = flatter, more emotionless
+            speed=0.75,           # slow deliberate pace (~60 digits/min)
+            roger_beep=False,
+        )
+        digit_count = num_groups * 5
+        logger.info(f'numbers_station: transmitted {num_groups} groups ({digit_count} digits)')
     except Exception as e:
         logger.error(f'numbers_station TX error: {e}')
 
