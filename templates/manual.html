@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RigGPT User Manual — v2.12.25</title>
+<title>RigGPT User Manual — v2.12.49</title>
 <style>
   :root {
     --bg:      #0a0a0b;
@@ -383,7 +383,7 @@
 <nav id="toc">
   <div id="toc-header">
     <div class="logo">📡 RigGPT</div>
-    <div class="ver">User Manual — v2.12.20</div>
+    <div class="ver">User Manual — v2.12.49</div>
     <a class="back-link" href="/">← Back to App</a>
   </div>
 
@@ -466,7 +466,7 @@
 
 <h1>RigGPT</h1>
 <div class="doc-subtitle">
-  User Manual &amp; API Reference &nbsp;·&nbsp; v2.12.25 &nbsp;·&nbsp; 2026-03-09<br>
+  User Manual &amp; API Reference &nbsp;·&nbsp; v2.12.49 &nbsp;·&nbsp; 2026-03-16<br>
   AI-augmented voice agent for Icom amateur radio transceivers
 </div>
 
@@ -1832,6 +1832,34 @@ systemctl daemon-reload
      CHANGELOG
 ══════════════════════════════════════════════════════════ -->
 <h2 id="changelog"><span class="h2-icon">40</span> Changelog</h2>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.49</span>
+    <span class="cl-date">2026-03-16</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag fix">fix</span> <strong>Spec Ops layout overhaul</strong> &mdash; fixed double-nested grid bug causing tab to cut off in browser. All rows now use responsive auto-fill grids. Ghost cards wrap naturally at any viewport width.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Solar Weather ANNOUNCE</strong> &mdash; manual announce was gated on AUTO-TX setting and K-threshold, silently doing nothing. Now always transmits when clicked.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Speechify TTS</strong> &mdash; API returns base64-encoded audio inside JSON, code expected raw MP3. Now decodes audio_data field correctly.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Ghost double-start race</strong> &mdash; _ghost_active flag now set before thread spawn to prevent two ghosts starting simultaneously.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Console gap</strong> &mdash; 60px dead zone between left panel and TX area (CSS grid said 280px, div was 220px).</li>
+    <li><span class="cl-tag new">new</span> <strong>Ghost audio layer</strong> &mdash; all 6 ghosts now transmit eerie whispered audio fragments between CI-V commands. Each ghost has its own phrase bank and FX preset palette. Configurable engine and voice via GHOST VOICE selector bar.</li>
+    <li><span class="cl-tag new">new</span> <strong>Spec Ops voice selectors</strong> &mdash; all TTS-based ops (Numbers Station, Solar, Mystery, Auto-ID, Pirate, Ghost) now have both engine AND voice dropdowns. Voice lists populate dynamically from the selected engine.</li>
+    <li><span class="cl-tag new">new</span> <strong>Tab persistence</strong> &mdash; active tab saved in URL hash, survives page reload.</li>
+    <li><span class="cl-tag new">new</span> <strong>IRC Mode</strong> &mdash; renamed from LIVE CHAT, persisted to settings.</li>
+    <li><span class="cl-tag new">new</span> <strong>Schedule + Beacon merged</strong> &mdash; combined into one 50/50 split tab. Quick beacon templates (ID/CQ/WX/TEST). Bulk pause/resume all beacons.</li>
+    <li><span class="cl-tag new">new</span> <strong>Waterfall art</strong> &mdash; 9 new bizarre patterns: Skull, Radioactive Trefoil, All-Seeing Eye, Barcode, ECG Heartbeat, Grey Alien, SOS Morse, Fractal Tree, Wave Collapse.</li>
+    <li><span class="cl-tag new">new</span> <strong>API CFG voice browser</strong> &mdash; browse button on default_voice fields fetches available voices from the engine.</li>
+    <li><span class="cl-tag new">new</span> <strong>Gunicorn log filter</strong> &mdash; suppresses HTTP 200 spam on polling endpoints in journalctl output.</li>
+    <li><span class="cl-tag new">new</span> <strong>Keyboard shortcuts</strong> &mdash; all tabs now have hotkeys. System=7, API CFG=8, AI=9, Clips=0, Spec Ops=#.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Dead code cleanup</strong> &mdash; removed 392-line pane-dub tombstone (dead since v2.12.34).</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Settings restore</strong> &mdash; TX engine/voice/delay/repeat, AI TX voice, IRC mode, and all Spec Ops voices now properly restored on page load.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Ops status polling</strong> &mdash; Spec Ops tab now polls all ops status endpoints on open, so active buttons survive page reload.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>CLAUDE.md sync</strong> &mdash; tab structure, pane IDs, and repo layout updated to match reality.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>User Manual</strong> &mdash; version updated from v2.12.25 to v2.12.49.</li>
+  </ul></div>
+</div>
 
 <div class="cl-entry">
   <div class="cl-header">

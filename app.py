@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.48
+RigGPT v2.12.49
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -390,7 +390,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.48'
+VERSION        = 'v2.12.49'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3970,6 +3970,8 @@ def api_settings_post():
         'autoid_callsign', 'autoid_interval', 'autoid_engine', 'autoid_voice',
         # Pirate Broadcast
         'pirate_interval', 'pirate_engine', 'pirate_voice',
+        # Ghost audio
+        'ghost_engine', 'ghost_voice',
         # IRC mode
         'irc_mode',
     }
@@ -7965,9 +7967,11 @@ def _ghost_whisper(ghost_name: str, stop: threading.Event):
     preset  = random.choice(presets)
     pitch   = random.randint(-8, 8)
     speed   = random.randint(60, 160)
-    _ghost_log_event(f'{ghost_name}: TX "{text}" [{preset} p={pitch} s={speed}]')
+    engine  = _app_settings.get('ghost_engine', 'espeak')
+    voice   = _app_settings.get('ghost_voice', '') or None
+    _ghost_log_event(f'{ghost_name}: TX "{text}" [{engine}/{voice or "default"} {preset} p={pitch} s={speed}]')
     try:
-        orchestrator.execute(text, engine='espeak', voice=None,
+        orchestrator.execute(text, engine=engine, voice=voice,
                              preset=preset, pitch=pitch, speed=speed, roger_beep=False)
     except Exception as e:
         _ghost_log_event(f'{ghost_name}: whisper error: {e}')
@@ -8258,11 +8262,13 @@ def _ghost_run_exorcist(stop: threading.Event, duration: int = 60):
             threads.append(t)
             t.start()
         # Screaming AI transmission
+        _exo_engine = _app_settings.get('ghost_engine', 'espeak')
+        _exo_voice  = _app_settings.get('ghost_voice', '') or None
         scream = random.choice(_EXORCIST_SCREAMS)
         _ghost_log_event(f'EXORCIST: transmitting: {scream!r}')
         try:
             orchestrator.execute(
-                scream, engine='espeak', voice='en-us',
+                scream, engine=_exo_engine, voice=_exo_voice,
                 preset='horror', pitch=random.randint(-8, 8),
                 speed=random.randint(60, 140), roger_beep=False
             )
@@ -8278,7 +8284,7 @@ def _ghost_run_exorcist(stop: threading.Event, duration: int = 60):
                 _ghost_log_event(f'EXORCIST: second transmission: {new_scream!r}')
                 try:
                     orchestrator.execute(
-                        new_scream, engine='espeak', voice='en-us',
+                        new_scream, engine=_exo_engine, voice=_exo_voice,
                         preset=random.choice(['alien', 'demon', 'cave', 'underwater', 'robot']),
                         pitch=random.randint(-12, 12),
                         speed=random.randint(50, 180), roger_beep=False

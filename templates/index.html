@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.48</span>
+    <span class="sb-label">v2.12.49</span>
   </div>
 </div>
 
@@ -2814,8 +2814,7 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="ns-voice" placeholder="voice (default)" list="ns-voice-list" style="flex:1;font-size:9px">
-          <datalist id="ns-voice-list"></datalist>
+          <select id="ns-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="ns-start-btn" onclick="nsStart()">&#9632; START</button>
@@ -2849,8 +2848,7 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="solar-voice" placeholder="voice (default)" list="solar-voice-list" style="flex:1;font-size:9px">
-          <datalist id="solar-voice-list"></datalist>
+          <select id="solar-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
         </div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">K-index: <span id="solar-kval" style="color:var(--cyan)">—</span></div>
         <div style="display:flex;gap:var(--s2)">
@@ -2886,8 +2884,7 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="mystery-voice" placeholder="voice (default)" list="mystery-voice-list" style="flex:1;font-size:9px">
-          <datalist id="mystery-voice-list"></datalist>
+          <select id="mystery-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
         </div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Next: <span id="mystery-next" style="color:var(--cyan)">—</span></div>
         <div style="display:flex;gap:var(--s2)">
@@ -2922,8 +2919,7 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="autoid-voice" placeholder="voice (default)" list="autoid-voice-list" style="flex:1;font-size:9px">
-          <datalist id="autoid-voice-list"></datalist>
+          <select id="autoid-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="autoid-start-btn" onclick="autoidStart()">START</button>
@@ -2966,8 +2962,7 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="pirate-voice" placeholder="voice (default)" list="pirate-voice-list" style="flex:1;font-size:9px">
-          <datalist id="pirate-voice-list"></datalist>
+          <select id="pirate-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="pirate-start-btn" style="background:#3a0000;border-color:var(--tx);color:var(--tx)" onclick="pirateStart()">&#128308; ON AIR</button>
@@ -3003,6 +2998,23 @@ hr.div  {
       <span class="panel-title" style="color:var(--tx)">&#128123; GHOST-IN-THE-MACHINE &mdash; CI-V POSSESSION ENGINE</span>
       <span style="font-size:9px;color:var(--text3)">directly manipulates radio hardware via CI-V serial commands &mdash; requires connected radio</span>
       <button class="btn sm warn" onclick="ghostStop()" style="margin-left:auto">&#9632; EXORCISE</button>
+    </div>
+    <!-- Ghost audio engine + voice (shared across all ghosts) -->
+    <div style="display:flex;gap:var(--s3);align-items:center;margin-bottom:var(--s3);padding:var(--s2) var(--s3);border:1px solid var(--border2);background:var(--bg0)">
+      <span style="font-size:8px;color:var(--tx);letter-spacing:.08em;font-weight:700">GHOST VOICE:</span>
+      <select id="ghost-engine" style="font-size:9px;width:110px" onchange="specopsVoiceRefresh('ghost')">
+        <option value="espeak">eSpeak</option>
+        <option value="piper">Piper</option>
+        <option value="edge">Edge TTS</option>
+        <option value="gtts">Google TTS</option>
+        <option value="pyttsx3">System TTS</option>
+        <option value="elevenlabs">ElevenLabs</option>
+        <option value="speechify">Speechify</option>
+        <option value="openai">OpenAI TTS</option>
+        <option value="fastkoko">FastKoko</option>
+      </select>
+      <select id="ghost-voice" style="font-size:9px;flex:1"><option value="">default</option></select>
+      <span style="font-size:8px;color:var(--text3)">Audio engine for all ghost whispers</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:var(--s3);margin-bottom:var(--s3)">
 
@@ -9160,6 +9172,8 @@ async function cfgFlushPresets() {
     pirate_interval:          get('pirate-interval'),
     pirate_engine:            get('pirate-engine'),
     pirate_voice:             get('pirate-voice'),
+    ghost_engine:             get('ghost-engine'),
+    ghost_voice:              get('ghost-voice'),
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -10725,6 +10739,8 @@ function _restoreAllSettings(s) {
   set('pirate-interval',  s.pirate_interval);
   set('pirate-engine',    s.pirate_engine);
   set('pirate-voice',     s.pirate_voice);
+  set('ghost-engine',     s.ghost_engine);
+  set('ghost-voice',      s.ghost_voice);
   // TX tab defaults (engine triggers async voice list load)
   if (s.tx_engine) {
     set('tx-engine', s.tx_engine);
@@ -10748,9 +10764,10 @@ function _restoreAllSettings(s) {
 // ── Spec Ops voice autocomplete ───────────────────────────────────────────
 async function specopsVoiceRefresh(prefix) {
   const engine = document.getElementById(prefix + '-engine')?.value;
-  const dl     = document.getElementById(prefix + '-voice-list');
-  if (!engine || !dl) return;
-  if (engine === 'cw') { dl.innerHTML = ''; return; } // CW has no voice
+  const sel    = document.getElementById(prefix + '-voice');
+  if (!engine || !sel) return;
+  sel.innerHTML = '<option value="">default</option>';
+  if (engine === 'cw') return; // CW has no voice
   try {
     const r = await api('GET', `/api/voices/${engine}`);
     let voiceArr = [];
@@ -10761,12 +10778,16 @@ async function specopsVoiceRefresh(prefix) {
         id, name: typeof info === 'object' ? (info.name || id) : String(info),
       }));
     }
-    dl.innerHTML = voiceArr.map(v =>
-      `<option value="${escHtml(v.id)}">${escHtml(v.name)}${v.name !== v.id ? ' (' + escHtml(v.id) + ')' : ''}</option>`
+    sel.innerHTML = '<option value="">default</option>' + voiceArr.map(v =>
+      `<option value="${escHtml(v.id)}">${escHtml(v.name)}${v.name !== v.id ? ' ('+escHtml(v.id)+')' : ''}</option>`
     ).join('');
+    // Restore saved voice from settings (the select wasn't populated during _restoreAllSettings)
+    const keyMap = {ns:'numbers_station_voice', solar:'solar_voice', mystery:'mystery_voice',
+                    autoid:'autoid_voice', pirate:'pirate_voice', ghost:'ghost_voice'};
+    const saved = (window._appSettings || {})[keyMap[prefix]];
+    if (saved) sel.value = saved;
   } catch(e) {
     console.warn('specopsVoiceRefresh:', e.message);
-    dl.innerHTML = '';
   }
 }
 
@@ -10804,6 +10825,10 @@ async function specopsRefreshStatus() {
     }
   } catch(e) {
     console.warn('specopsRefreshStatus:', e.message);
+  }
+  // Populate voice dropdowns for whatever engines are currently selected
+  for (const prefix of ['ns', 'solar', 'mystery', 'autoid', 'pirate', 'ghost']) {
+    specopsVoiceRefresh(prefix);
   }
 }
 

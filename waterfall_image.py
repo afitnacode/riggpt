@@ -396,6 +396,196 @@ def make_chevron(size=(128, 64)):
     return img
 
 
+def make_skull(size=(128, 64)):
+    """Skull / crossbones — spooky waterfall silhouette."""
+    from PIL import ImageDraw
+    W, H = size
+    img = Image.new('L', size, 0)
+    d   = ImageDraw.Draw(img)
+    cx, cy = W//2, H//3
+    # Cranium
+    rx, ry = W//5, H//4
+    d.ellipse([cx-rx, cy-ry, cx+rx, cy+ry], fill=200)
+    # Jaw
+    jw, jh = rx*2//3, H//6
+    d.rectangle([cx-jw, cy+ry-4, cx+jw, cy+ry+jh], fill=160)
+    # Eyes
+    ew = rx//3
+    d.ellipse([cx-rx//2-ew, cy-ry//3, cx-rx//2+ew, cy+ry//4], fill=0)
+    d.ellipse([cx+rx//2-ew, cy-ry//3, cx+rx//2+ew, cy+ry//4], fill=0)
+    # Nose
+    d.polygon([(cx-3, cy+ry//6), (cx+3, cy+ry//6), (cx, cy+ry//2)], fill=0)
+    # Crossbones
+    bw = W//3
+    by = cy+ry+jh+4
+    d.line([cx-bw, by, cx+bw, by+H//5], fill=180, width=3)
+    d.line([cx+bw, by, cx-bw, by+H//5], fill=180, width=3)
+    return img
+
+
+def make_radioactive(size=(128, 64)):
+    """Radioactive trefoil symbol."""
+    from PIL import ImageDraw
+    W, H = size
+    img = Image.new('L', size, 0)
+    d   = ImageDraw.Draw(img)
+    cx, cy = W//2, H//2
+    r = min(W, H)//2 - 4
+    # Three blades
+    for angle in [0, 120, 240]:
+        a_rad = np.radians(angle)
+        a2 = np.radians(angle + 60)
+        pts = [(cx, cy)]
+        for t in np.linspace(a_rad, a2, 30):
+            pts.append((int(cx + r*np.cos(t)), int(cy + r*np.sin(t))))
+        pts.append((cx, cy))
+        d.polygon(pts, fill=220)
+    # Center hole
+    d.ellipse([cx-r//4, cy-r//4, cx+r//4, cy+r//4], fill=0)
+    return img
+
+
+def make_eye(size=(128, 64)):
+    """All-seeing eye — Illuminati vibes on the waterfall."""
+    from PIL import ImageDraw
+    W, H = size
+    img = Image.new('L', size, 0)
+    d   = ImageDraw.Draw(img)
+    cx, cy = W//2, H//2
+    # Outer eye shape (two arcs)
+    pts_top = [(int(cx + W//2.5*np.cos(t)), int(cy - H//3*np.sin(t)))
+               for t in np.linspace(0, np.pi, 60)]
+    pts_bot = [(int(cx + W//2.5*np.cos(t)), int(cy + H//3*np.sin(t)))
+               for t in np.linspace(np.pi, 0, 60)]
+    d.polygon(pts_top + pts_bot, outline=200, fill=80)
+    # Iris
+    ir = min(W, H)//6
+    d.ellipse([cx-ir, cy-ir, cx+ir, cy+ir], outline=255, fill=160)
+    # Pupil
+    pr = ir//2
+    d.ellipse([cx-pr, cy-pr, cx+pr, cy+pr], fill=0)
+    # Light reflection
+    d.ellipse([cx-pr+2, cy-pr+2, cx-pr+5, cy-pr+5], fill=255)
+    return img
+
+
+def make_barcode(size=(128, 64)):
+    """Random barcode / scanner lines — mysterious data on the waterfall."""
+    import random
+    W, H = size
+    arr = np.zeros((H, W), dtype=np.uint8)
+    x = 4
+    while x < W - 4:
+        bw = random.choice([1, 1, 2, 2, 3])
+        bright = random.choice([180, 200, 220, 240, 255])
+        arr[:, x:min(x+bw, W)] = bright
+        x += bw + random.choice([1, 2, 3])
+    return Image.fromarray(arr, 'L')
+
+
+def make_heartbeat(size=(128, 64)):
+    """ECG / heartbeat trace — flatline with periodic QRS spikes."""
+    from PIL import ImageDraw, ImageFilter
+    W, H = size
+    img = Image.new('L', size, 0)
+    d   = ImageDraw.Draw(img)
+    mid = H // 2
+    # Draw flatline
+    d.line([(0, mid), (W, mid)], fill=100, width=1)
+    # QRS complexes every ~30px
+    for bx in range(20, W-10, 32):
+        pts = [(bx, mid), (bx+3, mid-2), (bx+5, mid+H//6),
+               (bx+7, mid-H//3), (bx+9, mid+H//5), (bx+12, mid-1), (bx+15, mid)]
+        d.line(pts, fill=255, width=2)
+    img = img.filter(ImageFilter.GaussianBlur(0.8))
+    return img
+
+
+def make_alien_face(size=(128, 64)):
+    """Grey alien face — big eyes, small mouth."""
+    from PIL import ImageDraw
+    W, H = size
+    img = Image.new('L', size, 0)
+    d   = ImageDraw.Draw(img)
+    cx, cy = W//2, H//2
+    # Head (inverted triangle-ish)
+    hw, hh = W//3, H//2-2
+    d.ellipse([cx-hw, cy-hh, cx+hw, cy+hh+4], fill=120)
+    # Chin
+    d.polygon([(cx-hw//2, cy+hh//2), (cx, cy+hh+4), (cx+hw//2, cy+hh//2)], fill=120)
+    # Eyes — big, black, almond-shaped
+    ew, eh = hw//2+4, hh//3+2
+    d.ellipse([cx-hw//2-ew//2, cy-eh, cx-hw//2+ew//2, cy+eh//2], fill=255)
+    d.ellipse([cx+hw//2-ew//2, cy-eh, cx+hw//2+ew//2, cy+eh//2], fill=255)
+    # Pupils
+    d.ellipse([cx-hw//2-3, cy-3, cx-hw//2+3, cy+3], fill=0)
+    d.ellipse([cx+hw//2-3, cy-3, cx+hw//2+3, cy+3], fill=0)
+    # Mouth — small line
+    d.line([(cx-6, cy+hh//2+2), (cx+6, cy+hh//2+2)], fill=60, width=1)
+    return img
+
+
+def make_sos_morse(size=(128, 64)):
+    """SOS in Morse code as visual pattern: ... --- ..."""
+    W, H = size
+    arr = np.zeros((H, W), dtype=np.uint8)
+    mid_y = H // 2
+    bar_h = max(H // 3, 6)
+    x = 8
+    dot_w, dash_w, gap, letter_gap = 3, 9, 3, 8
+    pattern = [  # S=...  O=---  S=...
+        dot_w, gap, dot_w, gap, dot_w, letter_gap,
+        dash_w, gap, dash_w, gap, dash_w, letter_gap,
+        dot_w, gap, dot_w, gap, dot_w,
+    ]
+    for i, pw in enumerate(pattern):
+        if i % 2 == 0:  # signal element
+            arr[mid_y-bar_h//2:mid_y+bar_h//2, x:min(x+pw, W)] = 240
+        x += pw
+        if x >= W:
+            break
+    # Repeat pattern across width
+    segment_w = x
+    if segment_w > 0 and segment_w < W:
+        tile = arr[:, :segment_w].copy()
+        for ox in range(segment_w + 12, W - segment_w, segment_w + 12):
+            end = min(ox + segment_w, W)
+            arr[:, ox:end] = tile[:, :end-ox]
+    return Image.fromarray(arr, 'L')
+
+
+def make_fractal_tree(size=(128, 64)):
+    """Recursive fractal tree."""
+    from PIL import ImageDraw
+    W, H = size
+    img = Image.new('L', size, 0)
+    d   = ImageDraw.Draw(img)
+    def _branch(x, y, length, angle, depth):
+        if depth <= 0 or length < 2:
+            return
+        x2 = x + int(length * np.cos(angle))
+        y2 = y - int(length * np.sin(angle))
+        bright = min(255, 80 + depth * 30)
+        d.line([(x, y), (x2, y2)], fill=bright, width=max(1, depth//2))
+        _branch(x2, y2, length * 0.67, angle + 0.45, depth - 1)
+        _branch(x2, y2, length * 0.67, angle - 0.45, depth - 1)
+    _branch(W//2, H-2, H//3, np.pi/2, 7)
+    return img
+
+
+def make_wave_collapse(size=(128, 64)):
+    """Collapsing sine waves — multiple frequencies decaying to center."""
+    W, H = size
+    x = np.linspace(0, 8*np.pi, W)
+    arr = np.zeros((H, W), dtype=np.float32)
+    for row in range(H):
+        decay = 1.0 - abs(row - H/2) / (H/2)
+        freq = 1.0 + 3.0 * (row / H)
+        arr[row] = decay * (0.5 + 0.5 * np.sin(freq * x + row * 0.3))
+    arr = (arr / arr.max() * 255).astype(np.uint8)
+    return Image.fromarray(arr, 'L')
+
+
 CANNED_IMAGES = {
     # Standard shapes
     'smiley':   (make_smiley,   'Smiley Face'),
@@ -417,6 +607,16 @@ CANNED_IMAGES = {
     'interference':   (make_interference,      'Wave Interference'),
     'vortex':         (make_vortex,            'Galaxy Vortex'),
     'qrish':          (make_qrish,             'QR-ish Blocks'),
+    # Bizarre / HF weirdness
+    'skull':          (make_skull,             '☠ Skull & Crossbones'),
+    'radioactive':    (make_radioactive,       '☢ Radioactive Trefoil'),
+    'eye':            (make_eye,               '👁 All-Seeing Eye'),
+    'barcode':        (make_barcode,           '▮ Mysterious Barcode'),
+    'heartbeat':      (make_heartbeat,         '♡ ECG Heartbeat'),
+    'alien_face':     (make_alien_face,        '👽 Grey Alien'),
+    'sos_morse':      (make_sos_morse,         '🆘 SOS Morse Visual'),
+    'fractal_tree':   (make_fractal_tree,      '🌳 Fractal Tree'),
+    'wave_collapse':  (make_wave_collapse,     '🌊 Wave Collapse'),
 }
 
 
