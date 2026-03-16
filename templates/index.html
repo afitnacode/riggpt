@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.37</span>
+    <span class="sb-label">v2.12.38</span>
   </div>
 </div>
 
@@ -1666,18 +1666,28 @@ hr.div  {
   <button class="tab-btn" onclick="showTab('hist')"   data-tab="hist">
     <span class="tab-num">7</span>LOG
   </button>
-  <button class="tab-btn" onclick="showTab('cfg')"    data-tab="cfg">
-    <span class="tab-num">9</span>CONFIG
+  <button class="tab-btn" onclick="showTab('cfg')"      data-tab="cfg">
+    <span class="tab-num">8</span>CONFIG
   </button>
-  <button class="tab-btn" onclick="showTab('ai')"     data-tab="ai">
-    <span class="tab-num">0</span>AI
+  <button class="tab-btn" onclick="showTab('system')"   data-tab="system">
+    <span class="tab-num">9</span>SYSTEM
   </button>
-  <button class="tab-btn" onclick="showTab('trip')"   data-tab="trip"
+  <button class="tab-btn" onclick="showTab('apicfg')"   data-tab="apicfg">
+    <span class="tab-num">0</span>API CFG
+  </button>
+  <button class="tab-btn" onclick="showTab('ai')"       data-tab="ai">
+    &#129302; AI
+  </button>
+  <button class="tab-btn" onclick="showTab('trip')"     data-tab="trip"
     style="color:var(--amber)">
     <span class="tab-num" style="color:var(--amber)">!</span>ACID TRIP
   </button>
-  <button class="tab-btn" onclick="showTab('clips')" data-tab="clips">
-    📼 CLIPS
+  <button class="tab-btn" onclick="showTab('clips')"   data-tab="clips">
+    &#128252; CLIPS
+  </button>
+  <button class="tab-btn" onclick="showTab('specops')" data-tab="specops"
+    style="color:var(--tx);border-bottom:2px solid var(--tx)">
+    &#9760; SPEC OPS
   </button>
 
   <div class="strip-right">
@@ -2984,12 +2994,14 @@ hr.div  {
 </div>
 <!-- ══════════════════════
      PANE: CONFIG
+     Radio connection, Discord integration, import/export
 ══════════════════════════ -->
 <div id="pane-cfg" class="pane">
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;flex:1;overflow:hidden;gap:0">
-    <!-- Radio settings -->
+  <div style="display:grid;grid-template-columns:300px 1fr;flex:1;overflow:hidden;gap:0">
+
+    <!-- Left: Radio Connection -->
     <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
-      <div class="panel-header"><span class="panel-title">RADIO CONTROL</span></div>
+      <div class="panel-header"><span class="panel-title">RADIO CONNECTION</span></div>
       <div class="form-row">
         <label>FREQ Hz</label>
         <input type="number" id="set-freq" placeholder="14225000" style="flex:1">
@@ -3003,32 +3015,195 @@ hr.div  {
         </select>
         <button class="btn sm" onclick="setMode()" style="flex-shrink:0">SET</button>
       </div>
-      <div class="btn-row" style="flex-shrink:0">
-        <button class="btn sm" onclick="getFrequency()">↺ READ FREQ</button>
+      <div class="btn-row">
+        <button class="btn sm" onclick="getFrequency()">&#8634; READ FREQ</button>
       </div>
       <div class="alert-strip" id="set-radio-alert"></div>
+      <div style="padding:var(--s4);font-size:var(--fz-xs);color:var(--text3);line-height:1.8">
+        <b style="color:var(--text2)">SYSTEM tab</b> &rarr; Audio device, health, diagnostics, gong.<br>
+        <b style="color:var(--text2)">API CFG tab</b> &rarr; API keys, LLM integrations, engine status.
+      </div>
+    </div>
 
-      <div class="sec-head" style="flex-shrink:0">AUDIO DEVICE</div>
-      <div class="form-row" style="flex-shrink:0">
+    <!-- Right: Discord + FastKoko + Import/Export -->
+    <div style="display:flex;flex-direction:column;overflow:hidden">
+
+      <!-- DISCORD MONITOR -->
+      <div id="discord-panel" style="border-bottom:var(--b1);background:var(--bg1);flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;max-height:240px">
+        <div class="panel-header" style="flex-shrink:0;display:flex;align-items:center;gap:var(--s4)">
+          <span class="panel-title" style="color:var(--cyan)">DISCORD MONITOR</span>
+          <span id="discord-status-badge" style="font-size:var(--fz-xs);padding:1px 6px;border:1px solid var(--text3);color:var(--text3);font-family:var(--mono)">OFFLINE</span>
+          <span id="discord-status-detail" style="font-size:var(--fz-xs);color:var(--text3);font-family:var(--mono)"></span>
+          <span style="margin-left:auto;font-size:var(--fz-xs);color:var(--text3)">Bot token + IDs in <b style="color:var(--text2)">API CFG</b></span>
+        </div>
+        <!-- Server + channel location row -->
+        <div style="display:flex;gap:var(--s6);padding:var(--s2) var(--s4);border-bottom:var(--b1);font-size:9px;background:var(--bg0);flex-shrink:0">
+          <span style="color:var(--text3)">MONITORING:</span>
+          <span id="discord-monitor-server" style="color:var(--cyan)">&#x2014;</span>
+          <span style="color:var(--text3)">/</span>
+          <span id="discord-monitor-channel" style="color:var(--rx)">&#x2014;</span>
+          <span style="color:var(--text3);margin-left:auto">bot:</span>
+          <span id="discord-monitor-bot" style="color:var(--text2)">&#x2014;</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s4);flex-shrink:0;border-bottom:var(--b1)">
+          <label style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap">INJECT INTO</label>
+          <select id="discord-inject-target" style="font-size:var(--fz-xs);width:140px">
+            <option value="chaos">Acid Trip Chaos Queue</option>
+            <option value="agent_a">Agent A Context</option>
+            <option value="agent_b">Agent B Context</option>
+            <option value="both">Both Agents</option>
+            <option value="off">Monitor Only (no inject)</option>
+          </select>
+          <label style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap">FORMAT</label>
+          <select id="discord-inject-format" style="font-size:var(--fz-xs);width:180px">
+            <option value="summary">Last N messages as summary</option>
+            <option value="verbatim">Verbatim: &lt;user&gt;: message</option>
+            <option value="topic">Topic steer: discuss this...</option>
+          </select>
+          <div class="btn-row" style="margin:0">
+            <button class="btn sm ok" onclick="discordApply()">APPLY</button>
+            <button class="btn sm" onclick="discordClear()">CLR</button>
+            <button class="btn sm" onclick="loadDiscordStatus()">&#8634;</button>
+          </div>
+          <span id="discord-msg-count" style="font-size:var(--fz-xs);color:var(--text3);margin-left:auto;white-space:nowrap"></span>
+        </div>
+        <div id="discord-msg-preview" style="flex:1;overflow-y:auto;font-size:var(--fz-xs);font-family:var(--mono);padding:var(--s2) var(--s4);color:var(--text2);line-height:1.6">
+          <span style="color:var(--text3)">No messages yet. Configure and APPLY to start monitoring.</span>
+        </div>
+        <div class="alert-strip" id="discord-alert"></div>
+      </div>
+
+      <!-- DISCORD CONTROL CHANNEL -->
+      <div style="border-bottom:var(--b1);background:var(--bg1);flex-shrink:0;padding:var(--s4)">
+        <div style="display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s2)">
+          <span class="panel-title" style="color:var(--amber)">DISCORD CONTROL CHANNEL</span>
+          <span id="ctrl-status-badge" style="font-size:var(--fz-xs);padding:1px 6px;border:1px solid var(--text3);color:var(--text3)">OFFLINE</span>
+          <a href="/trip/commands" target="_blank" class="btn sm" style="text-decoration:none;margin-left:auto">&#128203; COMMANDS</a>
+          <button class="btn sm ok" onclick="ctrlApplyConfig()">APPLY</button>
+          <button class="btn sm" onclick="ctrlClear()">CLR</button>
+          <button class="btn sm" onclick="loadCtrlStatus()">&#8634;</button>
+        </div>
+        <!-- Control server + channel location row -->
+        <div style="display:flex;gap:var(--s6);margin-bottom:var(--s2);font-size:9px;background:var(--bg0);padding:var(--s2) var(--s3);border:var(--b1)">
+          <span style="color:var(--text3)">CONTROL:</span>
+          <span id="ctrl-server" style="color:var(--amber)">&#x2014;</span>
+          <span style="color:var(--text3)">/</span>
+          <span id="ctrl-channel" style="color:var(--rx)">&#x2014;</span>
+          <span style="color:var(--text3);margin-left:auto">bot:</span>
+          <span id="ctrl-bot" style="color:var(--text2)">&#x2014;</span>
+        </div>
+        <div id="ctrl-detail" style="font-size:var(--fz-xs);color:var(--text3);margin-bottom:var(--s2)">
+          Configure in <b style="color:var(--text2)">API CFG &rarr; API INTEGRATIONS &rarr; Discord Control Channel</b>, then APPLY.
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">RECENT COMMANDS</div>
+        <div id="ctrl-msg-preview" style="font-size:var(--fz-xs);font-family:var(--mono);color:var(--text2);border:var(--b1);padding:var(--s2) var(--s3);max-height:70px;overflow-y:auto;line-height:1.6;background:var(--bg0)">
+          <span style="color:var(--text3)">No commands received yet.</span>
+        </div>
+        <div class="alert-strip" id="ctrl-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- FASTKOKO -->
+      <div style="border-bottom:var(--b1);background:var(--bg1);flex-shrink:0;padding:var(--s4)">
+        <div style="display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s3)">
+          <span class="panel-title" style="color:var(--rx)">FASTKOKO LOCAL TTS</span>
+          <span id="fastkoko-status-badge" style="font-size:var(--fz-xs);padding:1px 6px;border:1px solid var(--text3);color:var(--text3)">OFFLINE</span>
+          <button class="btn sm" onclick="fastkokoPing()" style="margin-left:auto">&#8634; PING</button>
+          <button class="btn sm ok" onclick="fastkokoPing(true)">LIST VOICES</button>
+        </div>
+        <div style="font-size:var(--fz-xs);color:var(--text3)">Configure URL in <b style="color:var(--text2)">API CFG &rarr; API INTEGRATIONS &rarr; FastKoko</b>, then PING.</div>
+        <div id="fastkoko-voice-list" style="margin-top:var(--s3);font-size:var(--fz-xs);font-family:var(--mono);color:var(--text3);display:none;max-height:80px;overflow-y:auto;border:var(--b1);padding:var(--s2) var(--s3);line-height:1.7"></div>
+        <div class="alert-strip" id="fastkoko-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- CONFIG IMPORT/EXPORT -->
+      <div style="display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:var(--b1);flex-shrink:0">
+        <span style="font-size:var(--fz-xs);color:var(--text3);text-transform:uppercase;letter-spacing:.06em">CONFIG FILE</span>
+        <button class="btn sm ok" onclick="cfgExport(false)" title="Export settings + masked keys">&#11015; EXPORT</button>
+        <button class="btn sm" onclick="cfgExport(true)" style="color:var(--amber);border-color:var(--amber)" title="Export with PLAINTEXT keys">&#11015; +KEYS</button>
+        <button class="btn sm" onclick="document.getElementById('cfg-import-inp').click()" title="Restore from JSON backup">&#11014; IMPORT</button>
+        <input type="file" id="cfg-import-inp" accept=".json" style="display:none" onchange="cfgImport(this)">
+        <button class="btn sm" onclick="cfgToggleDocs()" id="cfg-docs-btn">? DOCS</button>
+        <div class="alert-strip" id="cfg-io-alert" style="margin-left:auto;flex:1;max-width:320px"></div>
+      </div>
+      <div id="cfg-docs-panel" style="display:none;border-bottom:var(--b1);background:var(--bg0);padding:var(--s4);font-size:var(--fz-xs);color:var(--text2);max-height:220px;overflow-y:auto;line-height:1.8;flex-shrink:0">
+        <b style="color:var(--cyan)">CONFIG FILE FORMAT</b> &mdash; riggpt-config JSON<br><br>
+        Export saves settings + masked API key hints. Import restores settings and any unmasked key values.<br><br>
+        <b style="color:var(--text3)">CONFIG FILES ON DISK:</b><br>
+        &nbsp;&nbsp;<code>/home/riggpt/app_settings.json</code> &mdash; all application settings<br>
+        &nbsp;&nbsp;<code>/home/riggpt/api_keys.json</code> &mdash; API credentials<br><br>
+        <b style="color:var(--text3)">SECURITY:</b> Keys stored as plaintext. chmod 600 both files.<br>
+        Set <code>RIGGPT_KEY_FILE</code> env var to use an alternate path.
+      </div>
+
+    </div><!-- /right col -->
+  </div><!-- /grid -->
+</div>
+
+<!-- ══════════════════════
+     PANE: SYSTEM
+     Audio device, diagnostics, health, gong
+══════════════════════════ -->
+<div id="pane-system" class="pane">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;height:100%;overflow:hidden">
+
+    <!-- Audio -->
+    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
+      <div class="panel-header"><span class="panel-title">AUDIO DEVICE</span></div>
+      <div class="form-row">
         <label>DEVICE</label>
         <select id="set-audio-device" style="flex:1"></select>
       </div>
-      <div class="btn-row" style="flex-shrink:0">
-        <button class="btn sm" onclick="loadAudioDevices()">↺ DEVICES</button>
-        <button class="btn warn sm" onclick="testAudio()">▶ TEST</button>
-        <button class="btn sm" onclick="calibrateAudio()">🎚 CALIB</button>
+      <div class="btn-row">
+        <button class="btn sm" onclick="loadAudioDevices()">&#8634; REFRESH</button>
+        <button class="btn warn sm" onclick="testAudio()">&#9654; TEST</button>
+        <button class="btn sm" onclick="calibrateAudio()">&#127898; CALIB</button>
       </div>
       <div class="alert-strip" id="set-audio-alert"></div>
-
-      <div class="sec-head" style="flex-shrink:0">DIAGNOSTICS</div>
-      <div class="btn-row" style="flex-shrink:0">
-        <button class="btn sm" onclick="dashProbe()">🔍 PROBE RADIO</button>
-        <button class="btn warn sm" onclick="dashPttTest()">🎙 PTT TEST</button>
-        <button class="btn sm" onclick="civScan()" title="Scan all common CI-V addresses to find which one responds">🔎 CI-V SCAN</button>
-        <button class="btn sm" onclick="toggleDebugLog()" id="btn-debug-log" title="Toggle DEBUG-level logging in journald">DBG LOG</button>
+      <div class="sec-head" style="flex-shrink:0">GONG SETTINGS</div>
+      <div class="form-row">
+        <label>GONG FILE</label>
+        <input type="text" id="set-gong-path" placeholder="/opt/taco_bell_gong.wav" style="flex:1">
+        <button class="btn sm" onclick="saveGongPath()" style="flex-shrink:0">SAVE</button>
       </div>
-      <pre class="probe-out" id="set-probe-out"></pre>
+      <div class="alert-strip" id="set-gong-alert"></div>
+      <div class="btn-row border-top" style="margin-top:auto">
+        <button class="btn sm" onclick="tacoGong()" title="Ring the gong">&#128276; GONG</button>
+      </div>
     </div>
+
+    <!-- Diagnostics -->
+    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
+      <div class="panel-header"><span class="panel-title">DIAGNOSTICS</span></div>
+      <div class="btn-row" style="flex-shrink:0;flex-wrap:wrap">
+        <button class="btn sm" onclick="dashProbe()">&#128269; PROBE RADIO</button>
+        <button class="btn warn sm" onclick="dashPttTest()">&#127897; PTT TEST</button>
+        <button class="btn sm" onclick="civScan()" title="Scan CI-V addresses">&#128270; CI-V SCAN</button>
+        <button class="btn sm" onclick="toggleDebugLog()" id="btn-debug-log" title="Toggle DEBUG logging">DBG LOG</button>
+      </div>
+      <div class="alert-strip" id="set-radio-alert"></div>
+      <pre class="probe-out" id="set-probe-out" style="flex:1"></pre>
+    </div>
+
+    <!-- System Health -->
+    <div style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="panel-header">
+        <span class="panel-title">SYSTEM HEALTH</span>
+        <button class="btn sm" onclick="loadHealth()">&#8634;</button>
+      </div>
+      <div class="scroll-body" id="set-health-grid" style="flex:1">
+        <div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">Loading...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════
+     PANE: API CFG
+     API keys, integrations, engine status
+══════════════════════════ -->
+<div id="pane-apicfg" class="pane">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;height:100%;overflow:hidden">
 
     <!-- API Keys -->
     <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
@@ -3036,8 +3211,7 @@ hr.div  {
       <div class="form-row">
         <label>ELEVENLABS</label>
         <div class="key-row" style="flex:1">
-          <input type="password" id="set-el-key" placeholder="•••••••••••" style="flex:1"
-                 autocomplete="new-password" form="pw-form">
+          <input type="password" id="set-el-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
           <button class="btn sm" onclick="saveKey('elevenlabs')">SAVE</button>
           <button class="btn sm" onclick="testKey('elevenlabs')">TEST</button>
         </div>
@@ -3045,8 +3219,7 @@ hr.div  {
       <div class="form-row">
         <label>SPEECHIFY</label>
         <div class="key-row" style="flex:1">
-          <input type="password" id="set-sf-key" placeholder="•••••••••••" style="flex:1"
-                 autocomplete="new-password" form="pw-form">
+          <input type="password" id="set-sf-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
           <button class="btn sm" onclick="saveKey('speechify')">SAVE</button>
           <button class="btn sm" onclick="testKey('speechify')">TEST</button>
         </div>
@@ -3054,156 +3227,81 @@ hr.div  {
       <div class="form-row">
         <label>OPENAI</label>
         <div class="key-row" style="flex:1">
-          <input type="password" id="set-oa-key" placeholder="•••••••••••" style="flex:1"
-                 autocomplete="new-password" form="pw-form">
+          <input type="password" id="set-oa-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
           <button class="btn sm" onclick="saveKey('openai')">SAVE</button>
           <button class="btn sm" onclick="testKey('openai')">TEST</button>
         </div>
       </div>
       <div class="alert-strip" id="set-key-alert"></div>
-
       <div class="sec-head" style="flex-shrink:0">AMAZON S3 (CLIPS)</div>
       <div class="form-row">
         <label>ACCESS KEY</label>
         <div class="key-row" style="flex:1">
-          <input type="password" id="set-s3-access-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1"
-                 autocomplete="new-password" form="pw-form">
+          <input type="password" id="set-s3-access-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
           <button class="btn sm" onclick="saveS3Keys()">SAVE</button>
         </div>
       </div>
       <div class="form-row">
         <label>SECRET KEY</label>
         <div class="key-row" style="flex:1">
-          <input type="password" id="set-s3-secret-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1"
-                 autocomplete="new-password" form="pw-form">
+          <input type="password" id="set-s3-secret-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
         </div>
       </div>
       <div class="alert-strip" id="set-s3-alert"></div>
-
       <div class="sec-head" style="flex-shrink:0">ENGINE STATUS</div>
       <div class="engine-grid" id="set-engine-grid">
         <div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">Loading...</div>
       </div>
-      <div class="btn-row" style="flex-shrink:0">
-        <button class="btn sm" onclick="loadEngineStatus()">↺ REFRESH</button>
+      <div class="btn-row border-top" style="flex-shrink:0;margin-top:auto">
+        <button class="btn sm" onclick="loadEngineStatus()">&#8634; ENGINE STATUS</button>
       </div>
     </div>
 
-    <!-- System Health -->
+    <!-- API Integrations -->
     <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
-      <div class="panel-header"><span class="panel-title">SYSTEM HEALTH</span></div>
-      <div class="scroll-body" id="set-health-grid">
-        <div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">Loading...</div>
+      <div class="panel-header">
+        <span class="panel-title">API INTEGRATIONS</span>
+        <button class="btn sm" onclick="loadLlmProviders()">&#8634;</button>
       </div>
-      <div class="btn-row border-top" style="flex-shrink:0">
-        <button class="btn sm" onclick="loadHealth()">↺ REFRESH</button>
-        <button class="btn sm" onclick="tacoGong()" title="Drop a gong">🔔 GONG</button>
-      </div>
-
-      <!-- Gong path config -->
-      <div class="sec-head" style="flex-shrink:0">GONG SETTINGS</div>
-      <div class="form-row" style="flex-shrink:0">
-        <label>GONG FILE</label>
-        <input type="text" id="set-gong-path" placeholder="/opt/taco_bell_gong.wav" style="flex:1">
-        <button class="btn sm" onclick="saveGongPath()" style="flex-shrink:0">SAVE</button>
-      </div>
-      <div class="alert-strip" id="set-gong-alert"></div>
-    </div>
-
-    <!-- LLM Integrations -->
-    <div style="display:flex;flex-direction:column;overflow:hidden">
-      <div class="panel-header"><span class="panel-title">API INTEGRATIONS</span></div>
       <div class="scroll-body" id="cfg-llm-grid" style="flex:1;overflow-y:auto">
-        <div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">Loading…</div>
+        <div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">Loading&hellip;</div>
       </div>
       <div class="alert-strip" id="cfg-llm-alert"></div>
-      <div class="btn-row border-top" style="flex-shrink:0">
-        <button class="btn sm" onclick="loadLlmProviders()">↺ REFRESH</button>
+    </div>
+
+    <!-- Info / help -->
+    <div style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="panel-header"><span class="panel-title">INFO</span></div>
+      <div style="padding:var(--s4);font-size:var(--fz-xs);color:var(--text3);line-height:2;overflow-y:auto;flex:1">
+        <b style="color:var(--cyan)">API KEYS</b><br>
+        ElevenLabs, Speechify, OpenAI TTS keys go in the left column. S3 credentials are for the Clips tab cloud source.<br><br>
+        <b style="color:var(--cyan)">API INTEGRATIONS</b><br>
+        Ollama, Gemini, Groq, Mistral, Discord bot token, Discord channel IDs, FastKoko URL &mdash; all configured here via the dynamic provider cards.<br><br>
+        <b style="color:var(--cyan)">ENGINE STATUS</b><br>
+        Shows which TTS engines are installed and reachable. Click &#8634; ENGINE STATUS to refresh.<br><br>
+        <b style="color:var(--cyan)">STORAGE</b><br>
+        <code style="color:var(--text2)">/home/riggpt/app_settings.json</code><br>
+        <code style="color:var(--text2)">/home/riggpt/api_keys.json</code><br>
+        Never commit these files. chmod 600 recommended.
       </div>
     </div>
 
-  </div><!-- /.grid -->
+  </div>
+</div>
 
-  <!-- DISCORD INTEGRATION PANEL -->
-  <div id="discord-panel" style="border-top:var(--b1);background:var(--bg1);flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;max-height:220px">
-    <div class="panel-header" style="flex-shrink:0;display:flex;align-items:center;gap:var(--s4)">
-      <span class="panel-title" style="color:var(--cyan)">DISCORD MONITOR</span>
-      <span id="discord-status-badge" style="font-size:var(--fz-xs);padding:1px 6px;border:1px solid var(--text3);color:var(--text3);font-family:var(--mono)">OFFLINE</span>
-      <span id="discord-status-detail" style="font-size:var(--fz-xs);color:var(--text3);font-family:var(--mono)"></span>
-      <span style="margin-left:auto;font-size:var(--fz-xs);color:var(--text3)">Configure bot token + IDs in API KEYS above, then click APPLY</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s4);flex-shrink:0;border-bottom:var(--b1)">
-      <label style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap">INJECT INTO</label>
-      <select id="discord-inject-target" style="font-size:var(--fz-xs);width:140px">
-        <option value="chaos">Acid Trip Chaos Queue</option>
-        <option value="agent_a">Agent A Context</option>
-        <option value="agent_b">Agent B Context</option>
-        <option value="both">Both Agents</option>
-        <option value="off">Monitor Only (no inject)</option>
-      </select>
-      <label style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap">FORMAT</label>
-      <select id="discord-inject-format" style="font-size:var(--fz-xs);width:180px">
-        <option value="summary">Last N messages as summary</option>
-        <option value="verbatim">Verbatim: &lt;user&gt;: message</option>
-        <option value="topic">Topic steer: discuss this...</option>
-      </select>
-      <div class="btn-row" style="margin:0">
-        <button class="btn sm ok" onclick="discordApply()">APPLY CONFIG</button>
-        <button class="btn sm" onclick="discordClear()">CLR BUFFER</button>
-        <button class="btn sm" onclick="loadDiscordStatus()">↺</button>
-      </div>
-      <span id="discord-msg-count" style="font-size:var(--fz-xs);color:var(--text3);margin-left:auto;white-space:nowrap"></span>
-    </div>
-    <!-- Recent messages preview -->
-    <div id="discord-msg-preview" style="flex:1;overflow-y:auto;font-size:var(--fz-xs);font-family:var(--mono);padding:var(--s2) var(--s4);color:var(--text2);line-height:1.6">
-      <span style="color:var(--text3)">No messages yet. Configure and APPLY to start monitoring.</span>
-    </div>
-    <div class="alert-strip" id="discord-alert"></div>
+<!-- ══════════════════════
+     PANE: SPEC OPS
+     Special Ops + Ghost-in-the-Machine
+══════════════════════════ -->
+<div id="pane-specops" class="pane" style="overflow-y:auto">
+  <div style="padding:var(--s4);border-bottom:2px solid var(--tx);display:flex;align-items:center;gap:var(--s4);flex-shrink:0">
+    <span class="panel-title" style="color:var(--tx)">&#9760; SPECIAL OPERATIONS</span>
+    <span style="font-size:9px;color:var(--text3)">automated radio chaos &mdash; you were warned</span>
+    <span id="ghost-active-badge" style="display:none;margin-left:auto;font-size:9px;padding:2px 8px;border:1px solid var(--tx);color:var(--tx);font-family:var(--mono);animation:blink 1s step-end infinite">&#128123; POSSESSED: <span id="ghost-active-name"></span></span>
   </div>
 
-  <!-- FastKoko Local TTS panel -->
-  <div style="border-top:var(--b1);background:var(--bg1);flex-shrink:0;padding:var(--s4) var(--s4) var(--s3)">
-    <div style="display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s3)">
-      <span class="panel-title" style="color:var(--green)">FASTKOKO LOCAL TTS</span>
-      <span id="fastkoko-status-badge" style="font-size:var(--fz-xs);padding:1px 6px;border:1px solid var(--text3);color:var(--text3)">OFFLINE</span>
-      <button class="btn sm" onclick="fastkokoPing()" style="margin-left:auto">↺ PING</button>
-      <button class="btn sm ok" onclick="fastkokoPing(true)">LIST VOICES</button>
-    </div>
-    <div style="display:flex;align-items:center;gap:var(--s3);font-size:var(--fz-xs);color:var(--text3)">
-      <span>Configure server URL in</span>
-      <strong style="color:var(--text2)">API INTEGRATIONS → FastKoko (Local)</strong>
-      <span>above, then SAVE and PING here.</span>
-    </div>
-    <div id="fastkoko-voice-list" style="margin-top:var(--s3);font-size:var(--fz-xs);font-family:var(--mono);color:var(--text3);display:none;max-height:80px;overflow-y:auto;border:var(--b1);padding:var(--s2) var(--s3);line-height:1.7"></div>
-    <div class="alert-strip" id="fastkoko-alert" style="margin-top:var(--s2)"></div>
-  </div>
-
-  <!-- Discord Control Channel panel -->
-  <div style="border-top:var(--b1);background:var(--bg1);flex-shrink:0;padding:var(--s4) var(--s4) var(--s3)">
-    <div style="display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s3)">
-      <span class="panel-title" style="color:var(--amber)">DISCORD CONTROL CHANNEL</span>
-      <span id="ctrl-status-badge" style="font-size:var(--fz-xs);padding:1px 6px;border:1px solid var(--text3);color:var(--text3)">OFFLINE</span>
-      <a href="/trip/commands" target="_blank" class="btn sm" style="text-decoration:none;margin-left:auto" title="Open command reference in new tab">📋 COMMANDS</a>
-      <button class="btn sm ok" onclick="ctrlApplyConfig()">APPLY</button>
-      <button class="btn sm" onclick="ctrlClear()">CLR</button>
-      <button class="btn sm" onclick="loadCtrlStatus()">↺</button>
-    </div>
-    <div id="ctrl-detail" style="font-size:var(--fz-xs);color:var(--text3);margin-bottom:var(--s3)">
-      Configure in <strong style="color:var(--text2)">API INTEGRATIONS → Discord Control Channel</strong> above, then APPLY.
-    </div>
-    <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">RECENT COMMANDS</div>
-    <div id="ctrl-msg-preview" style="font-size:var(--fz-xs);font-family:var(--mono);color:var(--text2);border:var(--b1);padding:var(--s2) var(--s3);max-height:70px;overflow-y:auto;line-height:1.6;background:var(--bg0)">
-      <span style="color:var(--text3)">No commands received yet.</span>
-    </div>
-    <div class="alert-strip" id="ctrl-alert" style="margin-top:var(--s2)"></div>
-  </div>
-
-  <!-- ═══════════════════ SPECIAL OPS ═══════════════════ -->
-  <div style="border-top:2px solid var(--warn);background:var(--bg0);flex-shrink:0;padding:var(--s4)">
-    <div style="display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s3)">
-      <span class="panel-title" style="color:var(--warn)">&#9888; SPECIAL OPS</span>
-      <span style="font-size:9px;color:var(--text3)">automated radio events &mdash; use responsibly</span>
-    </div>
+  <!-- ROW 1: Numbers Station, Solar Weather, Mystery TX, Auto-ID -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--s4);padding:var(--s4);border-bottom:var(--b1)">
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--s4)">
 
       <!-- Numbers Station -->
@@ -3289,10 +3387,10 @@ hr.div  {
         <div class="alert-strip" id="autoid-alert" style="margin-top:var(--s2)"></div>
       </div>
 
-    </div><!-- /special ops grid row 1 -->
+  </div><!-- /row 1 -->
 
-    <!-- Row 2: FULL CHAOS -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s4);margin-top:var(--s4)">
+  <!-- ROW 2: Voice Roulette, Pirate Broadcast, Chaos Button -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s4);padding:var(--s4);border-bottom:var(--b1)">
 
       <!-- Voice Roulette -->
       <div style="border:2px solid #ff00ff;padding:var(--s3);background:var(--bg1)">
@@ -3342,56 +3440,120 @@ hr.div  {
         <div id="chaos-result" style="font-size:9px;color:var(--warn);margin-top:var(--s3);min-height:14px"></div>
       </div>
 
-    </div><!-- /special ops row 2 -->
-  </div><!-- /special ops -->
+  </div><!-- /row 2 -->
 
-  <!-- CONFIG IMPORT / EXPORT footer strip -->
-  <div style="display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s4);border-top:var(--b1);background:var(--bg1);flex-shrink:0">
-    <span style="font-size:var(--fz-xs);color:var(--text3);text-transform:uppercase;letter-spacing:.06em">CONFIG FILE</span>
-    <button class="btn sm ok" onclick="cfgExport(false)" title="Download backup: settings + API key hints (last 4 chars). Keys are masked.">⬇ EXPORT</button>
-    <button class="btn sm" onclick="cfgExport(true)" title="Download full backup including PLAINTEXT API keys. Store securely." style="color:var(--amber);border-color:var(--amber)">⬇ +KEYS</button>
-    <button class="btn sm" onclick="document.getElementById('cfg-import-inp').click()" title="Restore a previously exported config JSON file">⬆ IMPORT</button>
-    <input type="file" id="cfg-import-inp" accept=".json" style="display:none" onchange="cfgImport(this)">
-    <button class="btn sm" onclick="cfgToggleDocs()" id="cfg-docs-btn" title="Show config file format documentation">? DOCS</button>
-    <div class="alert-strip" id="cfg-io-alert" style="margin-left:auto;flex:1;max-width:320px"></div>
-  </div>
+  <!-- ROW 3: GHOST-IN-THE-MACHINE -->
+  <div style="padding:var(--s4);border-bottom:var(--b1)">
+    <div style="display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s3)">
+      <span class="panel-title" style="color:var(--tx)">&#128123; GHOST-IN-THE-MACHINE &mdash; CI-V POSSESSION ENGINE</span>
+      <span style="font-size:9px;color:var(--text3)">directly manipulates radio hardware via CI-V serial commands &mdash; requires connected radio</span>
+      <button class="btn sm warn" onclick="ghostStop()" style="margin-left:auto">&#9632; EXORCISE</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:var(--s3);margin-bottom:var(--s3)">
 
-  <!-- Config docs panel (hidden by default) -->
-  <div id="cfg-docs-panel" style="display:none;border-top:var(--b1);background:var(--bg0);padding:var(--s4);font-size:var(--fz-xs);color:var(--text2);max-height:220px;overflow-y:auto;line-height:1.8;flex-shrink:0">
-    <b style="color:var(--cyan)">CONFIG FILE FORMAT</b> — JSON, format version 2.12.6<br><br>
-    Export saves your settings + API key provider fields (passwords shown masked as ****xxxx).<br>
-    Import restores settings and any <b>unmasked</b> API key values (masked entries are skipped).<br><br>
-    <b style="color:var(--amber)">EXAMPLE:</b>
-    <pre style="font-size:9px;color:var(--text3);background:var(--bg1);padding:var(--s3);margin:var(--s2) 0;overflow-x:auto;border:1px solid var(--border1)">{
-  "__format__": "riggpt-config",
-  "__version__": "2.12.6",
-  "__exported_at__": "2026-03-01T12:00:00Z",
-  "settings": {
-    "ollama_url":    "http://192.168.40.15:11434",
-    "ollama_model":  "qwen3:14b",
-    "ai_persona":    "You are a ham radio operator...",
-    "ai_temp":       "0.8",
-    "ai_max_tokens": "200",
-    "gong_path":     "/opt/taco_bell_gong.wav"
-  },
-  "api_keys": {
-    "elevenlabs": {
-      "api_key": "sk_abc123....",
-      "default_model": "eleven_multilingual_v2"
-    },
-    "openai": {
-      "api_key": "sk-proj-...",
-      "default_model": "tts-1"
-    },
-    "gemini":  { "api_key": "AIza..." },
-    "mistral": { "api_key": "..." },
-    "groq":    { "api_key": "gsk_..." }
-  }
-}</pre>
-    <b style="color:var(--text3)">SECURITY:</b> Keys are stored as plaintext on disk. Protect api_keys.json with chmod 600.<br>
-    Set RIGGPT_KEY_FILE env var to use an alternate (e.g. encrypted volume) path.
-  </div>
-</div>
+      <!-- VFO Poltergeist -->
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#128994; VFO POLTERGEIST</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Randomly drifts the VFO frequency ±50&ndash;5000 Hz every 0.5&ndash;3s. Restores on stop.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
+          <span style="font-size:9px;color:var(--text3)">INTENSITY</span>
+          <input type="range" id="ghost-poltergeist-intensity" min="1" max="5" value="3" style="flex:1">
+          <span id="ghost-poltergeist-intensity-val" style="font-size:9px;color:var(--tx);width:8px">3</span>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
+          <span style="font-size:9px;color:var(--text3)">DURATION</span>
+          <input type="number" id="ghost-poltergeist-dur" value="30" min="5" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
+        </div>
+        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('poltergeist')">POSSESS</button>
+      </div>
+
+      <!-- Passband Possession -->
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#127770; PASSBAND POSSESSION</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Rapidly cycles IF filter 1→2→3→2→1. Audio breathes and pulses through bandwidth changes.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
+          <span style="font-size:9px;color:var(--text3)">DURATION</span>
+          <input type="number" id="ghost-passband-dur" value="30" min="5" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
+        </div>
+        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('passband')">POSSESS</button>
+      </div>
+
+      <!-- RF Power Wobble -->
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#127926; RF POWER WOBBLE</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Sinusoidal TX power modulation via CI-V 0x14/0x0A. Creates AM-like tremolo on the carrier.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
+          <span style="font-size:9px;color:var(--text3)">DURATION</span>
+          <input type="number" id="ghost-wobble-dur" value="30" min="5" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
+        </div>
+        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('power_wobble')">POSSESS</button>
+      </div>
+
+      <!-- AGC Seizure -->
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#9889; AGC SEIZURE</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Rapid AGC cycling FAST→MID→SLOW→OFF. Gain hunting makes audio collapse and surge unpredictably.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
+          <span style="font-size:9px;color:var(--text3)">DURATION</span>
+          <input type="number" id="ghost-agc-dur" value="30" min="5" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
+        </div>
+        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('agc_seizure')">POSSESS</button>
+      </div>
+
+      <!-- Split Personality -->
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#129394; SPLIT PERSONALITY</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Enables SPLIT mode. VFO-B randomly offset ±1&ndash;10 kHz. TX and RX on different frequencies.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
+          <span style="font-size:9px;color:var(--text3)">DURATION</span>
+          <input type="number" id="ghost-split-dur" value="60" min="5" max="600" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
+        </div>
+        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('split_personality')">POSSESS</button>
+      </div>
+
+      <!-- Digital Ghost -->
+      <div style="border:1px solid var(--tx);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.08em;margin-bottom:var(--s2)">&#128315; DIGITAL GHOST</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Keys PTT and transmits random CW fragments. Sounds like a haunted station calling CQ from nowhere.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
+          <span style="font-size:9px;color:var(--text3)">DURATION</span>
+          <input type="number" id="ghost-digital-dur" value="60" min="5" max="600" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
+        </div>
+        <button class="btn sm" style="width:100%;background:#1a0010;border-color:var(--tx);color:var(--tx)" onclick="ghostStart('digital_ghost')">POSSESS</button>
+      </div>
+
+      <!-- THE EXORCIST -->
+      <div style="border:2px solid var(--tx);padding:var(--s3);background:#1a0000;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+        <div style="font-size:9px;font-weight:700;color:var(--tx);letter-spacing:.1em;margin-bottom:var(--s2)">&#128123; THE EXORCIST</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s3)">ALL sub-ghosts simultaneously + screaming AI voice TX. Full radio possession. Duration: 60s min.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s3);align-items:center">
+          <span style="font-size:9px;color:var(--text3)">DURATION</span>
+          <input type="number" id="ghost-exorcist-dur" value="60" min="30" max="300" style="width:44px;font-size:9px"><span style="font-size:9px;color:var(--text3)">s</span>
+        </div>
+        <button onclick="ghostStart('exorcist')" style="
+          width:70px;height:70px;border-radius:50%;
+          background:radial-gradient(circle at 35% 35%,#cc0000,#3a0000);
+          border:2px solid var(--tx);color:#fff;font-size:22px;
+          cursor:pointer;box-shadow:0 0 18px rgba(200,0,0,.6);
+          font-family:var(--font);
+        ">&#128123;</button>
+      </div>
+
+    </div><!-- /ghost cards -->
+
+    <!-- Ghost log -->
+    <div style="background:var(--bg0);border:1px solid var(--border2);padding:var(--s3)">
+      <div style="display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s2)">
+        <span style="font-size:9px;color:var(--tx);font-weight:700;letter-spacing:.08em">POSSESSION LOG</span>
+        <button class="btn sm" onclick="ghostPoll()" style="margin-left:auto">&#8634; REFRESH</button>
+      </div>
+      <div id="ghost-log" style="font-size:9px;font-family:var(--mono);color:var(--text3);max-height:80px;overflow-y:auto;line-height:1.8">
+        <span style="color:var(--text3)">No ghost activity. Radio is... for now... yours.</span>
+      </div>
+    </div>
+  </div><!-- /ghost row -->
+
+</div><!-- /pane-specops -->
 
 <!-- ══════════════════════
      PANE: AI INTEGRATION
@@ -4599,7 +4761,7 @@ hr.div  {
 // ─────────────────────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────
-const TABS = ['dash','tx','beacon','wfall','sstv','sched','hist','cfg','ai','trip','clips'];
+const TABS = ['dash','tx','beacon','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops'];
 
 const CMD_PALETTE = [
   { name:'Connect radio',        key:'C',  action:()=>dashConnect() },
@@ -4653,7 +4815,10 @@ function showTab(name) {
   if (name === 'beacon') loadBeacons();
   if (name === 'sched')  loadSchedule();
   if (name === 'wfall')  loadWaterfallCanned();
-  if (name === 'cfg')    { loadEngineStatus(); loadAudioDevices(); loadHealth(); loadGongPath(); loadLlmProviders(); loadDiscordStatus(); discordStartPolling(); loadCtrlStatus(); ctrlStartPolling(); }
+  if (name === 'cfg')    { loadGongPath(); loadDiscordStatus(); discordStartPolling(); loadCtrlStatus(); ctrlStartPolling(); }
+  if (name === 'system') { loadAudioDevices(); loadHealth(); loadGongPath(); }
+  if (name === 'apicfg') { loadEngineStatus(); loadLlmProviders(); }
+  if (name === 'specops'){ ghostPoll(); }
   if (name === 'sstv')   loadSSTVModes();
   if (name === 'dash')   { loadDashStats(); loadRadioModel(); }
   if (name === 'ai')     loadAiConfig();
@@ -7008,6 +7173,11 @@ async function loadDiscordStatus() {
       detail.style.color = 'var(--text3)';
     }
   }
+  // Populate the live server/channel location row
+  const setSpan = (id, v, fallback='\u2014') => { const el = document.getElementById(id); if (el) el.textContent = v || fallback; };
+  setSpan('discord-monitor-server',  d.guild_name);
+  setSpan('discord-monitor-channel', d.channel_name ? '#' + d.channel_name : null);
+  setSpan('discord-monitor-bot',     d.bot_name);
 
   if (count) {
     count.textContent = d.message_count ? `${d.message_count} msg in buffer` : '';
@@ -7175,11 +7345,16 @@ async function loadCtrlStatus() {
   }
   if (det && s.bot_name) {
     det.innerHTML = `<span style="color:var(--cyan)">${escHtml(s.bot_name)}</span>` +
-      (s.guild_name   ? ` · ${escHtml(s.guild_name)}`   : '') +
-      (s.channel_name ? ` · <strong style="color:var(--green)">${escHtml(s.channel_name)}</strong>` : '') +
-      (s.error        ? ` · <span style="color:var(--red)">${escHtml(s.error)}</span>` : '') +
-      `<span style="color:var(--text3);margin-left:8px">${s.message_count} msg(s) · ${s.pending_count} pending</span>`;
+      (s.guild_name   ? ` &middot; ${escHtml(s.guild_name)}`   : '') +
+      (s.channel_name ? ` &middot; <strong style="color:var(--green)">${escHtml(s.channel_name)}</strong>` : '') +
+      (s.error        ? ` &middot; <span style="color:var(--red)">${escHtml(s.error)}</span>` : '') +
+      `<span style="color:var(--text3);margin-left:8px">${s.message_count} msg(s) &middot; ${s.pending_count} pending</span>`;
   }
+  // Populate the live control server/channel location row
+  const _cs = (id, v, fb='\u2014') => { const el = document.getElementById(id); if (el) el.textContent = v || fb; };
+  _cs('ctrl-server',  s.guild_name);
+  _cs('ctrl-channel', s.channel_name ? '#' + s.channel_name : null);
+  _cs('ctrl-bot',     s.bot_name);
   await _ctrlRefreshMessages();
 }
 
@@ -10968,6 +11143,79 @@ async function chaosButton() {
     if (el) el.textContent = 'Chaos error: '+e.message;
   }
 }
+
+// =============================================================
+// GHOST-IN-THE-MACHINE JS
+// =============================================================
+let _ghostPollTimer = null;
+
+async function ghostStart(name) {
+  const durEl = {
+    poltergeist:    'ghost-poltergeist-dur',
+    passband:       'ghost-passband-dur',
+    power_wobble:   'ghost-wobble-dur',
+    agc_seizure:    'ghost-agc-dur',
+    split_personality: 'ghost-split-dur',
+    digital_ghost:  'ghost-digital-dur',
+    exorcist:       'ghost-exorcist-dur',
+  }[name];
+  const duration  = parseInt(document.getElementById(durEl)?.value) || 30;
+  const intensity = parseInt(document.getElementById('ghost-poltergeist-intensity')?.value) || 3;
+  const r = await api('POST', '/api/ghost/start', { ghost: name, intensity, duration });
+  if (!r.success) {
+    const logEl = document.getElementById('ghost-log');
+    if (logEl) logEl.innerHTML = `<span style="color:var(--tx)">${escHtml(r.message || 'Failed')}</span>`;
+    return;
+  }
+  const badge = document.getElementById('ghost-active-badge');
+  const nameEl = document.getElementById('ghost-active-name');
+  if (badge) badge.style.display = '';
+  if (nameEl) nameEl.textContent = name.toUpperCase().replace(/_/g,' ');
+  _ghostStartPolling();
+  cfgFlushPresets();
+}
+
+async function ghostStop() {
+  await api('POST', '/api/ghost/stop');
+  const badge = document.getElementById('ghost-active-badge');
+  if (badge) badge.style.display = 'none';
+  _ghostStopPolling();
+  await ghostPoll();
+}
+
+async function ghostPoll() {
+  const r = await api('GET', '/api/ghost/status');
+  const logEl  = document.getElementById('ghost-log');
+  const badge  = document.getElementById('ghost-active-badge');
+  const nameEl = document.getElementById('ghost-active-name');
+  if (badge)  badge.style.display  = r.active ? '' : 'none';
+  if (nameEl) nameEl.textContent   = r.active ? (r.name || '').toUpperCase() : '';
+  if (logEl && r.log && r.log.length) {
+    logEl.innerHTML = r.log.slice().reverse().map(e =>
+      `<span style="color:var(--text3)">${e.ts ? e.ts.slice(11,19) : ''}</span> ${escHtml(e.msg)}`
+    ).join('<br>');
+  }
+  return r.active;
+}
+
+function _ghostStartPolling() {
+  if (_ghostPollTimer) return;
+  _ghostPollTimer = setInterval(async () => {
+    const still = await ghostPoll();
+    if (!still) _ghostStopPolling();
+  }, 2000);
+}
+
+function _ghostStopPolling() {
+  if (_ghostPollTimer) { clearInterval(_ghostPollTimer); _ghostPollTimer = null; }
+}
+
+// Wire the intensity slider display
+document.addEventListener('DOMContentLoaded', () => {
+  const slider = document.getElementById('ghost-poltergeist-intensity');
+  const val    = document.getElementById('ghost-poltergeist-intensity-val');
+  if (slider && val) slider.addEventListener('input', () => val.textContent = slider.value);
+});
 
 // =============================================================
 // Save S3 credentials from Config tab

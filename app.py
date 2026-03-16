@@ -7,6 +7,28 @@ Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
           Acid Trip Mode * Alexa Mode * Clips Tab * Community Memory (Qdrant RAG)
           Dub FX (Trenchtown) * Multi-radio profile support * Discord integration
+          Special Ops * Ghost-in-the-Machine (CI-V Possession Engine)
+
+v2.12.38 changes:
+  - FEATURE: Tab restructure -- CONFIG now contains radio connection + Discord only.
+    New SYSTEM tab (audio, diagnostics, health, gong). New API CFG tab (all keys,
+    LLM integrations, engine status). New SPEC OPS tab (all special ops features).
+  - FEATURE: SPEC OPS tab with Ghost-in-the-Machine CI-V Possession Engine:
+    VFO Poltergeist, Passband Possession, RF Power Wobble, AGC Seizure,
+    Split Personality, Digital Ghost, The Exorcist (all ghosts simultaneously).
+    All modes restore radio state on stop. Live possession log.
+  - FEATURE: Discord Monitor and Control Channel panels now show a live
+    server/channel/bot location row that updates on connection status change.
+  - FEATURE: Special Ops config (numbers station, solar, mystery, autoid, pirate,
+    roulette, ghost) all persisted to app_settings.json via cfgFlushPresets.
+  - FIX: Config persist audit -- discord inject target/format, audio device,
+    WF ART settings, SSTV VOX, beacon form defaults, trip gap fields were all
+    missing from cfgFlushPresets. All now saved and restored on page load.
+  - FIX: INSTALL.sh version detection now reads from the running service HTTP API
+    before git pull overwrites app.py, so upgrade output shows correct
+    'installed → incoming' instead of the same version twice.
+  - README.md: Fully updated with tab layout, Ghost-in-the-Machine docs,
+    Special Ops docs, CI-V safety notes, upgrade workflow.
 
 NOTE: Version is defined by the VERSION constant in the Configuration section
 below. When bumping versions, update ALL of the following in the same commit:

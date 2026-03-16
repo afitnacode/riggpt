@@ -2,7 +2,7 @@
 
 AI-driven ham radio transmission platform for the Icom IC-7610 (and other CI-V compatible radios).
 
-RigGPT is a Flask-based web application that turns a ham radio into an AI broadcast station. It generates speech from language models, synthesizes it with a configurable TTS engine, keys PTT via CI-V serial control, and transmits over the air. It supports live Discord community integration, vector memory, automated media playback, and a multi-agent AI debate mode called Acid Trip.
+RigGPT is a Flask-based web application that turns a ham radio into an AI broadcast station. It generates speech from language models, synthesizes it with a configurable TTS engine, keys PTT via CI-V serial control, and transmits over the air. It supports live Discord community integration, vector memory, automated media playback, a multi-agent AI debate mode called Acid Trip, and a Special Operations tab that lets you do deeply inadvisable things to your radio with CI-V commands.
 
 Built by a ham who wanted to do something deeply stupid with a perfectly good radio.
 
@@ -41,17 +41,15 @@ Built by a ham who wanted to do something deeply stupid with a perfectly good ra
 - Monitors the audience channel for a configurable trigger phrase (default: "AI Radio")
 - Fires a single sarcastic, rude, funny AI transmission in response
 - Configurable model, TTS engine, voice, and token budget
-- Live activity log in the AI tab
 
 ### Community Memory (Qdrant RAG)
 - Ingests Discord channel history into a local Qdrant vector database
-- Builds per-user behavioral profiles via LLM (communication style, humor, topics, role)
+- Builds per-user behavioral profiles via LLM
 - Clusters message history into conversation thread summaries
 - Injects relevant community context into agent system prompts at runtime
 - Three injection layers: community DNA, audience profiles, past thread summaries
 - Pre-trip briefing draws on threads, profiles, and running community references
 - Delta ingest via cron: only processes new messages, only rebuilds affected profiles
-- De-anonymized: stores real display names alongside SHA-256 author hash
 
 ### Clips Tab
 - Radio automation media player
@@ -59,19 +57,72 @@ Built by a ham who wanted to do something deeply stupid with a perfectly good ra
 - Click any clip to key PTT and play it over air
 - Amazon S3 bucket as optional second source (requires boto3)
 - Background poller rescans on a configurable interval
-- Cards show format, estimated duration, file size, and source
+- 24-slot cart machine with JINGLES / PROMOS / SPOTS / MISC tiers
+- OS drag-and-drop to assign files to cart slots
 
 ### TTS Engines
 eSpeak · Piper · Edge TTS · Google TTS · OpenAI TTS · ElevenLabs · Speechify · FastKoko (Kokoro)
+
+### Special Operations Tab
+A dedicated tab for automated and experimental radio features. All settings are persisted to config on disk.
+
+**Numbers Station** — Transmits Cold War-style 5-digit groups over air on a configurable schedule. Flat robotic eSpeak voice. Interval: 1–60 minutes. Engine-configurable.
+
+**Solar Weather Monitor** — Polls NOAA SWPC K-index every 10 minutes. Displays live K-index with color coding (quiet/unsettled/moderate/storm/severe/extreme). Optional AUTO-TX mode: when K-index exceeds the configured threshold (default: 5), automatically transmits a geomagnetic storm alert announcement.
+
+**Mystery Transmission** — Schedules a single transmission at a random time within a configurable overnight window (default: 02:00–04:00). Plays a random clip from the Clips library, or if none, transmits one of several pre-written cryptic lines with cave reverb. No log entry. No announcement. It just happens.
+
+**Auto-ID** — Transmits your callsign on a configurable interval. CW (Morse) via the beacon CW engine, or voice via any TTS engine. Supports regulatory ID compliance.
+
+**Voice Roulette** — Takes the current TX box text and transmits it using a completely random combination of TTS engine, FX preset, pitch (±12 semitones), and speed (0.6x–1.8x). The result is shown after transmission. You have no idea what it will sound like.
+
+**Pirate Broadcast** — Transmits absurd fake news headlines on a schedule using random FX presets. Intros include "WE INTERRUPT THIS SILENCE." and "FLASH BULLETIN." Headlines include things like "AREA DOG ELECTED MAYOR. FIRST ACT: ABOLISH MONDAYS."
+
+**Chaos Button** — A big red button that fires a random Special Op. Could be any of the above. Good luck.
+
+### Ghost-in-the-Machine (CI-V Possession Engine)
+Directly manipulates the radio hardware via CI-V serial commands in real time. Seven possession modes, all configurable and stoppable. A live possession log tracks every CI-V action. A blinking "POSSESSED" badge appears in the header while active.
+
+All modes restore radio state on stop (where applicable).
+
+| Mode | What it does |
+|---|---|
+| **VFO POLTERGEIST** | Randomly drifts the VFO frequency ±50–5000 Hz every 0.5–3 seconds. Intensity 1–5. Restores original frequency on exorcism. |
+| **PASSBAND POSSESSION** | Rapidly cycles the IF filter 1→2→3→2→1. Audio breathes and pulses as the bandwidth changes. |
+| **RF POWER WOBBLE** | Sinusoidal TX power modulation via CI-V cmd 0x14/0x0A. Creates an AM-like tremolo on the carrier at a random rate (0.3–2 Hz). |
+| **AGC SEIZURE** | Rapid AGC mode cycling: FAST→MID→SLOW→OFF→repeat. Gain hunting makes the audio unpredictably collapse and surge. |
+| **SPLIT PERSONALITY** | Enables SPLIT mode. VFO-B tuned to a random nearby offset (±1–10 kHz). TX and RX on different frequencies, periodically re-shuffled. |
+| **DIGITAL GHOST** | Keys PTT and transmits random CW Morse fragments drawn from letters, numbers, and Q-codes. Sounds like a haunted station calling CQ. |
+| **THE EXORCIST** | Fires VFO POLTERGEIST + PASSBAND POSSESSION + AGC SEIZURE simultaneously, while transmitting one of nine pre-written screaming lines in horror/alien/demon vocal FX. Continues for the configured duration, transmitting a new line every 15 seconds. |
 
 ### Other
 - SSTV image transmission (pysstv)
 - Waterfall art generator
 - Transmission scheduler and beacon
 - Full transmission log with playback
-- Dub FX tab (Trenchtown) for audio effects on any transmission
-- DOCS button: built-in user manual with troubleshooting and API reference
+- Dub FX panel (audio effects on any transmission)
 - Keyboard-first UI: numbered tabs, Ctrl+K command palette, Ctrl+. emergency PTT off
+- In-app DOCS button with built-in user manual
+- Config export/import (JSON backup with masked or plaintext keys)
+
+---
+
+## Tab Layout
+
+```
+CONSOLE(1) TX(2) BEACON(3) WF ART(4) SSTV(5) SCHEDULE(6) LOG(7)
+CONFIG(8) SYSTEM(9) API CFG(0) AI  ACID TRIP(!)  CLIPS(📼)  SPEC OPS(☠)
+```
+
+| Tab | Contents |
+|---|---|
+| **CONFIG (8)** | Radio connection (freq/mode/connect), Discord Monitor live view, Discord Control Channel live view, FastKoko TTS status, config import/export |
+| **SYSTEM (9)** | Audio device selection/test/calibration, gong settings, diagnostics (probe, PTT test, CI-V scan, debug log), system health |
+| **API CFG (0)** | API keys (ElevenLabs, Speechify, OpenAI, S3), API integrations (Ollama, Gemini, Groq, Mistral, Discord bot, FastKoko), engine status |
+| **AI** | Ollama/LLM config, AI transmit, debug log, persona, Alexa mode |
+| **ACID TRIP (!)** | Two-agent AI debate mode |
+| **CLIPS (📼)** | Radio automation media player, cart machine |
+| **SPEC OPS (☠)** | Numbers Station, Solar Weather, Mystery TX, Auto-ID, Voice Roulette, Pirate Broadcast, Chaos Button, Ghost-in-the-Machine |
 
 ---
 
@@ -93,10 +144,12 @@ Should work with any Icom radio that supports CI-V serial control and USB audio.
 Browser (operator UI)
         ↓
 Flask app (app.py) — radio machine
-        ├── CI-V serial → Icom radio (PTT + frequency control)
+        ├── CI-V serial → Icom radio (PTT + frequency + VFO + AGC + power)
         ├── ALSA aplay → USB audio codec → radio TX audio
         ├── TTS engines (local + cloud)
         ├── Discord poller (community monitoring)
+        ├── Discord control channel (remote commands)
+        ├── Solar weather poller (NOAA SWPC, every 10min)
         ├── Alexa watcher (trigger phrase detection)
         ├── Clips poller (media file scanner)
         └── Memory client (Qdrant RAG)
@@ -112,7 +165,7 @@ Flask app (app.py) — radio machine
 **Radio machine (Debian):**
 - Python 3.11+
 - Flask, requests, pyserial, APScheduler, pysstv, sounddevice
-- eSpeak-ng (for default TTS)
+- eSpeak-ng (for default TTS and Special Ops voice)
 - alsa-utils
 
 **For Community Memory (separate host recommended):**
@@ -139,42 +192,60 @@ The install script creates the `riggpt` service user, installs dependencies, set
 
 After install, open `http://your-radio-machine-ip:5000` in a browser.
 
-Configure your radio connection in the **CONFIG** tab: serial port, CI-V address, baud rate, and audio device.
+Configure your radio connection in the **CONFIG** tab. Audio device, diagnostics, and system health are in the **SYSTEM** tab. API keys and LLM providers are in **API CFG**.
 
----
-
-## Community Memory Setup
-
-See the built-in manual (DOCS button in the app) for full setup instructions including Qdrant deployment, ingestion pipeline, cron configuration, and the Qdrant internals deep-dive.
-
-Quick start:
+**Upgrade workflow:**
 ```bash
-# Deploy Qdrant and Ollama on your GPU host (docker-compose.yml included in memory/)
-# Pull required models
-docker exec ollama ollama pull nomic-embed-text
-docker exec ollama ollama pull qwen3:14b
-
-# Run full Discord history ingest
-export DISCORD_TOKEN="Bot your-token"
-export DISCORD_CHANNEL_ID="your-channel-id"
-python3 memory/riggpt-ingest.py --full
-
-# Enable in RigGPT: Config → Community Memory → ENABLED
+cd /opt/riggpt && git pull && bash INSTALL.sh
 ```
+The installer detects the running version from the live service API before stopping it, so upgrade output correctly shows `v2.12.37 → v2.12.38`.
 
 ---
 
 ## Configuration
 
-All settings are stored in `/home/riggpt/app_settings.json`. API keys (Discord bot token, ElevenLabs, OpenAI, Gemini, S3 credentials) are stored separately in `/home/riggpt/api_keys.json` with field-level encryption.
+All settings persist to disk automatically. Two config files are never touched by the installer:
 
-Never commit either of these files. They are in `.gitignore`.
+- `/home/riggpt/app_settings.json` — all application settings (frequencies, intervals, Special Ops config, Discord inject settings, audio device, WF ART settings, beacon defaults, ghost settings, etc.)
+- `/home/riggpt/api_keys.json` — API credentials (Discord bot token, ElevenLabs, OpenAI, Gemini, S3, etc.)
+
+Use **CONFIG → EXPORT** to download a JSON backup. **+KEYS** exports with plaintext API keys — store securely.
+
+---
+
+## Special Ops — Safety Note
+
+Ghost-in-the-Machine directly issues CI-V serial commands to the radio hardware. All modes restore radio state on stop. However:
+
+- **RF POWER WOBBLE** modulates TX power; only activate while not transmitting or while testing into a dummy load
+- **SPLIT PERSONALITY** enables SPLIT mode; restores on exorcism but verify VFO-A is correct after use
+- **THE EXORCIST** fires multiple simultaneous CI-V threads; give the radio 2–3 seconds to settle after stopping
+
+The EXORCISE button sends a stop signal to all active ghost threads. The possession log shows every CI-V command sent.
+
+---
+
+## Community Memory Setup
+
+See the built-in manual (DOCS button in the app) for full setup instructions.
+
+Quick start:
+```bash
+docker exec ollama ollama pull nomic-embed-text
+docker exec ollama ollama pull qwen3:14b
+
+export DISCORD_TOKEN="Bot your-token"
+export DISCORD_CHANNEL_ID="your-channel-id"
+python3 memory/riggpt-ingest.py --full
+```
+
+Enable in RigGPT: **API CFG → API INTEGRATIONS → Community Memory → ENABLED**
 
 ---
 
 ## Disclaimer
 
-This project transmits audio over licensed amateur radio frequencies. You are responsible for complying with your local amateur radio regulations including station identification requirements. AI-generated content transmitted over the air must comply with Part 97 (or your jurisdiction's equivalent). The author is not responsible for what your radio says.
+This project transmits audio over licensed amateur radio frequencies. You are responsible for complying with your local amateur radio regulations including station identification requirements. AI-generated content transmitted over the air must comply with Part 97 (or your jurisdiction's equivalent). The Ghost-in-the-Machine feature manipulates radio hardware directly; use it responsibly. The author is not responsible for what your radio says or does.
 
 ---
 
