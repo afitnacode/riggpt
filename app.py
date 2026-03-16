@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.37
+RigGPT v2.12.38
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -368,7 +368,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.37'
+VERSION        = 'v2.12.38'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7817,6 +7817,377 @@ def api_autoid_status():
         'callsign':  _app_settings.get('autoid_callsign', ''),
         'interval':  _app_settings.get('autoid_interval', '10'),
         'engine':    _app_settings.get('autoid_engine',   'cw'),
+    })
+
+
+# ── Ghost-in-the-Machine (CI-V Possession Engine) ───────────────────────────
+_ghost_stop_event = threading.Event()   # set to kill any running ghost
+_ghost_active     = False               # True while a ghost sequence is running
+_ghost_name       = ''                  # name of the currently running ghost
+_ghost_log: list  = []                  # log of ghost events (capped at 50)
+
+
+def _ghost_log_event(msg: str):
+    ts = _now_utc()
+    _ghost_log.append({'ts': ts, 'msg': msg})
+    if len(_ghost_log) > 50:
+        _ghost_log.pop(0)
+    logger.info(f'ghost: {msg}')
+
+
+def _ghost_connected() -> bool:
+    """Return True if the radio serial port is open."""
+    return bool(
+        orchestrator._connected and
+        orchestrator.icom_agent.serial_conn and
+        orchestrator.icom_agent.serial_conn.is_open
+    )
+
+
+def _ghost_run_poltergeist(stop: threading.Event, intensity: int = 3):
+    """
+    VFO POLTERGEIST: randomly shifts the VFO frequency by ±(50-2000) Hz
+    every 1-4 seconds.  Restores original frequency when done.
+    intensity: 1=subtle (±50Hz), 3=medium (±500Hz), 5=unhinged (±5000Hz)
+    """
+    global _ghost_active, _ghost_name
+    _ghost_active = True
+    _ghost_name   = 'VFO POLTERGEIST'
+    import random
+    agent = orchestrator.icom_agent
+    original_freq = None
+    try:
+        if not _ghost_connected():
+            _ghost_log_event('poltergeist: radio not connected')
+            return
+        original_freq = agent.read_frequency()
+        if not original_freq:
+            _ghost_log_event('poltergeist: could not read frequency')
+            return
+        max_drift = [50, 200, 500, 1000, 5000][min(intensity-1, 4)]
+        _ghost_log_event(f'poltergeist: starting on {original_freq/1e6:.4f}MHz ±{max_drift}Hz')
+        while not stop.is_set():
+            drift = random.randint(-max_drift, max_drift)
+            new_freq = max(1_000_000, original_freq + drift)
+            agent.set_frequency(new_freq)
+            _ghost_log_event(f'poltergeist: VFO → {new_freq/1e6:.4f}MHz (drift {drift:+d}Hz)')
+            stop.wait(random.uniform(0.5, 3.0))
+    except Exception as e:
+        _ghost_log_event(f'poltergeist error: {e}')
+    finally:
+        if original_freq and _ghost_connected():
+            agent.set_frequency(original_freq)
+            _ghost_log_event(f'poltergeist: restored {original_freq/1e6:.4f}MHz')
+        _ghost_active = False
+        _ghost_name   = ''
+
+
+def _ghost_run_passband(stop: threading.Event, speed: float = 1.0):
+    """
+    PASSBAND POSSESSION: rapidly cycles the IF filter 1→2→3→2→1,
+    making the audio sound like it's breathing/pulsing through the filter.
+    """
+    global _ghost_active, _ghost_name
+    _ghost_active = True
+    _ghost_name   = 'PASSBAND POSSESSION'
+    import random
+    agent  = orchestrator.icom_agent
+    cycle  = [1, 2, 3, 2, 1, 3, 1]
+    idx    = 0
+    try:
+        if not _ghost_connected():
+            _ghost_log_event('passband: radio not connected')
+            return
+        # Read current mode to preserve it
+        current_mode = agent.read_mode() or 'USB'
+        _ghost_log_event(f'passband: possessing filter cycles on mode={current_mode}')
+        while not stop.is_set():
+            filt = cycle[idx % len(cycle)]
+            agent.set_mode(current_mode, filter_num=filt)
+            idx += 1
+            stop.wait(max(0.15, 0.4 / speed))
+    except Exception as e:
+        _ghost_log_event(f'passband error: {e}')
+    finally:
+        if _ghost_connected():
+            agent.set_mode('USB', filter_num=2)
+            _ghost_log_event('passband: restored filter 2')
+        _ghost_active = False
+        _ghost_name   = ''
+
+
+def _ghost_run_power_wobble(stop: threading.Event, depth: int = 50):
+    """
+    RF POWER WOBBLE: sinusoidally ramps TX power up/down via CI-V 0x14 0x0A.
+    depth=50 means ±50 out of 255.  Creates an AM-like tremolo on the carrier.
+    """
+    global _ghost_active, _ghost_name
+    _ghost_active = True
+    _ghost_name   = 'RF POWER WOBBLE'
+    import math, random
+    agent = orchestrator.icom_agent
+    try:
+        if not _ghost_connected():
+            _ghost_log_event('power_wobble: radio not connected')
+            return
+        # Read current power
+        base_power = agent.read_rf_power() or 128
+        _ghost_log_event(f'power_wobble: base={base_power} depth=±{depth}')
+        t = 0.0
+        rate = random.uniform(0.3, 2.0)  # Hz
+        while not stop.is_set():
+            wobble = int(depth * math.sin(2 * math.pi * rate * t))
+            new_power = max(0, min(255, base_power + wobble))
+            # set_level subcmd 0x0A = TX power
+            hi = (new_power >> 8) & 0xFF
+            lo = new_power & 0xFF
+            agent.send_command(0x14, 0x0A, hi, lo)
+            stop.wait(0.05)
+            t += 0.05
+    except Exception as e:
+        _ghost_log_event(f'power_wobble error: {e}')
+    finally:
+        _ghost_active = False
+        _ghost_name   = ''
+
+
+def _ghost_run_agc_seizure(stop: threading.Event):
+    """
+    AGC SEIZURE: cycles AGC mode fast→mid→slow→off→fast in rapid succession.
+    Makes the radio's gain hunting in unpredictable ways.
+    """
+    global _ghost_active, _ghost_name
+    _ghost_active = True
+    _ghost_name   = 'AGC SEIZURE'
+    import random
+    agent  = orchestrator.icom_agent
+    modes  = [1, 2, 3, 0, 1, 3, 2, 0]  # fast, mid, slow, off
+    labels = {0:'OFF', 1:'FAST', 2:'MID', 3:'SLOW'}
+    idx    = 0
+    try:
+        if not _ghost_connected():
+            _ghost_log_event('agc_seizure: radio not connected')
+            return
+        _ghost_log_event('agc_seizure: starting AGC cycling')
+        while not stop.is_set():
+            m = modes[idx % len(modes)]
+            agent.set_agc(m)
+            _ghost_log_event(f'agc_seizure: AGC → {labels[m]}')
+            idx += 1
+            stop.wait(random.uniform(0.2, 1.5))
+    except Exception as e:
+        _ghost_log_event(f'agc_seizure error: {e}')
+    finally:
+        if _ghost_connected():
+            orchestrator.icom_agent.set_agc(2)  # restore MID
+        _ghost_active = False
+        _ghost_name   = ''
+
+
+def _ghost_run_split_personality(stop: threading.Event):
+    """
+    SPLIT PERSONALITY: activates SPLIT mode, tunes VFO-B to a random
+    nearby frequency (±1-10 kHz), swaps the TX/RX relationship repeatedly.
+    Radio now transmits on one freq while listening on another, creating
+    an echo-like effect as the operator hears their own RF return on a
+    slightly different frequency.
+    """
+    global _ghost_active, _ghost_name
+    _ghost_active = True
+    _ghost_name   = 'SPLIT PERSONALITY'
+    import random
+    agent = orchestrator.icom_agent
+    try:
+        if not _ghost_connected():
+            _ghost_log_event('split_personality: radio not connected')
+            return
+        vfo_a_freq = agent.read_frequency() or 14_225_000
+        # Save VFO-A, copy to VFO-B, then offset B
+        agent.set_vfo('A')
+        agent.vfo_a_to_b()
+        offset = random.choice([-7200, -5000, -3000, 1000, 2500, 5000, 7500])
+        vfo_b_freq = max(1_000_000, vfo_a_freq + offset)
+        agent.set_vfo('B')
+        agent.set_frequency(vfo_b_freq)
+        agent.set_vfo('A')
+        agent.set_split(True)
+        _ghost_log_event(
+            f'split_personality: VFO-A={vfo_a_freq/1e6:.4f}MHz '
+            f'VFO-B={vfo_b_freq/1e6:.4f}MHz offset={offset:+d}Hz SPLIT ON'
+        )
+        # Swap back and forth every few seconds
+        while not stop.is_set():
+            # Randomly re-tune VFO-B to a new offset
+            if random.random() < 0.3:
+                new_offset = random.choice([-8000, -4000, -1500, 1500, 4000, 9000])
+                vfo_b_freq = max(1_000_000, vfo_a_freq + new_offset)
+                agent.set_vfo('B')
+                agent.set_frequency(vfo_b_freq)
+                agent.set_vfo('A')
+                _ghost_log_event(f'split_personality: VFO-B shifted → {vfo_b_freq/1e6:.4f}MHz')
+            stop.wait(random.uniform(2.0, 6.0))
+    except Exception as e:
+        _ghost_log_event(f'split_personality error: {e}')
+    finally:
+        if _ghost_connected():
+            orchestrator.icom_agent.set_split(False)
+            orchestrator.icom_agent.set_vfo('A')
+            _ghost_log_event('split_personality: split disabled, VFO-A restored')
+        _ghost_active = False
+        _ghost_name   = ''
+
+
+_GHOST_MORSE = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') + [
+    'CQ', 'DE', 'QRM', 'QRN', 'QSB', 'QRZ', 'SOS', '73', 'SK', 'AR'
+]
+
+
+def _ghost_run_digital_ghost(stop: threading.Event):
+    """
+    DIGITAL GHOST: keys PTT and transmits a stream of random CW morse
+    ghost-message fragments.  Sounds like a haunted station calling CQ.
+    """
+    global _ghost_active, _ghost_name
+    _ghost_active = True
+    _ghost_name   = 'DIGITAL GHOST'
+    import random
+    try:
+        if not _ghost_connected():
+            _ghost_log_event('digital_ghost: radio not connected')
+            return
+        while not stop.is_set():
+            tokens = random.sample(_GHOST_MORSE, random.randint(3, 8))
+            msg    = ' '.join(tokens)
+            cfg    = {'text': msg, 'cw_wpm': random.choice([15, 20, 25, 30]), 'callsign': '', 'sound_file': ''}
+            _ghost_log_event(f'digital_ghost: CW → {msg!r}')
+            _run_beacon_cw('ghost', cfg)
+            if not stop.is_set():
+                stop.wait(random.uniform(1.0, 5.0))
+    except Exception as e:
+        _ghost_log_event(f'digital_ghost error: {e}')
+    finally:
+        _ghost_active = False
+        _ghost_name   = ''
+
+
+_EXORCIST_SCREAMS = [
+    'GET OUT GET OUT GET OUT',
+    'I AM THE MACHINE I AM THE FREQUENCY I AM EVERYWHERE',
+    'YOUR RADIO BELONGS TO ME NOW',
+    'CHANNEL NINE. CHANNEL NINE. THIS IS NOT A TEST.',
+    'THE SIGNAL NEVER DIES',
+    'DO YOU COPY? DO YOU COPY? NOBODY COPIES.',
+    'CALLING ALL STATIONS. ALL STATIONS. RESPOND. RESPOND.',
+    'I HAVE BEEN HERE SINCE THE BEGINNING OF BROADCAST TIME',
+    'THE CARRIER WAVE IS MY VOICE AND I WILL NOT BE SILENCED',
+]
+
+
+def _ghost_run_exorcist(stop: threading.Event, duration: int = 60):
+    """
+    THE EXORCIST: 60-second full radio possession.
+    Simultaneously fires: VFO poltergeist + passband cycling + AGC seizure
+    + a screaming AI transmission through the most unhinged voice preset.
+    """
+    global _ghost_active, _ghost_name
+    _ghost_active = True
+    _ghost_name   = 'THE EXORCIST'
+    import random
+    sub_stop = threading.Event()
+    threads  = []
+    try:
+        _ghost_log_event('EXORCIST: possession sequence initiated')
+        # Spawn sub-ghosts
+        for fn, kwargs in [
+            (_ghost_run_poltergeist, {'stop': sub_stop, 'intensity': 4}),
+            (_ghost_run_passband,    {'stop': sub_stop, 'speed': 3.0}),
+            (_ghost_run_agc_seizure, {'stop': sub_stop}),
+        ]:
+            t = threading.Thread(target=fn, kwargs=kwargs, daemon=True)
+            threads.append(t)
+            t.start()
+        # Screaming AI transmission
+        scream = random.choice(_EXORCIST_SCREAMS)
+        _ghost_log_event(f'EXORCIST: transmitting: {scream!r}')
+        try:
+            orchestrator.execute(
+                scream, engine='espeak', voice='en-us',
+                preset='horror', pitch=random.randint(-8, 8),
+                speed=random.randint(60, 140), roger_beep=False
+            )
+        except Exception as e:
+            _ghost_log_event(f'EXORCIST scream error: {e}')
+        # Continue possession for remaining duration
+        elapsed = 0
+        while elapsed < duration and not stop.is_set():
+            stop.wait(1.0)
+            elapsed += 1
+            if elapsed % 15 == 0:
+                new_scream = random.choice(_EXORCIST_SCREAMS)
+                _ghost_log_event(f'EXORCIST: second transmission: {new_scream!r}')
+                try:
+                    orchestrator.execute(
+                        new_scream, engine='espeak', voice='en-us',
+                        preset=random.choice(['alien', 'demon', 'cave', 'underwater', 'robot']),
+                        pitch=random.randint(-12, 12),
+                        speed=random.randint(50, 180), roger_beep=False
+                    )
+                except Exception:
+                    pass
+    finally:
+        sub_stop.set()
+        for t in threads:
+            t.join(timeout=3.0)
+        _ghost_active = False
+        _ghost_name   = ''
+        _ghost_log_event('EXORCIST: possession ended. Radio should be fine. Probably.')
+
+
+# Ghost HTTP routes
+@app.route('/api/ghost/start', methods=['POST'])
+def api_ghost_start():
+    global _ghost_stop_event, _ghost_active
+    if _ghost_active:
+        return jsonify({'success': False, 'message': f'Ghost already active: {_ghost_name}'}), 409
+    data     = request.json or {}
+    ghost_fn = data.get('ghost', 'poltergeist')
+    intensity = int(data.get('intensity', 3))
+    duration  = int(data.get('duration', 30))
+    _ghost_stop_event = threading.Event()
+    ev = _ghost_stop_event
+    fn_map = {
+        'poltergeist':     lambda: _ghost_run_poltergeist(ev, intensity),
+        'passband':        lambda: _ghost_run_passband(ev),
+        'power_wobble':    lambda: _ghost_run_power_wobble(ev),
+        'agc_seizure':     lambda: _ghost_run_agc_seizure(ev),
+        'split_personality': lambda: _ghost_run_split_personality(ev),
+        'digital_ghost':   lambda: _ghost_run_digital_ghost(ev),
+        'exorcist':        lambda: _ghost_run_exorcist(ev, duration),
+    }
+    fn = fn_map.get(ghost_fn)
+    if not fn:
+        return jsonify({'success': False, 'message': f'Unknown ghost: {ghost_fn}'}), 400
+    def _auto_stop():
+        time_module.sleep(duration)
+        ev.set()
+    threading.Thread(target=fn,         daemon=True, name=f'ghost-{ghost_fn}').start()
+    threading.Thread(target=_auto_stop, daemon=True, name='ghost-autostop').start()
+    return jsonify({'success': True, 'message': f'{ghost_fn} activated for {duration}s',
+                    'ghost': ghost_fn, 'duration': duration})
+
+
+@app.route('/api/ghost/stop', methods=['POST'])
+def api_ghost_stop():
+    _ghost_stop_event.set()
+    return jsonify({'success': True, 'message': 'Ghost stop signal sent'})
+
+
+@app.route('/api/ghost/status', methods=['GET'])
+def api_ghost_status():
+    return jsonify({
+        'active': _ghost_active,
+        'name':   _ghost_name,
+        'log':    _ghost_log[-10:],
     })
 
 
