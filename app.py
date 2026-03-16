@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.52
+RigGPT v2.12.53
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -390,7 +390,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.52'
+VERSION        = 'v2.12.53'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -2041,6 +2041,38 @@ def image_to_sstv(image_path, output_wav, mode='Robot36',
 # -------------------------------------------------------------
 # Workflow Orchestrator
 # -------------------------------------------------------------
+def _clean_tts_text(text: str) -> str:
+    """Clean text for TTS synthesis — remove characters that engines speak literally."""
+    import re as _re
+    # Replace / with a space (prevents TTS saying "slash")
+    text = text.replace('/', ' ')
+    # Replace backslash
+    text = text.replace('\\', ' ')
+    # Replace common markup that TTS engines read aloud
+    text = text.replace('*', '')      # asterisks (markdown bold/italic)
+    text = text.replace('#', '')      # hash marks
+    text = text.replace('_', ' ')     # underscores
+    text = text.replace('~', '')      # tildes (markdown strikethrough)
+    text = text.replace('`', '')      # backticks
+    text = text.replace('|', ' ')     # pipes
+    text = text.replace('{', '')      # braces
+    text = text.replace('}', '')      # braces
+    text = text.replace('[', '')      # brackets
+    text = text.replace(']', '')      # brackets
+    text = text.replace('<', '')      # angle brackets
+    text = text.replace('>', '')      # angle brackets
+    text = text.replace('@', ' at ')  # @ sign
+    text = text.replace('&', ' and ') # ampersand
+    # Remove emoji-like Unicode (U+1F000–U+1FAFF, U+2600–U+27BF)
+    text = _re.sub(r'[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0000FE00-\U0000FE0F]', '', text)
+    # Remove URLs
+    text = _re.sub(r'https?://\S+', '', text)
+    # Collapse multiple spaces/newlines
+    text = _re.sub(r'  +', ' ', text)
+    text = _re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 class WorkflowOrchestrator:
     def __init__(self):
         self.icom_agent     = IcomSerialAgent()
@@ -2069,6 +2101,10 @@ class WorkflowOrchestrator:
                 flanger=0, tremolo=0, overdrive=0, bitcrush=0,
                 roger_beep=True):
         global _poller_paused
+        # Clean text for TTS — remove chars that engines speak literally
+        text = _clean_tts_text(text)
+        if not text.strip():
+            return {'success': False, 'message': 'Empty text after cleaning', 'duration': 0}
         start      = time_module.time()
         audio_file = None   # raw TTS output
         fx_file    = None   # post-effects output (may differ from audio_file)
@@ -3941,6 +3977,7 @@ def api_settings_post():
         'trip_turns', 'trip_delay', 'trip_max_tok', 'trip_temp',
         # Conversational spacing
         'trip_gap_min', 'trip_gap_max', 'trip_hesitate',
+        'trip_wildcard', 'trip_wildcard_n', 'trip_tx',
         'trip_discord_influence', 'trip_discord_lookback', 'trip_discord_lookback_every',
         # Transmit tab defaults
         'tx_engine', 'tx_voice', 'tx_delay', 'tx_repeat',
@@ -4527,42 +4564,49 @@ def _sanitise_trip_reply(text: str) -> str:
     """
     import re as _re
 
-    # Remove lines that look like system-prompt headers or metadata
-    # e.g. "BACKGROUND:", "Topic:", "Opponent:", "CRITICAL OUTPUT RULE:", "[CRITICAL:", "[Background:"
+    # Remove lines that look like system-prompt headers, metadata, or echoed instructions
     BAD_PREFIXES = (
         'BACKGROUND:', 'Topic:', 'Opponent:', 'The debate topic',
         'CRITICAL OUTPUT RULE:', '[CRITICAL', '[Background', '[IMPORTANT',
         'Discord', 'Reply in ', 'Stay in character', 'Deliver your response',
+        'Your audience', 'Your listeners', 'STOP.', 'EVERYTHING STOPS',
+        'We have an instruction', 'The system says', 'The system prompt',
+        'The user gave', 'The user says', 'We have to reply',
+        'I need to respond', 'As per the instructions', 'According to',
+        'Let me respond', 'I should respond', 'My character',
+        'Respond in character', 'React to this', 'Make it the springboard',
+        'Address this directly', 'Let it hijack',
+        'Also we have', 'But earlier', 'There is an interruption',
+        'I\'m supposed to', 'The persona says', 'instruction conflict',
     )
     lines = text.splitlines()
     clean = []
     for line in lines:
         stripped = line.strip()
-        # Drop blank lines only if we have nothing yet (leading whitespace)
         if not stripped:
-            if clean:
-                clean.append('')
+            if clean: clean.append('')
             continue
-        if any(stripped.startswith(p) for p in BAD_PREFIXES):
+        if any(stripped.startswith(p) or stripped.lower().startswith(p.lower()) for p in BAD_PREFIXES):
             continue
         clean.append(line)
 
     text = '\n'.join(clean).strip()
 
-    # Remove any remaining bracketed metadata blocks: [CRITICAL: ...] [Background: ...]
-    text = _re.sub(r'\[(?:CRITICAL|IMPORTANT|Background|Discord)[^\]]{0,400}\]', '', text, flags=_re.DOTALL)
+    # Remove any remaining bracketed metadata blocks: [CRITICAL: ...] [Background: ...] etc.
+    text = _re.sub(r'\[(?:CRITICAL|IMPORTANT|Background|Discord|System|Note|Instructions?)[^\]]{0,400}\]', '', text, flags=_re.DOTALL)
 
-    # Remove leading labels like "Agent A:" or "Alex:" that aren't part of speech
-    # Only strip if it's at the very start and followed by a space
+    # Remove parenthetical meta-commentary: (as Art, I should...) (responding to Discord...)
+    text = _re.sub(r'\((?:as |responding to|per |according to|the system|instruction|note:)[^)]{0,200}\)', '', text, flags=_re.IGNORECASE)
+
+    # Remove leading labels like "Agent A:" or "Alex:" or "Art:" that aren't part of speech
     text = _re.sub(r'^[A-Z][A-Za-z\s]{0,20}:\s*', '', text)
 
-    # Strip Discord markup tokens that may have leaked into model output
-    # <#channel_id>  <@user_id>  <@&role_id>  <:emoji_name:id>  <a:emoji_name:id>
+    # Strip Discord markup tokens
     text = _re.sub(r'<[#@][^>]{1,40}>', '', text)
     text = _re.sub(r'<a?:[A-Za-z0-9_]{1,32}:\d+>', '', text)
-    text = _re.sub(r'  +', ' ', text)  # collapse double spaces left by removed tokens
 
-    # Collapse multiple blank lines to one
+    # Collapse whitespace
+    text = _re.sub(r'  +', ' ', text)
     text = _re.sub(r'\n{3,}', '\n\n', text)
 
     return text.strip()

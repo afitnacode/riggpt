@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.52</span>
+    <span class="sb-label">v2.12.53</span>
   </div>
 </div>
 
@@ -9173,6 +9173,9 @@ async function cfgFlushPresets() {
     trip_gap_min:  get('trip-gap-min'),
     trip_gap_max:  get('trip-gap-max'),
     trip_hesitate: checked('trip-hesitate') ? 'true' : 'false',
+    trip_wildcard: checked('trip-wildcard') ? 'true' : 'false',
+    trip_wildcard_n: get('trip-wildcard-n'),
+    trip_tx:       checked('trip-tx') ? 'true' : 'false',
     // Discord monitor
     discord_inject_target: get('discord-inject-target'),
     discord_inject_format: get('discord-inject-format'),
@@ -9655,7 +9658,18 @@ function _tripRestoreAgentSettings() {
   // Spacing controls
   setIfSaved('trip_gap_min',   'trip-gap-min');
   setIfSaved('trip_gap_max',   'trip-gap-max');
-  setIfSaved('trip_hesitate',  'trip-hesitate');
+  // Checkboxes need .checked not .value
+  const chkIfSaved = (key, elId) => {
+    const v = s[key];
+    if (v !== undefined) {
+      const el = document.getElementById(elId);
+      if (el) el.checked = (v === 'true' || v === true);
+    }
+  };
+  chkIfSaved('trip_hesitate',  'trip-hesitate');
+  chkIfSaved('trip_wildcard',  'trip-wildcard');
+  setIfSaved('trip_wildcard_n','trip-wildcard-n');
+  chkIfSaved('trip_tx',        'trip-tx');
   const _infEl = document.getElementById('trip-discord-influence');
   if (_infEl) tripDiscordInfluenceUpdate(_infEl.value);
 }
@@ -9670,7 +9684,7 @@ function _tripAttachAgentWatchers() {
   for (const f of _TRIP_SESSION_FIELDS) {
     fieldIds.push(`trip-${f}`);
   }
-  fieldIds.push('trip-gap-min','trip-gap-max','trip-hesitate');
+  fieldIds.push('trip-gap-min','trip-gap-max','trip-hesitate','trip-wildcard','trip-wildcard-n','trip-tx');
 
   const save = () => {
     if (_tripAgentSaveTimer) clearTimeout(_tripAgentSaveTimer);
@@ -9795,12 +9809,8 @@ async function tripStart(previewOnly = false) {
       : '';
     const discordInfluence = _tripDiscordInfluencePrompt();
     // Output guardrail appended last — overrides everything above
-    const guardrail = '\n\nCRITICAL OUTPUT RULE: Reply ONLY with your character\'s spoken words. '
-      + 'Never repeat instructions, labels, usernames, brackets, or metadata. '
-      + 'Never write BACKGROUND, Topic, Opponent, Discord, or any structural text. '
-      + 'Do not address the other speaker by name. '
-      + 'Output is spoken aloud — write only what the character says, nothing else.';
-    return `${bg}${persona}\nThe debate topic is: ${topicStr}.${oracle} Reply in 1-3 sentences. Stay in character.${discordInfluence}${guardrail}`;
+    const guardrail = '\n\nOUTPUT: Only your spoken words. No labels, no instructions, no metadata, no names. This is spoken aloud on radio.';
+    return `${bg}${persona}\nDebate topic: ${topicStr}.${oracle} Reply in 1-3 sentences. Stay in character.${discordInfluence}${guardrail}`;
   };
   const aCtx = _buildCtx(aPersona, aCanon, topic);
   const bCtx = _buildCtx(bPersona, bCanon, topic);
@@ -9904,20 +9914,17 @@ async function tripStart(previewOnly = false) {
       const recent = discordMsgs.slice(-discordLookbackN);
       const discordBlock = recent.map(m => m.content.trim()).join(' / ');
 
-      // Craft the prompt based on influence level
+      // Craft the prompt — phrased as natural speech, not instructions
+      // (instructional phrasing gets echoed by weak models)
       let lookbackPrompt;
       if (discordInfluenceV <= 5) {
-        lookbackPrompt = `Your listeners have been talking: ${discordBlock}. `
-          + `Respond in character — let what they said color what you say next.`;
+        lookbackPrompt = `Someone in the crowd says: ${discordBlock}`;
       } else if (discordInfluenceV <= 7) {
-        lookbackPrompt = `Your audience just said: ${discordBlock}. `
-          + `React to this directly. Make it the springboard for what you say next.`;
+        lookbackPrompt = `The crowd is shouting at you: ${discordBlock}`;
       } else if (discordInfluenceV <= 9) {
-        lookbackPrompt = `STOP. Your audience is talking and you cannot ignore it: ${discordBlock}. `
-          + `Address this directly in what you say. Let it hijack the conversation if it must.`;
+        lookbackPrompt = `${discordBlock}`;
       } else {
-        lookbackPrompt = `EVERYTHING STOPS. Your audience has spoken: ${discordBlock}. `
-          + `This is now the entire conversation. Respond to your audience directly. Forget the debate.`;
+        lookbackPrompt = `${discordBlock}`;
       }
 
       // Replace the final user message with the Discord-driven prompt
