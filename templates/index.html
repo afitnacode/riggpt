@@ -1883,26 +1883,6 @@ hr.div  {
           </div>
         </div>
 
-        <!-- AGC -->
-        <div style="border-top:var(--b1);padding-top:var(--s2);margin-bottom:var(--s2)">
-          <div style="font-size:9px;color:var(--text3);letter-spacing:.08em;margin-bottom:var(--s2)">AGC</div>
-          <div style="display:flex;gap:2px">
-            <button class="btn sm" id="agc-1" onclick="civAgc(1)" style="flex:1;font-size:8px">FAST</button>
-            <button class="btn sm" id="agc-2" onclick="civAgc(2)" style="flex:1;font-size:8px">MID</button>
-            <button class="btn sm" id="agc-3" onclick="civAgc(3)" style="flex:1;font-size:8px">SLOW</button>
-            <button class="btn sm" id="agc-0" onclick="civAgc(0)" style="flex:1;font-size:8px">OFF</button>
-          </div>
-        </div>
-
-        <!-- NR / NB / Split -->
-        <div style="border-top:var(--b1);padding-top:var(--s2)">
-          <div style="font-size:9px;color:var(--text3);letter-spacing:.08em;margin-bottom:var(--s2)">DSP / SPLIT</div>
-          <div style="display:flex;gap:var(--s2)">
-            <button class="btn sm" id="civ-nr-btn" onclick="civToggle('nr','civ-nr-btn')" style="flex:1">NR</button>
-            <button class="btn sm" id="civ-nb-btn" onclick="civToggle('nb','civ-nb-btn')" style="flex:1">NB</button>
-            <button class="btn sm" id="civ-split-btn" onclick="civToggle('split','civ-split-btn')" style="flex:1">SPLIT</button>
-          </div>
-        </div>
       </div>
 
       <!-- Col C: Actions / alert / probe -->
@@ -1928,7 +1908,14 @@ hr.div  {
       <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
         <div class="panel-header">
           <span class="panel-title">📡 TRANSMIT</span>
-          <label class="toggle-row" style="font-size:var(--fz-xs);gap:4px;margin-left:auto;cursor:pointer" title="Live Chat: Enter key transmits immediately">
+          <!-- Mini TX stats -->
+          <div style="display:flex;gap:var(--s4);margin-left:auto;align-items:center">
+            <span style="font-size:9px;color:var(--text3)">TX: <span id="d-total" style="color:var(--text2)">0</span></span>
+            <span style="font-size:9px;color:var(--green)">✓<span id="d-ok">0</span></span>
+            <span style="font-size:9px;color:var(--red)">✗<span id="d-fail">0</span></span>
+            <span style="font-size:9px;color:var(--cyan)" id="d-airtime">0s</span>
+          </div>
+          <label class="toggle-row" style="font-size:var(--fz-xs);gap:4px;margin-left:var(--s4);cursor:pointer" title="Live Chat: Enter key transmits immediately">
             <input type="checkbox" id="tx-livechat" onchange="txLiveChatToggle()"> LIVE CHAT
           </label>
           <span id="tx-charcount" style="font-size:var(--fz-xs);color:var(--text3);margin-left:var(--s4)">0 ch</span>
