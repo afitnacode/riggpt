@@ -3965,11 +3965,13 @@ def api_settings_post():
         'bcn_interval', 'bcn_repeat', 'bcn_engine',
         # Special Ops
         'numbers_station_interval', 'numbers_station_engine',
-        'solar_autotx_enabled', 'solar_kindex_threshold',
-        'mystery_window_start', 'mystery_window_end',
+        'solar_autotx_enabled', 'solar_kindex_threshold', 'solar_engine',
+        'mystery_window_start', 'mystery_window_end', 'mystery_engine',
         'autoid_callsign', 'autoid_interval', 'autoid_engine',
         # Pirate Broadcast
         'pirate_interval', 'pirate_engine',
+        # IRC mode
+        'irc_mode',
     }
     updated = {}
     for k, v in patch.items():
@@ -7667,8 +7669,9 @@ def _solar_poll_and_announce():
         f'THIS IS AN AUTOMATED ALERT.'
     )
     _solar_cache['last_announced'] = _now_utc()
+    engine = _app_settings.get('solar_engine', 'espeak')
     try:
-        orchestrator.execute(msg, engine='espeak', voice='en-us', preset='normal', roger_beep=False)
+        orchestrator.execute(msg, engine=engine, voice=None, preset='normal', roger_beep=False)
         logger.info(f'solar: K={k} alert transmitted (condition={cond})')
     except Exception as e:
         logger.error(f'solar: TX error: {e}')
@@ -7723,9 +7726,10 @@ def _run_mystery_tx():
         threading.Thread(target=_clips_play, args=(clip,), daemon=True, name='mystery-tx').start()
     else:
         msg = random.choice(_MYSTERY_LINES)
+        engine = _app_settings.get('mystery_engine', 'espeak')
         logger.info(f'mystery: transmitting line: {msg!r}')
         try:
-            orchestrator.execute(msg, engine='espeak', voice='en-us', preset='cave', roger_beep=False)
+            orchestrator.execute(msg, engine=engine, voice=None, preset='cave', roger_beep=False)
         except Exception as e:
             logger.error(f'mystery TX error: {e}')
 

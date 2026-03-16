@@ -1379,7 +1379,7 @@ kbd {
 }
 #pane-dash.active {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 220px 1fr;
   grid-template-rows: 1fr;
   gap: 0;
   height: 100%;
@@ -1469,7 +1469,7 @@ kbd {
    RESPONSIVE (1080p fallback)
 ═══════════════════════════════════════════════════════════ */
 @media (max-width: 1200px) {
-  #pane-dash { grid-template-columns: 240px 1fr; }
+  #pane-dash { grid-template-columns: 220px 1fr; }
   .dash-left  { }
   .freq-display { font-size: 24px; }
 }
@@ -1884,13 +1884,13 @@ hr.div  {
         <span style="font-size:9px;color:var(--cyan)" id="d-airtime">0s</span>
       </div>
       <label class="toggle-row" style="font-size:var(--fz-xs);gap:4px;margin-left:var(--s4);cursor:pointer">
-        <input type="checkbox" id="tx-livechat" onchange="txLiveChatToggle()"> LIVE CHAT
+        <input type="checkbox" id="tx-livechat" onchange="txLiveChatToggle()"> IRC MODE
       </label>
       <span id="tx-charcount" style="font-size:var(--fz-xs);color:var(--text3);margin-left:var(--s4)">0 ch</span>
     </div>
 
     <div id="tx-livechat-banner" style="display:none;background:var(--red);color:#fff;font-size:9px;font-weight:700;letter-spacing:.1em;text-align:center;padding:2px 0;flex-shrink:0">
-      ● LIVE CHAT — ENTER KEY TRANSMITS
+      ● IRC MODE — ENTER KEY TRANSMITS
     </div>
 
     <!-- Content grid: left (message+fx) / right (TTS engine) -->
@@ -2803,8 +2803,14 @@ hr.div  {
           <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
           <select id="ns-engine" style="flex:1;font-size:9px">
             <option value="espeak">eSpeak</option>
+            <option value="piper">Piper</option>
             <option value="edge">Edge TTS</option>
-            <option value="gtts">gTTS</option>
+            <option value="gtts">Google TTS</option>
+            <option value="pyttsx3">System TTS</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="speechify">Speechify</option>
+            <option value="openai">OpenAI TTS</option>
+            <option value="fastkoko">FastKoko</option>
           </select>
         </div>
         <div style="display:flex;gap:var(--s2)">
@@ -2817,13 +2823,26 @@ hr.div  {
       <!-- Solar Weather -->
       <div style="border:1px solid var(--border2);padding:var(--s3);background:var(--bg1)">
         <div style="font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.1em;margin-bottom:var(--s2)">&#9728; SOLAR WEATHER</div>
-        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">NOAA K-index alert via eSpeak when storm detected.</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">NOAA K-index alert when storm detected.</div>
         <div style="display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2)">
           <span style="font-size:9px;color:var(--text3)">K &ge;</span>
           <input type="number" id="solar-threshold" value="5" min="1" max="9" style="width:36px;font-size:9px">
           <label style="font-size:9px;display:flex;align-items:center;gap:3px;margin-left:auto">
             <input type="checkbox" id="solar-autotx"> AUTO-TX
           </label>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <select id="solar-engine" style="flex:1;font-size:9px">
+            <option value="espeak">eSpeak</option>
+            <option value="piper">Piper</option>
+            <option value="edge">Edge TTS</option>
+            <option value="gtts">Google TTS</option>
+            <option value="pyttsx3">System TTS</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="speechify">Speechify</option>
+            <option value="openai">OpenAI TTS</option>
+            <option value="fastkoko">FastKoko</option>
+          </select>
         </div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">K-index: <span id="solar-kval" style="color:var(--cyan)">—</span></div>
         <div style="display:flex;gap:var(--s2)">
@@ -2844,6 +2863,19 @@ hr.div  {
           <span style="font-size:9px;color:var(--text3)">&#8594;</span>
           <input type="number" id="mystery-end" value="4" min="0" max="23" style="width:36px;font-size:9px" title="End hour (0-23)">
           <span style="font-size:9px;color:var(--text3)">hr</span>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <select id="mystery-engine" style="flex:1;font-size:9px">
+            <option value="espeak">eSpeak</option>
+            <option value="piper">Piper</option>
+            <option value="edge">Edge TTS</option>
+            <option value="gtts">Google TTS</option>
+            <option value="pyttsx3">System TTS</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="speechify">Speechify</option>
+            <option value="openai">OpenAI TTS</option>
+            <option value="fastkoko">FastKoko</option>
+          </select>
         </div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Next: <span id="mystery-next" style="color:var(--cyan)">—</span></div>
         <div style="display:flex;gap:var(--s2)">
@@ -2867,7 +2899,14 @@ hr.div  {
           <select id="autoid-engine" style="flex:1;font-size:9px">
             <option value="cw">CW (Morse)</option>
             <option value="espeak">eSpeak</option>
+            <option value="piper">Piper</option>
             <option value="edge">Edge TTS</option>
+            <option value="gtts">Google TTS</option>
+            <option value="pyttsx3">System TTS</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="speechify">Speechify</option>
+            <option value="openai">OpenAI TTS</option>
+            <option value="fastkoko">FastKoko</option>
           </select>
         </div>
         <div style="display:flex;gap:var(--s2)">
@@ -2899,9 +2938,15 @@ hr.div  {
           <input type="number" id="pirate-interval" value="15" min="1" max="120" style="width:44px;font-size:9px" title="Minutes between bulletins">
           <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
           <select id="pirate-engine" style="flex:1;font-size:9px">
-            <option value="espeak">eSpeak (chaos mode)</option>
-            <option value="gtts">Google TTS</option>
+            <option value="espeak">eSpeak</option>
+            <option value="piper">Piper</option>
             <option value="edge">Edge TTS</option>
+            <option value="gtts">Google TTS</option>
+            <option value="pyttsx3">System TTS</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="speechify">Speechify</option>
+            <option value="openai">OpenAI TTS</option>
+            <option value="fastkoko">FastKoko</option>
           </select>
         </div>
         <div style="display:flex;gap:var(--s2)">
@@ -7814,7 +7859,7 @@ function txLiveChatToggle() {
   if (banner) banner.style.display = on ? '' : 'none';
   if (textarea) {
     if (on) {
-      textarea.placeholder = 'Type and press Enter to transmit immediately…';
+      textarea.placeholder = 'IRC mode — type and press Enter to transmit…';
       textarea.rows = 3;
     } else {
       textarea.placeholder = 'Enter text to transmit over the air...';
@@ -7822,6 +7867,8 @@ function txLiveChatToggle() {
     }
     textarea.focus();
   }
+  // Persist IRC mode setting
+  api('POST', '/api/settings', { irc_mode: on ? 'true' : 'false' });
 }
 
 function txHandleKey(event) {
@@ -9033,8 +9080,10 @@ async function cfgFlushPresets() {
     numbers_station_engine:   get('ns-engine'),
     solar_kindex_threshold:   get('solar-threshold'),
     solar_autotx_enabled:     checked('solar-autotx') ? 'true' : 'false',
+    solar_engine:             get('solar-engine'),
     mystery_window_start:     get('mystery-start'),
     mystery_window_end:       get('mystery-end'),
+    mystery_engine:           get('mystery-engine'),
     autoid_callsign:          get('autoid-callsign'),
     autoid_interval:          get('autoid-interval'),
     autoid_engine:            get('autoid-engine'),
@@ -10591,8 +10640,10 @@ function _restoreAllSettings(s) {
   set('ns-engine',        s.numbers_station_engine);
   set('solar-threshold',  s.solar_kindex_threshold);
   chk('solar-autotx',     s.solar_autotx_enabled);
+  set('solar-engine',     s.solar_engine);
   set('mystery-start',    s.mystery_window_start);
   set('mystery-end',      s.mystery_window_end);
+  set('mystery-engine',   s.mystery_engine);
   set('autoid-callsign',  s.autoid_callsign);
   set('autoid-interval',  s.autoid_interval);
   set('autoid-engine',    s.autoid_engine);
@@ -10609,6 +10660,9 @@ function _restoreAllSettings(s) {
   set('ai-tx-engine', s.ai_tx_engine);
   set('ai-tx-voice',  s.ai_tx_voice);
   chk('ai-auto-tx',   s.ai_auto_tx);
+  // IRC mode
+  chk('tx-livechat',   s.irc_mode);
+  if (s.irc_mode === 'true') txLiveChatToggle();
 }
 
 // =============================================================
@@ -10688,7 +10742,8 @@ async function solarCheck() {
 async function solarSave() {
   const threshold = document.getElementById('solar-threshold')?.value || '5';
   const autotx    = document.getElementById('solar-autotx')?.checked ? 'true' : 'false';
-  const r = await api('POST', '/api/settings', { solar_kindex_threshold: threshold, solar_autotx_enabled: autotx });
+  const engine    = document.getElementById('solar-engine')?.value || 'espeak';
+  const r = await api('POST', '/api/settings', { solar_kindex_threshold: threshold, solar_autotx_enabled: autotx, solar_engine: engine });
   showAlert('solar-alert', r.success ? 'Saved' : 'Failed', r.success ? 'ok' : 'err');
 }
 async function solarAnnounce() {
@@ -10701,6 +10756,9 @@ async function solarAnnounce() {
 async function mysterySchedule() {
   const ws = parseInt(document.getElementById('mystery-start')?.value) || 2;
   const we = parseInt(document.getElementById('mystery-end')?.value)   || 4;
+  const engine = document.getElementById('mystery-engine')?.value || 'espeak';
+  // Save engine to settings so backend runner reads it
+  await api('POST', '/api/settings', { mystery_engine: engine });
   const r  = await api('POST', '/api/mystery/schedule', { window_start_hour: ws, window_end_hour: we });
   showAlert('mystery-alert', r.message || (r.success ? 'Scheduled' : 'Failed'), r.success ? 'ok' : 'err');
   if (r.success && r.scheduled_for) {
