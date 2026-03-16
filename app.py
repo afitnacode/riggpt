@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.47
+RigGPT v2.12.48
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -390,7 +390,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.47'
+VERSION        = 'v2.12.48'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7899,6 +7899,80 @@ def _ghost_connected() -> bool:
     )
 
 
+# ── Ghost audio fragments — eerie phrases transmitted between CI-V chaos ──
+_GHOST_AUDIO = {
+    'poltergeist': [
+        'Can you hear me.',
+        'Wrong frequency.',
+        'I was here before you.',
+        'The dial is moving.',
+        'You are not alone.',
+        'This is not your radio.',
+    ],
+    'passband': [
+        'Seven. Three. Nine. One.',
+        'Deep.',
+        'The filter cannot stop me.',
+        'Breathing.',
+        'Below the noise floor.',
+    ],
+    'power_wobble': [
+        'Latitude. Three seven. Longitude. Negative one two two.',
+        'Zero three fifteen zulu.',
+        'Power level fluctuating.',
+        'Carrier unstable.',
+    ],
+    'agc_seizure': [
+        'FAST.',
+        'SLOW.',
+        'GAIN.',
+        'Hunting.',
+        'Signal. Lost. Found. Lost.',
+        'The AGC cannot save you.',
+    ],
+    'digital_ghost': [
+        'CQ CQ CQ.',
+        'Nothing heard.',
+        'Ghost station.',
+        'QRZ. QRZ. No one answers.',
+    ],
+    'split_personality': [
+        'I am on both frequencies.',
+        'Who is transmitting.',
+        'This is not me. This is the other one.',
+        'Split.',
+    ],
+}
+
+_GHOST_PRESETS = {
+    'poltergeist':       ['cave', 'horror', 'underwater'],
+    'passband':          ['underwater', 'alien', 'psychedelic'],
+    'power_wobble':      ['robot', 'telephone', 'broadcast'],
+    'agc_seizure':       ['alien', 'demon', 'cave'],
+    'digital_ghost':     ['horror', 'cave', 'robot'],
+    'split_personality': ['psychedelic', 'alien', 'underwater'],
+}
+
+
+def _ghost_whisper(ghost_name: str, stop: threading.Event):
+    """Transmit a short eerie audio fragment. Blocks until TTS finishes (keys PTT)."""
+    import random
+    if stop.is_set():
+        return
+    phrases = _GHOST_AUDIO.get(ghost_name, _GHOST_AUDIO['poltergeist'])
+    presets = _GHOST_PRESETS.get(ghost_name, ['cave'])
+    text    = random.choice(phrases)
+    preset  = random.choice(presets)
+    pitch   = random.randint(-8, 8)
+    speed   = random.randint(60, 160)
+    _ghost_log_event(f'{ghost_name}: TX "{text}" [{preset} p={pitch} s={speed}]')
+    try:
+        orchestrator.execute(text, engine='espeak', voice=None,
+                             preset=preset, pitch=pitch, speed=speed, roger_beep=False)
+    except Exception as e:
+        _ghost_log_event(f'{ghost_name}: whisper error: {e}')
+
+
 def _ghost_run_poltergeist(stop: threading.Event, intensity: int = 3):
     """
     VFO POLTERGEIST: randomly shifts the VFO frequency by ±(50-2000) Hz
@@ -7921,11 +7995,15 @@ def _ghost_run_poltergeist(stop: threading.Event, intensity: int = 3):
             return
         max_drift = [50, 200, 500, 1000, 5000][min(intensity-1, 4)]
         _ghost_log_event(f'poltergeist: starting on {original_freq/1e6:.4f}MHz ±{max_drift}Hz')
+        _loop_n = 0
         while not stop.is_set():
             drift = random.randint(-max_drift, max_drift)
             new_freq = max(1_000_000, original_freq + drift)
             agent.set_frequency(new_freq)
             _ghost_log_event(f'poltergeist: VFO → {new_freq/1e6:.4f}MHz (drift {drift:+d}Hz)')
+            _loop_n += 1
+            if _loop_n % 4 == 0:
+                _ghost_whisper('poltergeist', stop)
             stop.wait(random.uniform(0.5, 3.0))
     except Exception as e:
         _ghost_log_event(f'poltergeist error: {e}')
@@ -7960,6 +8038,8 @@ def _ghost_run_passband(stop: threading.Event, speed: float = 1.0):
             filt = cycle[idx % len(cycle)]
             agent.set_mode(current_mode, filter_num=filt)
             idx += 1
+            if idx % 12 == 0:
+                _ghost_whisper('passband', stop)
             stop.wait(max(0.15, 0.4 / speed))
     except Exception as e:
         _ghost_log_event(f'passband error: {e}')
@@ -7990,6 +8070,7 @@ def _ghost_run_power_wobble(stop: threading.Event, depth: int = 50):
         _ghost_log_event(f'power_wobble: base={base_power} depth=±{depth}')
         t = 0.0
         rate = random.uniform(0.3, 2.0)  # Hz
+        _loop_n = 0
         while not stop.is_set():
             wobble = int(depth * math.sin(2 * math.pi * rate * t))
             new_power = max(0, min(255, base_power + wobble))
@@ -7997,6 +8078,9 @@ def _ghost_run_power_wobble(stop: threading.Event, depth: int = 50):
             hi = (new_power >> 8) & 0xFF
             lo = new_power & 0xFF
             agent.send_command(0x14, 0x0A, hi, lo)
+            _loop_n += 1
+            if _loop_n % 100 == 0:
+                _ghost_whisper('power_wobble', stop)
             stop.wait(0.05)
             t += 0.05
     except Exception as e:
@@ -8029,6 +8113,8 @@ def _ghost_run_agc_seizure(stop: threading.Event):
             agent.set_agc(m)
             _ghost_log_event(f'agc_seizure: AGC → {labels[m]}')
             idx += 1
+            if idx % 5 == 0:
+                _ghost_whisper('agc_seizure', stop)
             stop.wait(random.uniform(0.2, 1.5))
     except Exception as e:
         _ghost_log_event(f'agc_seizure error: {e}')
@@ -8071,7 +8157,9 @@ def _ghost_run_split_personality(stop: threading.Event):
             f'VFO-B={vfo_b_freq/1e6:.4f}MHz offset={offset:+d}Hz SPLIT ON'
         )
         # Swap back and forth every few seconds
+        _loop_n = 0
         while not stop.is_set():
+            _loop_n += 1
             # Randomly re-tune VFO-B to a new offset
             if random.random() < 0.3:
                 new_offset = random.choice([-8000, -4000, -1500, 1500, 4000, 9000])
@@ -8080,6 +8168,8 @@ def _ghost_run_split_personality(stop: threading.Event):
                 agent.set_frequency(vfo_b_freq)
                 agent.set_vfo('A')
                 _ghost_log_event(f'split_personality: VFO-B shifted → {vfo_b_freq/1e6:.4f}MHz')
+            if _loop_n % 2 == 0:
+                _ghost_whisper('split_personality', stop)
             stop.wait(random.uniform(2.0, 6.0))
     except Exception as e:
         _ghost_log_event(f'split_personality error: {e}')
@@ -8110,12 +8200,18 @@ def _ghost_run_digital_ghost(stop: threading.Event):
         if not _ghost_connected():
             _ghost_log_event('digital_ghost: radio not connected')
             return
+        _loop_n = 0
         while not stop.is_set():
-            tokens = random.sample(_GHOST_MORSE, random.randint(3, 8))
-            msg    = ' '.join(tokens)
-            cfg    = {'text': msg, 'cw_wpm': random.choice([15, 20, 25, 30]), 'callsign': '', 'sound_file': ''}
-            _ghost_log_event(f'digital_ghost: CW → {msg!r}')
-            _run_beacon_cw('ghost', cfg)
+            _loop_n += 1
+            if _loop_n % 3 == 0:
+                # Every 3rd cycle: whispered voice fragment instead of CW
+                _ghost_whisper('digital_ghost', stop)
+            else:
+                tokens = random.sample(_GHOST_MORSE, random.randint(3, 8))
+                msg    = ' '.join(tokens)
+                cfg    = {'text': msg, 'cw_wpm': random.choice([15, 20, 25, 30]), 'callsign': '', 'sound_file': ''}
+                _ghost_log_event(f'digital_ghost: CW → {msg!r}')
+                _run_beacon_cw('ghost', cfg)
             if not stop.is_set():
                 stop.wait(random.uniform(1.0, 5.0))
     except Exception as e:

@@ -11,6 +11,12 @@ _NOISY_PATHS = frozenset([
     '/api/discord/status',
     '/api/ctrl/status',
     '/api/log/stats',
+    '/api/system/health',
+    '/api/settings',
+    '/api/numbers_station/status',
+    '/api/pirate/status',
+    '/api/mystery/status',
+    '/api/autoid/status',
 ])
 
 

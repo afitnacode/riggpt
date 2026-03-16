@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.47</span>
+    <span class="sb-label">v2.12.48</span>
   </div>
 </div>
 
@@ -2801,7 +2801,7 @@ hr.div  {
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
           <input type="number" id="ns-interval" value="5" min="1" max="60" style="width:44px;font-size:9px" title="Interval in minutes">
           <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
-          <select id="ns-engine" style="flex:1;font-size:9px">
+          <select id="ns-engine" style="flex:1;font-size:9px" onchange="specopsVoiceRefresh('ns')">
             <option value="espeak">eSpeak</option>
             <option value="piper">Piper</option>
             <option value="edge">Edge TTS</option>
@@ -2814,7 +2814,8 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="ns-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
+          <input type="text" id="ns-voice" placeholder="voice (default)" list="ns-voice-list" style="flex:1;font-size:9px">
+          <datalist id="ns-voice-list"></datalist>
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="ns-start-btn" onclick="nsStart()">&#9632; START</button>
@@ -2835,7 +2836,7 @@ hr.div  {
           </label>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <select id="solar-engine" style="flex:1;font-size:9px">
+          <select id="solar-engine" style="flex:1;font-size:9px" onchange="specopsVoiceRefresh('solar')">
             <option value="espeak">eSpeak</option>
             <option value="piper">Piper</option>
             <option value="edge">Edge TTS</option>
@@ -2848,7 +2849,8 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="solar-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
+          <input type="text" id="solar-voice" placeholder="voice (default)" list="solar-voice-list" style="flex:1;font-size:9px">
+          <datalist id="solar-voice-list"></datalist>
         </div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">K-index: <span id="solar-kval" style="color:var(--cyan)">—</span></div>
         <div style="display:flex;gap:var(--s2)">
@@ -2871,7 +2873,7 @@ hr.div  {
           <span style="font-size:9px;color:var(--text3)">hr</span>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <select id="mystery-engine" style="flex:1;font-size:9px">
+          <select id="mystery-engine" style="flex:1;font-size:9px" onchange="specopsVoiceRefresh('mystery')">
             <option value="espeak">eSpeak</option>
             <option value="piper">Piper</option>
             <option value="edge">Edge TTS</option>
@@ -2884,7 +2886,8 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="mystery-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
+          <input type="text" id="mystery-voice" placeholder="voice (default)" list="mystery-voice-list" style="flex:1;font-size:9px">
+          <datalist id="mystery-voice-list"></datalist>
         </div>
         <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Next: <span id="mystery-next" style="color:var(--cyan)">—</span></div>
         <div style="display:flex;gap:var(--s2)">
@@ -2905,7 +2908,7 @@ hr.div  {
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
           <input type="number" id="autoid-interval" value="10" min="1" max="120" style="width:44px;font-size:9px" title="Interval minutes">
           <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
-          <select id="autoid-engine" style="flex:1;font-size:9px">
+          <select id="autoid-engine" style="flex:1;font-size:9px" onchange="specopsVoiceRefresh('autoid')">
             <option value="cw">CW (Morse)</option>
             <option value="espeak">eSpeak</option>
             <option value="piper">Piper</option>
@@ -2919,7 +2922,8 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="autoid-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
+          <input type="text" id="autoid-voice" placeholder="voice (default)" list="autoid-voice-list" style="flex:1;font-size:9px">
+          <datalist id="autoid-voice-list"></datalist>
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="autoid-start-btn" onclick="autoidStart()">START</button>
@@ -2949,7 +2953,7 @@ hr.div  {
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
           <input type="number" id="pirate-interval" value="15" min="1" max="120" style="width:44px;font-size:9px" title="Minutes between bulletins">
           <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
-          <select id="pirate-engine" style="flex:1;font-size:9px">
+          <select id="pirate-engine" style="flex:1;font-size:9px" onchange="specopsVoiceRefresh('pirate')">
             <option value="espeak">eSpeak</option>
             <option value="piper">Piper</option>
             <option value="edge">Edge TTS</option>
@@ -2962,7 +2966,8 @@ hr.div  {
           </select>
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
-          <input type="text" id="pirate-voice" placeholder="voice (default)" style="flex:1;font-size:9px">
+          <input type="text" id="pirate-voice" placeholder="voice (default)" list="pirate-voice-list" style="flex:1;font-size:9px">
+          <datalist id="pirate-voice-list"></datalist>
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="pirate-start-btn" style="background:#3a0000;border-color:var(--tx);color:var(--tx)" onclick="pirateStart()">&#128308; ON AIR</button>
@@ -10739,6 +10744,31 @@ function _restoreAllSettings(s) {
 // =============================================================
 // SPECIAL OPS JS
 // =============================================================
+
+// ── Spec Ops voice autocomplete ───────────────────────────────────────────
+async function specopsVoiceRefresh(prefix) {
+  const engine = document.getElementById(prefix + '-engine')?.value;
+  const dl     = document.getElementById(prefix + '-voice-list');
+  if (!engine || !dl) return;
+  if (engine === 'cw') { dl.innerHTML = ''; return; } // CW has no voice
+  try {
+    const r = await api('GET', `/api/voices/${engine}`);
+    let voiceArr = [];
+    if (Array.isArray(r.voices)) {
+      voiceArr = r.voices.map(v => typeof v === 'object' ? {id: v.id||v.name, name: v.name||v.id} : {id: v, name: v});
+    } else if (r.voices && typeof r.voices === 'object') {
+      voiceArr = Object.entries(r.voices).map(([id, info]) => ({
+        id, name: typeof info === 'object' ? (info.name || id) : String(info),
+      }));
+    }
+    dl.innerHTML = voiceArr.map(v =>
+      `<option value="${escHtml(v.id)}">${escHtml(v.name)}${v.name !== v.id ? ' (' + escHtml(v.id) + ')' : ''}</option>`
+    ).join('');
+  } catch(e) {
+    console.warn('specopsVoiceRefresh:', e.message);
+    dl.innerHTML = '';
+  }
+}
 
 // ── Spec Ops Status Refresh (on tab open / page load) ─────────────────────
 async function specopsRefreshStatus() {
