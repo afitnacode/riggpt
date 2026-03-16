@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.54
+RigGPT v2.12.55
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -340,6 +340,7 @@ except ImportError:
         def status_dict(self): return {'available': False, 'error': 'memory module not found'}
 _active_tx_proc = None   # Popen handle for killable aplay during TX
 _play_file_lock = threading.Lock()  # Prevents concurrent aplay device contention
+_tx_exec_lock   = threading.Lock()  # Prevents concurrent execute() calls from fighting over audio
 
 # -- Alexa mode state ----------------------------------------------------------
 # Watches Discord for trigger phrase and fires a single snarky AI TX in response.
@@ -390,7 +391,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.54'
+VERSION        = 'v2.12.55'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1884,43 +1885,51 @@ class AudioPlaybackAgent:
 
         global _active_tx_proc
         for dev in devices_to_try:
-            try:
-                cmd = ['aplay']
-                if dev:
-                    cmd += ['-D', dev]
-                cmd.append(play_file)
-                logger.info(f"aplay: device={dev or 'system-default'} file={play_file}")
-                proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.PIPE)
-                _active_tx_proc = proc
+            # Retry up to 3 times per device for "Device or resource busy" errors
+            for attempt in range(3):
                 try:
-                    _, stderr_bytes = proc.communicate(timeout=300)
-                finally:
-                    _active_tx_proc = None
-                if proc.returncode == 0:
-                    logger.info(f"aplay: complete (device={dev or 'system-default'})")
-                    if processed and processed != file_path and os.path.exists(processed):
-                        try: os.remove(processed)
-                        except Exception: pass
-                    return True
-                if proc.returncode == -15 or proc.returncode == -9:
-                    # Killed by terminate endpoint
-                    logger.info("aplay: terminated by user")
-                    if processed and processed != file_path and os.path.exists(processed):
-                        try: os.remove(processed)
-                        except Exception: pass
+                    cmd = ['aplay']
+                    if dev:
+                        cmd += ['-D', dev]
+                    cmd.append(play_file)
+                    logger.info(f"aplay: device={dev or 'system-default'} file={play_file}{' (retry '+str(attempt)+')' if attempt else ''}")
+                    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                            stderr=subprocess.PIPE)
+                    _active_tx_proc = proc
+                    try:
+                        _, stderr_bytes = proc.communicate(timeout=300)
+                    finally:
+                        _active_tx_proc = None
+                    if proc.returncode == 0:
+                        logger.info(f"aplay: complete (device={dev or 'system-default'})")
+                        if processed and processed != file_path and os.path.exists(processed):
+                            try: os.remove(processed)
+                            except Exception: pass
+                        return True
+                    if proc.returncode == -15 or proc.returncode == -9:
+                        # Killed by terminate endpoint
+                        logger.info("aplay: terminated by user")
+                        if processed and processed != file_path and os.path.exists(processed):
+                            try: os.remove(processed)
+                            except Exception: pass
+                        return False
+                    err = (stderr_bytes or b'').decode().strip()
+                    if 'busy' in err.lower() and attempt < 2:
+                        logger.info(f"aplay: device busy, retrying in 1.5s (attempt {attempt+1}/3)")
+                        time_module.sleep(1.5)
+                        continue  # retry same device
+                    logger.warning(f"aplay failed device={dev}: rc={proc.returncode} {err}")
+                    break  # move to next device
+                except subprocess.TimeoutExpired:
+                    if _active_tx_proc:
+                        _active_tx_proc.kill()
+                        _active_tx_proc = None
+                    logger.error("aplay timed out")
                     return False
-                err = (stderr_bytes or b'').decode().strip()
-                logger.warning(f"aplay failed device={dev}: rc={proc.returncode} {err}")
-            except subprocess.TimeoutExpired:
-                if _active_tx_proc:
-                    _active_tx_proc.kill()
+                except Exception as e:
                     _active_tx_proc = None
-                logger.error("aplay timed out")
-                return False
-            except Exception as e:
-                _active_tx_proc = None
-                logger.warning(f"aplay error device={dev}: {e}")
+                    logger.warning(f"aplay error device={dev}: {e}")
+                    break  # move to next device
 
         logger.error("aplay: all devices failed")
         # Clean up normalized temp file if it was created
@@ -2105,6 +2114,11 @@ class WorkflowOrchestrator:
         text = _clean_tts_text(text)
         if not text.strip():
             return {'success': False, 'message': 'Empty text after cleaning', 'duration': 0}
+        # Acquire TX lock — prevents concurrent execute() calls from fighting over audio device.
+        # Wait up to 60s for any in-progress TX to finish; fail if still locked.
+        if not _tx_exec_lock.acquire(timeout=60):
+            logger.warning('execute: TX lock busy for 60s, aborting')
+            return {'success': False, 'message': 'Another transmission is in progress', 'duration': 0}
         start      = time_module.time()
         audio_file = None   # raw TTS output
         fx_file    = None   # post-effects output (may differ from audio_file)
@@ -2203,6 +2217,7 @@ class WorkflowOrchestrator:
                         os.remove(path)
                     except Exception:
                         pass
+            _tx_exec_lock.release()
 
 
 # -------------------------------------------------------------
