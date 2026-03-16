@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.49
+RigGPT v2.12.50
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -390,7 +390,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.49'
+VERSION        = 'v2.12.50'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3962,7 +3962,7 @@ def api_settings_post():
         # SSTV
         'sstv_vox',
         # Beacon form defaults
-        'bcn_interval', 'bcn_repeat', 'bcn_engine',
+        'bcn_interval', 'bcn_repeat', 'bcn_engine', 'bcn_voice',
         # Special Ops
         'numbers_station_interval', 'numbers_station_engine', 'numbers_station_voice',
         'solar_autotx_enabled', 'solar_kindex_threshold', 'solar_engine', 'solar_voice',

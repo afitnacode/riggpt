@@ -1637,7 +1637,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.49</span>
+    <span class="sb-label">v2.12.50</span>
   </div>
 </div>
 
@@ -2263,7 +2263,7 @@ hr.div  {
         </div>
         <div class="form-row" id="bcn-voice-row">
           <label>VOICE</label>
-          <input type="text" id="bcn-voice" placeholder="default" style="flex:1">
+          <select id="bcn-voice" style="flex:1"><option value="">default</option></select>
         </div>
         <div class="form-row">
           <label>INTERVAL</label>
@@ -2381,7 +2381,7 @@ hr.div  {
             </div>
             <div class="form-row" style="padding:0;margin-bottom:var(--s2)">
               <label style="min-width:48px">ENGINE</label>
-              <select id="sched-engine" style="flex:1;font-size:var(--fz-xs)">
+              <select id="sched-engine" style="flex:1;font-size:var(--fz-xs)" onchange="_loadVoicesInto('sched-engine','sched-voice','sched_voice')">
                 <option value="espeak">eSpeak</option>
                 <option value="piper">Piper</option>
                 <option value="edge">Edge TTS</option>
@@ -2395,7 +2395,7 @@ hr.div  {
             </div>
             <div class="form-row" style="padding:0">
               <label style="min-width:48px">VOICE</label>
-              <input type="text" id="sched-voice" placeholder="default" style="flex:1;font-size:var(--fz-xs)">
+              <select id="sched-voice" style="flex:1;font-size:var(--fz-xs)"><option value="">default</option></select>
             </div>
           </div>
           <!-- Clip fields (hidden by default) -->
@@ -3185,9 +3185,7 @@ hr.div  {
       </div>
       <div class="form-row" style="flex-shrink:0">
         <label>VOICE</label>
-        <select id="ai-tx-voice-sel" style="flex:1;display:none"></select>
-        <input type="text" id="ai-tx-voice" placeholder="default" style="flex:1">
-        <button class="btn sm" onclick="aiLoadTxVoices()" title="Load voices for selected engine">↺</button>
+        <select id="ai-tx-voice" style="flex:1"><option value="">default</option></select>
       </div>
       <div id="ai-tx-voice-hint" style="font-size:9px;color:var(--text3);padding:0 var(--s4) var(--s2);min-height:12px"></div>
 
@@ -3211,11 +3209,12 @@ hr.div  {
         </div>
         <div class="form-row" style="margin-bottom:var(--s2)">
           <label style="font-size:9px;width:52px">ENGINE</label>
-          <select id="alexa-engine" style="flex:1;font-size:9px">
+          <select id="alexa-engine" style="flex:1;font-size:9px" onchange="_loadVoicesInto('alexa-engine','alexa-voice','alexa_voice')">
             <option value="espeak">eSpeak</option>
             <option value="piper">Piper</option>
             <option value="edge">Edge TTS</option>
             <option value="gtts">gTTS</option>
+            <option value="pyttsx3">System TTS</option>
             <option value="elevenlabs">ElevenLabs</option>
             <option value="speechify">Speechify</option>
             <option value="openai">OpenAI TTS</option>
@@ -3224,7 +3223,7 @@ hr.div  {
         </div>
         <div class="form-row" style="margin-bottom:var(--s2)">
           <label style="font-size:9px;width:52px">VOICE</label>
-          <input type="text" id="alexa-voice" placeholder="default" style="flex:1;font-size:9px">
+          <select id="alexa-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
         </div>
         <div class="form-row" style="margin-bottom:var(--s2)">
           <label style="font-size:9px;width:52px">MAX TOK</label>
@@ -3720,8 +3719,7 @@ hr.div  {
           </select>
           <button class="btn sm" onclick="dubLoadVoices()" title="Reload voices" style="flex-shrink:0">&#8634;</button>
         </div>
-        <select id="dub-voice-sel" style="width:100%;display:none;font-size:var(--fz-xs);margin-bottom:var(--s1)"></select>
-        <input type="text" id="dub-voice" placeholder="voice" style="width:100%;font-size:var(--fz-xs);margin-bottom:var(--s1)">
+        <select id="dub-voice" style="width:100%;font-size:var(--fz-xs);margin-bottom:var(--s1)"><option value="">default</option></select>
         <div id="dub-voice-hint" style="font-size:9px;color:var(--text3);min-height:10px;margin-bottom:var(--s2)"></div>
         <!-- File Sample -->
         <div style="border:1px dashed var(--border2);padding:var(--s2);text-align:center;cursor:pointer;
@@ -3824,9 +3822,7 @@ hr.div  {
         </div>
         <div class="form-row" style="margin-bottom:0">
           <label>VOICE</label>
-          <select id="trip-a-voice-sel" style="flex:1;display:none"></select>
-          <input type="text" id="trip-a-voice" placeholder="en-us+m3" style="flex:1">
-          <button class="btn sm" onclick="tripLoadAgentVoices('a')" title="Load voices for selected engine">↺</button>
+          <select id="trip-a-voice" style="flex:1"><option value="">default</option></select>
         </div>
         <div id="trip-a-voice-hint" style="font-size:9px;color:var(--text3);padding:0 var(--s4) var(--s2)"></div>
         <!-- MODEL -->
@@ -4139,9 +4135,7 @@ hr.div  {
         </div>
         <div class="form-row" style="margin-bottom:0">
           <label>VOICE</label>
-          <select id="trip-b-voice-sel" style="flex:1;display:none"></select>
-          <input type="text" id="trip-b-voice" placeholder="en-us" style="flex:1">
-          <button class="btn sm" onclick="tripLoadAgentVoices('b')" title="Load voices for selected engine">↺</button>
+          <select id="trip-b-voice" style="flex:1"><option value="">default</option></select>
         </div>
         <div id="trip-b-voice-hint" style="font-size:9px;color:var(--text3);padding:0 var(--s4) var(--s2)"></div>
         <!-- MODEL -->
@@ -4384,9 +4378,9 @@ function showTab(name) {
   try { history.replaceState(null, '', '#' + name); } catch {}
   if (name === 'clips') { clipsLoad(); }
   if (name === 'hist')   { loadHistory(); loadHistoryStats(); }
-  if (name === 'sched')  { loadSchedule(); loadBeacons(); }
+  if (name === 'sched')  { loadSchedule(); loadBeacons(); _loadVoicesInto('bcn-engine','bcn-voice','bcn_voice'); _loadVoicesInto('sched-engine','sched-voice'); }
   if (name === 'wfall')  loadWaterfallCanned();
-  if (name === 'cfg')    { loadGongPath(); loadDiscordStatus(); discordStartPolling(); loadCtrlStatus(); ctrlStartPolling(); }
+  if (name === 'cfg')    { loadGongPath(); loadDiscordStatus(); discordStartPolling(); loadCtrlStatus(); ctrlStartPolling(); _loadVoicesInto('alexa-engine','alexa-voice','alexa_voice'); }
   if (name === 'system') { loadAudioDevices(); loadHealth(); loadGongPath(); }
   if (name === 'apicfg') { loadEngineStatus(); loadLlmProviders(); }
   if (name === 'specops'){ ghostPoll(); specopsRefreshStatus(); }
@@ -5468,8 +5462,68 @@ async function loadVoices() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// PRESETS
+/**
+ * Universal voice loader — ONE function for ALL engine+voice pairs in the UI.
+ * Uses the exact proven parsing logic from loadVoices().
+ * @param {string} engineElId  - ID of the <select> engine element
+ * @param {string} voiceElId   - ID of the <select> voice element
+ * @param {string} settingsKey - key in _appSettings to restore saved voice (optional)
+ */
+async function _loadVoicesInto(engineElId, voiceElId, settingsKey) {
+  const engine = document.getElementById(engineElId)?.value;
+  const sel    = document.getElementById(voiceElId);
+  if (!sel) return;
+  if (!engine || engine === 'cw' || engine === 'clip') {
+    sel.innerHTML = '<option value="">default</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">(loading…)</option>';
+  try {
+    const r = await api('GET', `/api/voices/${engine}`);
+    // Check for error responses (e.g. "API key not configured")
+    if (r.error) {
+      sel.innerHTML = `<option value="">(${r.error})</option>`;
+      console.warn(`_loadVoicesInto(${engineElId}): ${r.error}`);
+      return;
+    }
+    // Normalise to [{id, name}] — handles ALL backend formats:
+    //   array of objects:  [{id, name}, ...]  (espeak, edge, gtts, openai)
+    //   dict {id: obj}:    {id: {name, available}, ...}  (piper)
+    //   dict {id: string}: {id: 'Rachel', ...}  (ElevenLabs)
+    let voiceArr = [];
+    if (Array.isArray(r.voices)) {
+      voiceArr = r.voices.map(v => typeof v === 'object' ? v : {id: v, name: v});
+    } else if (r.voices && typeof r.voices === 'object') {
+      voiceArr = Object.entries(r.voices)
+        .filter(([, info]) => {
+          if (typeof info === 'object' && info !== null) return info.available !== false;
+          return true;
+        })
+        .map(([id, info]) => ({
+          id,
+          name: (typeof info === 'object' && info !== null) ? (info.name || id) : String(info),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (!voiceArr.length) {
+      sel.innerHTML = '<option value="">(no voices found)</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">default</option>' + voiceArr.map(v => {
+      const id   = v.id   || v;
+      const name = v.name || v;
+      return `<option value="${escHtml(id)}">${escHtml(name)}${name !== id ? ' ('+escHtml(id)+')' : ''}</option>`;
+    }).join('');
+    // Restore saved voice from settings
+    if (settingsKey) {
+      const saved = (window._appSettings || {})[settingsKey];
+      if (saved) sel.value = saved;
+    }
+  } catch(e) {
+    sel.innerHTML = '<option value="">(error loading voices)</option>';
+    console.error(`_loadVoicesInto(${engineElId}):`, e);
+  }
+}
 // ─────────────────────────────────────────────────────────────
 const VOICE_PRESETS = {
   normal:    { engine:'espeak', voice:'en-us' },
@@ -5529,6 +5583,10 @@ function bcnEngineChange() {
   if (msgRow)   msgRow.style.display  = eng === 'clip' ? 'none' : '';
   if (clipRow)  clipRow.style.display = eng === 'clip' ? '' : 'none';
   if (eng === 'clip') bcnRefreshClips();
+  // Load voices for selected engine
+  if (eng !== 'cw' && eng !== 'clip') {
+    _loadVoicesInto('bcn-engine', 'bcn-voice', 'bcn_voice');
+  }
 }
 
 async function bcnRefreshClips() {
@@ -6550,9 +6608,7 @@ function dubGetParams() {
 async function _dubCall(dry_run) {
   const text    = document.getElementById('dub-text').value.trim();
   const engine  = document.getElementById('dub-engine').value;
-  const voice   = (document.getElementById('dub-voice-sel')?.style.display !== 'none'
-    ? document.getElementById('dub-voice-sel')?.value
-    : document.getElementById('dub-voice')?.value) || '';
+  const voice   = document.getElementById('dub-voice')?.value || '';
   const fileInp = document.getElementById('dub-file-inp');
   const effects = dubGetParams();
 
@@ -6609,62 +6665,7 @@ async function dubPreview() {
 }
 
 async function dubLoadVoices() {
-  const engine  = document.getElementById('dub-engine')?.value || 'espeak';
-  const selEl   = document.getElementById('dub-voice-sel');
-  const txtEl   = document.getElementById('dub-voice');
-  const hintEl  = document.getElementById('dub-voice-hint');
-  const hints = {
-    espeak:'Fast offline robot voice.',
-    piper:'Local neural TTS (high quality).',
-    edge:'Microsoft neural TTS (online, free).',
-    gtts:'Google TTS (online, free).',
-    pyttsx3:'System TTS (offline).',
-    elevenlabs:'ElevenLabs (cloud, requires API key in Config).',
-    speechify:'Speechify (cloud, requires API key in Config).',
-    openai:'OpenAI TTS — alloy/echo/fable/onyx/nova/shimmer.',
-  };
-  if (hintEl) hintEl.textContent = (hints[engine] || '') + ' Loading voices…';
-  const hasDropdown = ['espeak','piper','edge','gtts','elevenlabs','speechify','openai'].includes(engine);
-  if (!hasDropdown) {
-    if (selEl) selEl.style.display = 'none';
-    if (txtEl) txtEl.style.display = '';
-    if (hintEl) hintEl.textContent = hints[engine] || '';
-    return;
-  }
-  try {
-    const r = await api('GET', '/api/voices/' + engine);
-    let arr = [];
-    if (Array.isArray(r.voices)) {
-      arr = r.voices;
-    } else if (r.voices && typeof r.voices === 'object') {
-      arr = Object.entries(r.voices)
-        .filter(([,i]) => typeof i !== 'object' || i.available !== false)
-        .map(([id,i]) => ({ id, name: typeof i==='object' ? (i.name||id) : String(i) }))
-        .sort((a,b) => a.name.localeCompare(b.name));
-    }
-    if (!arr.length) {
-      if (selEl) selEl.style.display = 'none';
-      if (txtEl) txtEl.style.display = '';
-      if (hintEl) hintEl.textContent = 'No voices found — enter manually';
-      return;
-    }
-    const dflt = r.default || (txtEl?.value) || '';
-    if (selEl) {
-      selEl.innerHTML = arr.map(v => {
-        const id   = v.id   || v;
-        const name = v.name || v;
-        return `<option value="${escHtml(String(id))}" ${String(id)===dflt?'selected':''}>${escHtml(String(name))}</option>`;
-      }).join('');
-      selEl.style.display = '';
-      selEl.onchange = () => { if (txtEl) txtEl.value = selEl.value; };
-      if (txtEl) { txtEl.value = selEl.value; txtEl.style.display = 'none'; }
-    }
-    if (hintEl) hintEl.textContent = (hints[engine]||'') + '  — ' + arr.length + ' voices';
-  } catch(e) {
-    if (selEl) selEl.style.display = 'none';
-    if (txtEl) txtEl.style.display = '';
-    if (hintEl) hintEl.textContent = 'Error: ' + e.message;
-  }
+  await _loadVoicesInto('dub-engine', 'dub-voice');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -9035,9 +9036,6 @@ async function tripLoadModels(agent) {
 // ══════════════════════════════════════════════════════════════
 async function aiLoadTxVoices() {
   const engine = document.getElementById('ai-tx-engine')?.value || 'espeak';
-  const selEl  = document.getElementById('ai-tx-voice-sel');
-  const txtEl  = document.getElementById('ai-tx-voice');
-  const hintEl = document.getElementById('ai-tx-voice-hint');
   const hints  = {
     espeak:'Fast, offline, robotic.',
     piper:'Local neural TTS. High quality.',
@@ -9047,48 +9045,16 @@ async function aiLoadTxVoices() {
     elevenlabs:'ElevenLabs — requires API key in Config.',
     speechify:'Speechify — requires API key in Config.',
     openai:'OpenAI TTS — alloy/echo/fable/onyx/nova/shimmer.',
+    fastkoko:'Local Kokoro TTS.',
   };
-  if (hintEl) hintEl.textContent = (hints[engine] || '');
-  const hasDropdown = ['espeak','piper','edge','gtts','elevenlabs','speechify','openai'].includes(engine);
-  if (!hasDropdown) {
-    if (selEl) selEl.style.display = 'none';
-    if (txtEl) txtEl.style.display = '';
-    return;
-  }
-  if (hintEl) hintEl.textContent = (hints[engine] || '') + ' Loading…';
-  try {
-    const r = await api('GET', '/api/voices/' + engine);
-    let arr = [];
-    if (Array.isArray(r.voices)) {
-      arr = r.voices;
-    } else if (r.voices && typeof r.voices === 'object') {
-      arr = Object.entries(r.voices)
-        .filter(([,i]) => typeof i !== 'object' || i.available !== false)
-        .map(([id,i]) => ({ id, name: typeof i==='object' ? (i.name||id) : String(i) }))
-        .sort((a,b) => a.name.localeCompare(b.name));
-    }
-    if (!arr.length) {
-      if (selEl) selEl.style.display = 'none';
-      if (txtEl) txtEl.style.display = '';
-      if (hintEl) hintEl.textContent = 'No voices — enter ID manually';
-      return;
-    }
-    const dflt = r.default || txtEl?.value || '';
-    if (selEl) {
-      selEl.innerHTML = arr.map(v => {
-        const id   = v.id   || v;
-        const name = v.name || v;
-        return `<option value="${escHtml(String(id))}" ${String(id)===dflt?'selected':''}>${escHtml(String(name))}</option>`;
-      }).join('');
-      selEl.style.display = '';
-      selEl.onchange = () => { if (txtEl) txtEl.value = selEl.value; };
-      if (txtEl) { txtEl.value = selEl.value; txtEl.style.display = 'none'; }
-    }
-    if (hintEl) hintEl.textContent = (hints[engine]||'') + '  — ' + arr.length + ' voices';
-  } catch(e) {
-    if (selEl) selEl.style.display = 'none';
-    if (txtEl) txtEl.style.display = '';
-    if (hintEl) hintEl.textContent = 'Error: ' + e.message;
+  const hintEl = document.getElementById('ai-tx-voice-hint');
+  if (hintEl) hintEl.textContent = hints[engine] || '';
+  await _loadVoicesInto('ai-tx-engine', 'ai-tx-voice', 'ai_tx_voice');
+  // Update hint with voice count
+  const sel = document.getElementById('ai-tx-voice');
+  if (hintEl && sel) {
+    const n = sel.options.length - 1; // minus "default" option
+    if (n > 0) hintEl.textContent = (hints[engine]||'') + '  — ' + n + ' voices';
   }
 }
 
@@ -9151,6 +9117,7 @@ async function cfgFlushPresets() {
     bcn_interval: get('bcn-interval'),
     bcn_repeat:   get('bcn-repeat'),
     bcn_engine:   get('bcn-engine'),
+    bcn_voice:    get('bcn-voice'),
     // Audio device
     audio_device: get('set-audio-device'),
     // Special Ops
@@ -9385,10 +9352,7 @@ function tripClearCanon(agent) {
 // TRIP: VOICE LOADER (ElevenLabs + all engines)
 // ══════════════════════════════════════════════════════════════
 async function tripLoadAgentVoices(agent) {
-  const engine  = document.getElementById('trip-' + agent + '-engine')?.value || 'espeak';
-  const selEl   = document.getElementById('trip-' + agent + '-voice-sel');
-  const txtEl   = document.getElementById('trip-' + agent + '-voice');
-  const hintEl  = document.getElementById('trip-' + agent + '-voice-hint');
+  const hintEl = document.getElementById('trip-' + agent + '-voice-hint');
   const hints = {
     piper:'Local neural TTS. High quality, offline.',
     espeak:'Fast, offline, robotic. Always available.',
@@ -9397,64 +9361,15 @@ async function tripLoadAgentVoices(agent) {
     elevenlabs:'Premium cloud TTS. Requires API key in Config.',
     speechify:'Cloud TTS. Requires API key in Config.',
     openai:'OpenAI TTS (Alloy/Echo/Nova/etc). Requires API key.',
-    fastkoko:'Local Kokoro TTS. High quality, no cloud, no key. Configure server URL in Config.',
+    fastkoko:'Local Kokoro TTS. High quality, no cloud, no key.',
   };
+  const engine = document.getElementById('trip-' + agent + '-engine')?.value || 'espeak';
   if (hintEl) hintEl.textContent = hints[engine] || '';
-
-  // Engines with enumerable voice lists get a dropdown; others keep text input
-  const hasDropdown = ['espeak','piper','edge','gtts','elevenlabs','speechify','openai','fastkoko'].includes(engine);
-  if (!hasDropdown) {
-    if (selEl) selEl.style.display = 'none';
-    if (txtEl) txtEl.style.display = '';
-    return;
-  }
-
-  if (hintEl) hintEl.textContent = (hints[engine] || '') + ' — loading voices…';
-  try {
-    const r = await api('GET', '/api/voices/' + engine);
-    let voiceArr = [];
-    if (Array.isArray(r.voices)) {
-      voiceArr = r.voices;
-    } else if (r.voices && typeof r.voices === 'object') {
-      voiceArr = Object.entries(r.voices)
-        .filter(([, info]) => typeof info !== 'object' || info.available !== false)
-        .map(([id, info]) => ({
-          id,
-          name: (typeof info === 'object' && info !== null) ? (info.name || id) : String(info),
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    if (!voiceArr.length) {
-      if (hintEl) hintEl.textContent = 'No voices found — enter ID manually';
-      if (selEl) selEl.style.display = 'none';
-      if (txtEl) txtEl.style.display = '';
-      return;
-    }
-
-    // Switch to dropdown mode
-    const currentVal = txtEl ? txtEl.value : '';
-    const dflt = r.default || currentVal || '';
-    if (selEl) {
-      selEl.innerHTML = voiceArr.map(v => {
-        const id   = v.id   || v;
-        const name = v.name || v;
-        return `<option value="${escHtml(String(id))}" ${String(id) === dflt ? 'selected' : ''}>${escHtml(String(name))}</option>`;
-      }).join('');
-      selEl.style.display = '';
-      // Keep text input in sync when dropdown changes
-      selEl.onchange = () => { if (txtEl) txtEl.value = selEl.value; };
-      if (txtEl) {
-        txtEl.value = selEl.value;
-        txtEl.style.display = 'none';
-      }
-    }
-    const n = voiceArr.length;
-    if (hintEl) hintEl.textContent = (hints[engine] || '') + ` — ${n} voice${n===1?'':'s'}`;
-  } catch(e) {
-    if (hintEl) hintEl.textContent = 'Error loading voices: ' + e.message;
-    if (selEl) selEl.style.display = 'none';
-    if (txtEl) txtEl.style.display = '';
+  await _loadVoicesInto('trip-' + agent + '-engine', 'trip-' + agent + '-voice', 'trip_' + agent + '_voice');
+  const sel = document.getElementById('trip-' + agent + '-voice');
+  if (hintEl && sel) {
+    const n = sel.options.length - 1;
+    if (n > 0) hintEl.textContent = (hints[engine] || '') + ` — ${n} voice${n===1?'':'s'}`;
   }
 }
 
@@ -10718,6 +10633,7 @@ function _restoreAllSettings(s) {
   set('bcn-interval', s.bcn_interval);
   set('bcn-repeat',   s.bcn_repeat);
   set('bcn-engine',   s.bcn_engine);
+  set('bcn-voice',    s.bcn_voice);
   // Audio device (note: select populated async, so just store and apply after populate)
   if (s.audio_device) window._savedAudioDevice = s.audio_device;
   // Special Ops
@@ -10762,33 +10678,10 @@ function _restoreAllSettings(s) {
 // =============================================================
 
 // ── Spec Ops voice autocomplete ───────────────────────────────────────────
-async function specopsVoiceRefresh(prefix) {
-  const engine = document.getElementById(prefix + '-engine')?.value;
-  const sel    = document.getElementById(prefix + '-voice');
-  if (!engine || !sel) return;
-  sel.innerHTML = '<option value="">default</option>';
-  if (engine === 'cw') return; // CW has no voice
-  try {
-    const r = await api('GET', `/api/voices/${engine}`);
-    let voiceArr = [];
-    if (Array.isArray(r.voices)) {
-      voiceArr = r.voices.map(v => typeof v === 'object' ? {id: v.id||v.name, name: v.name||v.id} : {id: v, name: v});
-    } else if (r.voices && typeof r.voices === 'object') {
-      voiceArr = Object.entries(r.voices).map(([id, info]) => ({
-        id, name: typeof info === 'object' ? (info.name || id) : String(info),
-      }));
-    }
-    sel.innerHTML = '<option value="">default</option>' + voiceArr.map(v =>
-      `<option value="${escHtml(v.id)}">${escHtml(v.name)}${v.name !== v.id ? ' ('+escHtml(v.id)+')' : ''}</option>`
-    ).join('');
-    // Restore saved voice from settings (the select wasn't populated during _restoreAllSettings)
-    const keyMap = {ns:'numbers_station_voice', solar:'solar_voice', mystery:'mystery_voice',
-                    autoid:'autoid_voice', pirate:'pirate_voice', ghost:'ghost_voice'};
-    const saved = (window._appSettings || {})[keyMap[prefix]];
-    if (saved) sel.value = saved;
-  } catch(e) {
-    console.warn('specopsVoiceRefresh:', e.message);
-  }
+function specopsVoiceRefresh(prefix) {
+  const keyMap = {ns:'numbers_station_voice', solar:'solar_voice', mystery:'mystery_voice',
+                  autoid:'autoid_voice', pirate:'pirate_voice', ghost:'ghost_voice'};
+  _loadVoicesInto(prefix + '-engine', prefix + '-voice', keyMap[prefix]);
 }
 
 // ── Spec Ops Status Refresh (on tab open / page load) ─────────────────────
