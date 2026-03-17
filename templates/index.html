@@ -1007,7 +1007,6 @@ kbd {
 .fx-group:nth-child(3) .fx-group-title { color: #44aaff; } /* blue  - PITCH */
 .fx-group:nth-child(4) .fx-group-title { color: #ff4444; } /* red   - DISTORTION */
 .fx-group:nth-child(5) .fx-group-title { color: #cc66ff; } /* violet - MODULATION */
-.fx-group:nth-child(6) .fx-group-title { color: #ff9500; } /* amber  - VU METER */
 .fx-knob-row {
   display: flex;
   flex-direction: column;
@@ -1629,7 +1628,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.57</span>
+    <span class="sb-label">v2.12.58</span>
   </div>
 </div>
 
@@ -3566,34 +3565,38 @@ hr.div  {
               <div class="fx-knob"><label>REVERB</label><input type="range" id="dub-reverb" min="0" max="100" value="0" oninput="dubUpdate('reverb',this.value)"><span class="fx-val" id="dv-reverb">OFF</span></div>
             </div>
           </div>
-          <!-- VU Meter -->
-          <div class="fx-group" style="min-height:100px">
-            <div class="fx-group-title" style="color:#ff9500">VU METER</div>
-            <div style="padding:var(--s2) var(--s3);display:flex;flex-direction:column;gap:4px;flex:1;justify-content:center">
-              <div style="display:flex;align-items:center;gap:4px">
-                <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono);width:10px">L</span>
-                <div style="flex:1;display:flex;gap:1px;height:10px" id="vu-bar-l"></div>
-                <span id="vu-val-l" style="font-size:8px;color:#55cc55;font-family:var(--mono);width:28px;text-align:right">-∞</span>
+        </div>
+        <!-- VU Meter — full width strip below FX knobs -->
+        <div style="border-top:1px solid #2a2a2a;background:linear-gradient(180deg,#111,#0a0a0a);padding:6px 12px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-size:8px;color:#ff9500;font-family:var(--mono);letter-spacing:.12em;flex-shrink:0">VU METER</span>
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono);width:8px">L</span>
+                <div style="flex:1;display:flex;gap:1px;height:8px" id="vu-bar-l"></div>
+                <span id="vu-val-l" style="font-size:8px;color:#55cc55;font-family:var(--mono);width:30px;text-align:right">-∞</span>
               </div>
-              <div style="display:flex;align-items:center;gap:4px">
-                <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono);width:10px">R</span>
-                <div style="flex:1;display:flex;gap:1px;height:10px" id="vu-bar-r"></div>
-                <span id="vu-val-r" style="font-size:8px;color:#55cc55;font-family:var(--mono);width:28px;text-align:right">-∞</span>
-              </div>
-              <div style="display:flex;padding-left:14px;padding-right:32px;justify-content:space-between">
-                <span style="font-size:6px;color:#444;font-family:var(--mono)">-40</span>
-                <span style="font-size:6px;color:#444;font-family:var(--mono)">-20</span>
-                <span style="font-size:6px;color:#444;font-family:var(--mono)">-10</span>
-                <span style="font-size:6px;color:#444;font-family:var(--mono)">-6</span>
-                <span style="font-size:6px;color:#444;font-family:var(--mono)">-3</span>
-                <span style="font-size:6px;color:#ff4444;font-family:var(--mono)">0</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;align-items:center;padding-top:2px;border-top:1px solid #1a1a1a">
-                <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono)">PEAK</span>
-                <span id="vu-peak" style="font-size:9px;color:#ff9500;font-family:var(--mono)">— dB</span>
-                <button onclick="_vuReset()" style="font-size:7px;background:#1a1a1a;border:1px solid #333;color:#6a6a5a;cursor:pointer;padding:1px 4px;font-family:var(--mono)">RST</button>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono);width:8px">R</span>
+                <div style="flex:1;display:flex;gap:1px;height:8px" id="vu-bar-r"></div>
+                <span id="vu-val-r" style="font-size:8px;color:#55cc55;font-family:var(--mono);width:30px;text-align:right">-∞</span>
               </div>
             </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex-shrink:0">
+              <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono)">PEAK</span>
+              <span id="vu-peak" style="font-size:10px;color:#ff9500;font-family:var(--mono)">— dB</span>
+              <button onclick="_vuReset()" style="font-size:7px;background:#1a1a1a;border:1px solid #333;color:#6a6a5a;cursor:pointer;padding:1px 6px;font-family:var(--mono)">RST</button>
+            </div>
+          </div>
+          <!-- Scale -->
+          <div style="display:flex;margin-left:72px;margin-right:48px;justify-content:space-between">
+            <span style="font-size:6px;color:#333;font-family:var(--mono)">-40</span>
+            <span style="font-size:6px;color:#333;font-family:var(--mono)">-30</span>
+            <span style="font-size:6px;color:#333;font-family:var(--mono)">-20</span>
+            <span style="font-size:6px;color:#333;font-family:var(--mono)">-10</span>
+            <span style="font-size:6px;color:#444;font-family:var(--mono)">-6</span>
+            <span style="font-size:6px;color:#444;font-family:var(--mono)">-3</span>
+            <span style="font-size:6px;color:#ff4444;font-family:var(--mono)">0</span>
           </div>
         </div>
         <!-- DRY/WET + chain display + action buttons -->
@@ -6093,9 +6096,11 @@ function dubUpdate(type, val) {
 }
 
 // ── VU Meter (80s LED bar) ───────────────────────────────────────────────
-const _VU_SEGS = 20;
+const _VU_SEGS = 24;
 let _vuPeakL = -Infinity, _vuPeakR = -Infinity;
 let _vuAnim = null;
+let _vuCurrentL = -60, _vuCurrentR = -60;  // smoothed dB values
+let _vuTargetL = -60, _vuTargetR = -60;
 
 function _vuInit() {
   for (const ch of ['l','r']) {
@@ -6103,12 +6108,7 @@ function _vuInit() {
     if (!bar || bar.children.length) continue;
     for (let i = 0; i < _VU_SEGS; i++) {
       const seg = document.createElement('div');
-      seg.style.cssText = 'flex:1;height:100%;border-radius:1px;';
-      // Green -> yellow -> red gradient across segments
-      if (i < 12) seg.style.background = '#1a1a1a';  // will light green
-      else if (i < 16) seg.style.background = '#1a1a1a';  // will light yellow
-      else seg.style.background = '#1a1a1a';  // will light red
-      seg.dataset.on = '0';
+      seg.style.cssText = 'flex:1;height:100%;border-radius:1px;background:#1a1a1a;transition:none;';
       bar.appendChild(seg);
     }
   }
@@ -6119,49 +6119,57 @@ function _vuSetLevel(ch, db) {
   const valEl = document.getElementById('vu-val-' + ch);
   if (!bar) return;
   const segs = bar.children;
-  // Map dB to segments: -40dB=0 segs, 0dB=20 segs
   const norm = Math.max(0, Math.min(1, (db + 40) / 40));
   const lit = Math.round(norm * _VU_SEGS);
   for (let i = 0; i < _VU_SEGS; i++) {
     if (i < lit) {
-      if (i < 12) segs[i].style.background = '#33cc33';
-      else if (i < 16) segs[i].style.background = '#cccc00';
+      if (i < 14) segs[i].style.background = '#33cc33';
+      else if (i < 19) segs[i].style.background = '#cccc00';
       else segs[i].style.background = '#ff3333';
     } else {
       segs[i].style.background = '#1a1a1a';
     }
   }
-  if (valEl) valEl.textContent = db > -40 ? db.toFixed(0) + ' dB' : '-∞';
-  // Peak hold
+  if (valEl) valEl.textContent = db > -39 ? db.toFixed(0) + ' dB' : '-∞';
   if (ch === 'l' && db > _vuPeakL) _vuPeakL = db;
   if (ch === 'r' && db > _vuPeakR) _vuPeakR = db;
   const peakEl = document.getElementById('vu-peak');
   if (peakEl) {
     const pk = Math.max(_vuPeakL, _vuPeakR);
-    peakEl.textContent = pk > -40 ? pk.toFixed(1) + ' dB' : '— dB';
+    peakEl.textContent = pk > -39 ? pk.toFixed(1) + ' dB' : '— dB';
     peakEl.style.color = pk > -3 ? '#ff3333' : pk > -6 ? '#cccc00' : '#ff9500';
   }
 }
 
 function _vuAnimate() {
-  // Simulated VU during preview/TX — bounces based on audio element
   const aud = document.getElementById('dub-audio');
-  if (aud && !aud.paused) {
-    // Simulate L/R from time position variance
-    const base = -12 + Math.sin(aud.currentTime * 8) * 8;
-    _vuSetLevel('l', base + (Math.random() * 6 - 3));
-    _vuSetLevel('r', base + (Math.random() * 6 - 3));
-  } else if (_txActive) {
-    const base = -8 + Math.sin(Date.now() / 150) * 6;
-    _vuSetLevel('l', base + (Math.random() * 4 - 2));
-    _vuSetLevel('r', base + (Math.random() * 4 - 2));
+  const active = (aud && !aud.paused) || _txActive;
+  if (active) {
+    // Generate smooth targets (change target every ~200ms, not every frame)
+    if (Math.random() < 0.08) {  // ~5 times/sec at 60fps
+      const base = _txActive ? -8 : -12;
+      const swing = _txActive ? 5 : 8;
+      _vuTargetL = base + Math.sin(Date.now() / 400) * swing + (Math.random() * 3 - 1.5);
+      _vuTargetR = base + Math.cos(Date.now() / 350) * swing + (Math.random() * 3 - 1.5);
+    }
+    // Smooth interpolation toward target (attack fast, release slow)
+    const attackRate = 0.3;
+    const releaseRate = 0.08;
+    _vuCurrentL += (_vuTargetL > _vuCurrentL ? attackRate : releaseRate) * (_vuTargetL - _vuCurrentL);
+    _vuCurrentR += (_vuTargetR > _vuCurrentR ? attackRate : releaseRate) * (_vuTargetR - _vuCurrentR);
+    _vuSetLevel('l', _vuCurrentL);
+    _vuSetLevel('r', _vuCurrentR);
   } else {
-    // Decay
-    _vuSetLevel('l', -60);
-    _vuSetLevel('r', -60);
-    cancelAnimationFrame(_vuAnim);
-    _vuAnim = null;
-    return;
+    // Smooth decay to silence
+    _vuCurrentL += 0.06 * (-60 - _vuCurrentL);
+    _vuCurrentR += 0.06 * (-60 - _vuCurrentR);
+    _vuSetLevel('l', _vuCurrentL);
+    _vuSetLevel('r', _vuCurrentR);
+    if (_vuCurrentL < -55 && _vuCurrentR < -55) {
+      cancelAnimationFrame(_vuAnim);
+      _vuAnim = null;
+      return;
+    }
   }
   _vuAnim = requestAnimationFrame(_vuAnimate);
 }
@@ -6172,6 +6180,8 @@ function _vuStart() {
 function _vuReset() {
   _vuPeakL = -Infinity;
   _vuPeakR = -Infinity;
+  _vuCurrentL = -60; _vuCurrentR = -60;
+  _vuTargetL = -60; _vuTargetR = -60;
   _vuSetLevel('l', -60);
   _vuSetLevel('r', -60);
   const peakEl = document.getElementById('vu-peak');

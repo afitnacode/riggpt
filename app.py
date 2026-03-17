@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.57
+RigGPT v2.12.58
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -391,7 +391,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.57'
+VERSION        = 'v2.12.58'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7042,7 +7042,7 @@ def _build_ffmpeg_filters(fx: dict) -> list:
     if dist > 0:
         gain = 1.0 + (dist / 100.0) * 19.0            # 1- - 20- boost
         filters.append(f'volume={gain:.2f},alimiter=limit=0.95')
-        filters.append('volume=0.7')                   # compensate loudness
+        filters.append('volume=0.85')                  # compensate loudness
 
     # -- Bitcrush via acrusher ------------------------------------
     bits = int(fx.get('bitcrush', 0))
@@ -7058,7 +7058,7 @@ def _build_ffmpeg_filters(fx: dict) -> list:
         filters.append(f'tremolo=f={stutter_freq:.1f}:d=1.0')
         # Add a short echo to enhance the stutter effect
         stutter_delay = max(20, int(300 - stutter * 2.8))
-        filters.append(f'aecho=0.8:0.7:{stutter_delay}:0.5')
+        filters.append(f'aecho=0.95:0.7:{stutter_delay}:0.5')
 
     # -- Stereo Width (haas/pan widening) ------------------------
     width = float(fx.get('width', 100))
@@ -7084,7 +7084,7 @@ def _build_ffmpeg_filters(fx: dict) -> list:
         d  = chorus / 100.0 * 0.04 + 0.005            # depth 0.005-0.045
         sp = 0.25 + chorus / 100.0 * 0.5              # speed 0.25-0.75 Hz
         filters.append(
-            f'chorus=0.7:0.9:{int(45+chorus)}|{int(60+chorus*0.7)}'
+            f'chorus=0.85:0.9:{int(45+chorus)}|{int(60+chorus*0.7)}'
             f':{d:.3f}|{d*0.75:.3f}:{sp:.3f}|{sp*0.8:.3f}:2|2.3'
         )
 
@@ -7101,7 +7101,7 @@ def _build_ffmpeg_filters(fx: dict) -> list:
         decay = 0.2 + phaser / 100.0 * 0.6
         speed = 0.3 + phaser / 100.0 * 1.0
         filters.append(
-            f'aphaser=in_gain=0.4:out_gain=0.74:delay=3'
+            f'aphaser=in_gain=0.9:out_gain=0.9:delay=3'
             f':decay={decay:.2f}:speed={speed:.2f}:type=t'
         )
 
@@ -7124,7 +7124,7 @@ def _build_ffmpeg_filters(fx: dict) -> list:
         fb_pct = float(fx.get('echo_fb', 40))
         decay  = 0.1 + (fb_pct / 90.0) * 0.75
         decay  = min(0.85, max(0.1, decay))
-        filters.append(f'aecho=0.8:{decay:.2f}:{echo}:{decay*0.55:.2f}')
+        filters.append(f'aecho=0.95:{decay:.2f}:{echo}:{decay*0.55:.2f}')
 
     reverb = float(fx.get('reverb', 0))
     if reverb > 0:
@@ -7132,12 +7132,18 @@ def _build_ffmpeg_filters(fx: dict) -> list:
         d1,d2,d3,d4 = int(20+r*30), int(35+r*55), int(55+r*90), int(85+r*140)
         c1,c2,c3,c4 = r*0.42, r*0.36, r*0.26, r*0.18
         filters.append(
-            f'aecho=0.8:0.9:{d1}|{d2}|{d3}|{d4}:{c1:.2f}|{c2:.2f}|{c3:.2f}|{c4:.2f}'
+            f'aecho=0.95:0.95:{d1}|{d2}|{d3}|{d4}:{c1:.2f}|{c2:.2f}|{c3:.2f}|{c4:.2f}'
         )
 
     # -- Final loudnorm -------------------------------------------
     if fx.get('normalize', False):
         filters.append('loudnorm=I=-20:TP=-2:LRA=11')
+
+    # -- Auto gain recovery: compensate cumulative FX volume loss --
+    # dynaudnorm gently brings level back up without clipping.
+    # Only applied when there are actual effects (not on clean signal).
+    if filters:
+        filters.append('dynaudnorm=f=150:g=5:p=0.95:m=10')
 
     return filters
 
