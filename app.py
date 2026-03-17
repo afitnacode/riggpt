@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.59
+RigGPT v2.12.60
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -361,6 +361,7 @@ _clips_s3_cache_dir = '/tmp/riggpt_clips_cache'
 _numbers_station_job = None
 _mystery_job         = None
 _autoid_job          = None
+_timeannounce_job    = None
 _solar_cache         = {'k': None, 'updated': None, 'last_announced': None}
 _solar_poller_job    = None
 
@@ -391,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.59'
+VERSION        = 'v2.12.60'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4020,6 +4021,7 @@ def api_settings_post():
         'solar_autotx_enabled', 'solar_kindex_threshold', 'solar_engine', 'solar_voice',
         'mystery_window_start', 'mystery_window_end', 'mystery_engine', 'mystery_voice',
         'autoid_callsign', 'autoid_interval', 'autoid_engine', 'autoid_voice',
+        'timeannounce_interval', 'timeannounce_engine', 'timeannounce_voice',
         # Pirate Broadcast
         'pirate_interval', 'pirate_engine', 'pirate_voice',
         # Ghost audio
@@ -6454,7 +6456,7 @@ def _clips_play(clip: dict):
             if orchestrator.icom_agent and orchestrator.icom_agent.serial_conn \
                     and orchestrator.icom_agent.serial_conn.is_open:
                 orchestrator.icom_agent.ptt_on()
-                time_module.sleep(0.3)
+                time_module.sleep(0.15)  # minimal PTT settling time
             else:
                 logger.warning('clips: radio not connected -- playing without PTT')
         except Exception as ptt_e:
@@ -6469,15 +6471,13 @@ def _clips_play(clip: dict):
         if ffplay:
             try:
                 cmd = [ffplay, '-nodisp', '-autoexit', '-loglevel', 'error']
-                if dev:
-                    # ffplay uses SDL; set AUDIODEV env or use -acodec / alsa device
-                    # Simplest cross-platform: just let SDL pick, override via env
-                    pass
                 cmd.append(fpath)
-                with _clips_lock:
-                    pass  # lock not needed for proc ref, just for flag
+                env = os.environ.copy()
+                if dev:
+                    env['AUDIODEV'] = dev       # SDL audio device routing
+                    env['SDL_AUDIODRIVER'] = 'alsa'
                 proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL)
+                                        stderr=subprocess.DEVNULL, env=env)
                 _clips_proc = proc
                 proc.wait(timeout=600)
                 _clips_proc = None
@@ -6585,16 +6585,18 @@ def api_clips_play():
         return jsonify({'success': False, 'message': 'name required'}), 400
 
     # If something is already playing, kill it first
+    killed = False
     with _clips_lock:
         if _clips_playing:
             proc = _clips_proc
             if proc:
                 try: proc.kill()
                 except Exception: pass
+                killed = True
             _clips_playing = False
             _clips_proc = None
-        # Small grace period for thread teardown
-    time_module.sleep(0.1)
+    if killed:
+        time_module.sleep(0.1)  # grace period only when we killed something
 
     with _clips_lock:
         clip = next((f for f in _clips_files if f['name'] == name), None)
@@ -7134,6 +7136,10 @@ def _build_ffmpeg_filters(fx: dict) -> list:
         filters.append(
             f'aecho=0.95:0.95:{d1}|{d2}|{d3}|{d4}:{c1:.2f}|{c2:.2f}|{c3:.2f}|{c4:.2f}'
         )
+
+    # -- Reverse (play audio backwards — creepy on shortwave) -------
+    if fx.get('reverse', False):
+        filters.append('areverse')
 
     # -- Final loudnorm -------------------------------------------
     if fx.get('normalize', False):
@@ -7842,6 +7848,16 @@ _MYSTERY_LINES = [
     'Stand by for further instructions.',
     'All stations.  All stations.  Silence please.',
     'This is not a test.',
+    'Do not adjust your receiver.',
+    'The voice you hear is not your own.',
+    'Coordinates received.  Awaiting confirmation.',
+    'Frequency check.  Frequency check.  No response expected.',
+    'The signal persists.  The source does not.',
+    'Transmission begins at midnight.  Midnight has passed.',
+    'If you can hear this, it is already too late.',
+    'Relay.  Relay.  The message is the medium.',
+    'We have been transmitting for longer than you know.',
+    'End of line.  Beginning of something else.',
 ]
 
 
@@ -7994,6 +8010,74 @@ def api_autoid_status():
         'callsign':  _app_settings.get('autoid_callsign', ''),
         'interval':  _app_settings.get('autoid_interval', '10'),
         'engine':    _app_settings.get('autoid_engine',   'cw'),
+    })
+
+
+# ── Time Announce ─────────────────────────────────────────────────────────────
+def _run_time_announce():
+    """Transmit current UTC and local time on the air."""
+    import datetime
+    now_utc   = datetime.datetime.utcnow()
+    now_local = datetime.datetime.now()
+    utc_str   = now_utc.strftime('%H %M')
+    local_str = now_local.strftime('%H %M')
+    msg = f'The time is {utc_str} UTC.  Local time, {local_str}.'
+    engine = _app_settings.get('timeannounce_engine', 'espeak')
+    voice  = _app_settings.get('timeannounce_voice', '') or None
+    logger.info(f'time_announce: {msg!r} engine={engine}')
+    try:
+        orchestrator.execute(msg, engine=engine, voice=voice, preset='broadcast',
+                             pitch=-2, speed=0.9, roger_beep=False)
+    except Exception as e:
+        logger.error(f'time_announce TX error: {e}')
+
+
+@app.route('/api/timeannounce/start', methods=['POST'])
+def api_timeannounce_start():
+    global _timeannounce_job
+    if not scheduler:
+        return jsonify({'success': False, 'message': 'Scheduler not available'}), 503
+    data     = request.json or {}
+    interval = max(1, int(data.get('interval_minutes',
+                          int(_app_settings.get('timeannounce_interval', 30)))))
+    engine   = data.get('engine', _app_settings.get('timeannounce_engine', 'espeak'))
+    voice    = data.get('voice', _app_settings.get('timeannounce_voice', ''))
+    _app_settings['timeannounce_interval'] = str(interval)
+    _app_settings['timeannounce_engine']   = engine
+    _app_settings['timeannounce_voice']    = voice
+    _save_app_settings(_app_settings)
+    try:
+        if _timeannounce_job:
+            try: _timeannounce_job.remove()
+            except Exception: pass
+        _timeannounce_job = scheduler.add_job(
+            _run_time_announce,
+            CronTrigger.from_crontab(f'*/{interval} * * * *'),
+            id='time_announce', replace_existing=True,
+        )
+        threading.Thread(target=_run_time_announce, daemon=True, name='timeannounce-initial').start()
+        return jsonify({'success': True,
+                        'message': f'Time announce every {interval}min (engine={engine})'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/timeannounce/stop', methods=['POST'])
+def api_timeannounce_stop():
+    global _timeannounce_job
+    if _timeannounce_job:
+        try: _timeannounce_job.remove()
+        except Exception: pass
+        _timeannounce_job = None
+    return jsonify({'success': True, 'message': 'Time announce stopped'})
+
+
+@app.route('/api/timeannounce/status', methods=['GET'])
+def api_timeannounce_status():
+    return jsonify({
+        'active':   _timeannounce_job is not None,
+        'interval': _app_settings.get('timeannounce_interval', '30'),
+        'engine':   _app_settings.get('timeannounce_engine', 'espeak'),
     })
 
 
@@ -8494,6 +8578,26 @@ _PIRATE_HEADLINES = [
     'All stations. All stations. Disregard previous transmission.',
     'Signal acquired. Identity unknown. Mood: mysterious.',
     'You are now part of the experiment. Results pending.',
+    'FLASH: Entire ham band discovered to be one enormous QRM source.',
+    'Area operator keys up on fourteen megahertz. Regrets it immediately.',
+    'Sunspot activity described as aggressively unhelpful.',
+    'Local antenna farm achieves sentience. Demands better feed line.',
+    'International panel of experts agrees: nobody knows what that noise is.',
+    'Breaking: the ionosphere has filed a formal complaint.',
+    'Scientists baffled as radio signal arrives before it was sent.',
+    'Emergency broadcast: your antenna is crooked and everyone can tell.',
+    'Reports confirm that the skip is in. Nobody knows where it came from.',
+    'Unlicensed station broadcasts entire grocery list. Listeners riveted.',
+    'Mystery signal identified as microwave oven in adjacent apartment.',
+    'Ham radio operator discovers that the real DX was the friends made along the way.',
+    'This bulletin brought to you by electromagnetic radiation. You are welcome.',
+    'FLASH: QSO party declared a disaster area. Contacts everywhere.',
+    'Frequency police issue citation. Defendant claims artistic expression.',
+    'Breaking: propagation map confirms the band is both open and closed simultaneously.',
+    'Local repeater gains consciousness. Immediately starts complaining about kerchunkers.',
+    'Top secret military frequency accidentally plays smooth jazz for six hours.',
+    'Man builds antenna so large it requires its own weather system.',
+    'NOAA issues advisory: solar flare incoming. Recommended action: enjoy the aurora.',
 ]
 
 
@@ -8590,7 +8694,7 @@ def api_voice_roulette():
     speed    = round(random.uniform(0.6, 1.8), 1)
     result   = orchestrator.execute(text, engine=engine, voice=None,
                                     preset=preset, pitch=pitch,
-                                    speed=int(speed * 100), roger_beep=False)
+                                    speed=speed, roger_beep=False)
     return jsonify({
         'success': result.get('success', False),
         'engine':  engine,

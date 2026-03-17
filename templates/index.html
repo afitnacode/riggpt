@@ -1628,7 +1628,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.59</span>
+    <span class="sb-label">v2.12.60</span>
   </div>
 </div>
 
@@ -2938,8 +2938,38 @@ hr.div  {
 
   </div><!-- /row 1 -->
 
-  <!-- ROW 2: Voice Roulette, Pirate Broadcast, Chaos Button -->
+  <!-- ROW 2: Time Announce, Voice Roulette, Pirate Broadcast, Chaos Button -->
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--s4);padding:var(--s4);border-bottom:var(--b1)">
+
+      <!-- Time Announce -->
+      <div style="border:1px solid var(--cyan);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:var(--cyan);letter-spacing:.1em;margin-bottom:var(--s2)">&#128344; TIME ANNOUNCE</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Periodic UTC and local time announcement. Classic ham radio utility.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="number" id="timeannounce-interval" value="30" min="1" max="120" style="width:44px;font-size:9px" title="Interval minutes">
+          <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
+          <select id="timeannounce-engine" style="flex:1;font-size:9px" onchange="specopsVoiceRefresh('timeannounce')">
+            <option value="espeak">eSpeak</option>
+            <option value="piper">Piper</option>
+            <option value="edge">Edge TTS</option>
+            <option value="gtts">Google TTS</option>
+            <option value="pyttsx3">System TTS</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="speechify">Speechify</option>
+            <option value="openai">OpenAI TTS</option>
+            <option value="fastkoko">FastKoko</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <select id="timeannounce-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
+        </div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn sm primary" id="timeannounce-start-btn" onclick="timeannounceStart()">START</button>
+          <button class="btn sm warn" onclick="timeannounceStop()">STOP</button>
+          <button class="btn sm" onclick="timeannounceTest()" title="Fire once now">&#9654; TEST</button>
+        </div>
+        <div class="alert-strip" id="timeannounce-alert" style="margin-top:var(--s2)"></div>
+      </div>
 
       <!-- Voice Roulette -->
       <div style="border:2px solid #ff00ff;padding:var(--s3);background:var(--bg1)">
@@ -3565,6 +3595,7 @@ hr.div  {
               <div class="fx-knob"><label>CRUSH</label><input type="range" id="dub-bitcrush" min="0" max="14" value="0" oninput="dubUpdate('bitcrush',this.value)"><span class="fx-val" id="dv-bitcrush">OFF</span></div>
               <div class="fx-knob"><label>STUTTER</label><input type="range" id="dub-stutter" min="0" max="100" value="0" oninput="dubUpdate('stutter',this.value)"><span class="fx-val" id="dv-stutter">OFF</span></div>
               <div class="fx-knob"><label>WIDTH</label><input type="range" id="dub-width" min="0" max="200" value="100" oninput="dubUpdate('width',this.value)"><span class="fx-val" id="dv-width">100%</span></div>
+              <div class="fx-knob"><label>REV</label><label class="toggle-row" style="flex:1;gap:4px"><input type="checkbox" id="dub-reverse" onchange="dubUpdateChainDisplay()"> <span class="fx-val" style="width:auto" id="dv-reverse">OFF</span></label></div>
             </div>
           </div>
           <div class="fx-group">
@@ -6067,6 +6098,10 @@ function dubPreset(name) {
     const sl = document.getElementById('dub-' + k);
     if (sl) { sl.value = p[k]; dubUpdate(k, p[k]); }
   });
+  // Reset checkboxes to defaults (presets don't include these)
+  const revCb = document.getElementById('dub-reverse');
+  if (revCb) revCb.checked = false;
+  dubUpdateChainDisplay();
   // Highlight active preset button
   document.querySelectorAll('[id^="dub-preset-btn-"]').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('dub-preset-btn-' + name);
@@ -6229,6 +6264,10 @@ function dubUpdateChainDisplay() {
   if (gi('dub-vibrato')   > 0) parts.push('vib=' + gi('dub-vibrato') + '%');
   if (gi('dub-reverb')    > 0) parts.push('reverb=' + gi('dub-reverb') + '%');
   const echo = gi('dub-echo'); if (echo > 0) parts.push('echo=' + echo + 'ms/' + gi('dub-echo-fb') + '%fb');
+  const revEl = document.getElementById('dub-reverse');
+  const revLbl = document.getElementById('dv-reverse');
+  if (revEl?.checked) parts.push('REVERSE');
+  if (revLbl) revLbl.textContent = revEl?.checked ? 'ON' : 'OFF';
   const el = document.getElementById('dub-chain');
   if (el) el.innerHTML = 'Chain ' + (parts.length
     ? `<span style="color:var(--amber);font-size:9px">[${parts.length} FX]</span> <span>` + parts.join(' <span style="color:var(--text3)">→</span> ') + '</span>'
@@ -6302,6 +6341,8 @@ function dubLoadUserPreset() {
     set('dub-reverb',    p.reverb    ?? 0);
     set('dub-echo',      p.echo      ?? 0);
     set('dub-echo-fb',   p.echo_fb   ?? 40);
+    const revCb = document.getElementById('dub-reverse');
+    if (revCb) revCb.checked = !!p.reverse;
     // Trigger display update for all
     Object.keys(_DUB_DFLT).forEach(k => {
       const sl = document.getElementById('dub-' + k);
@@ -6418,6 +6459,7 @@ function dubGetParams() {
     echo:      gi('dub-echo'),
     echo_fb:   gi('dub-echo-fb'),
     normalize: document.getElementById('dub-normalize')?.checked || false,
+    reverse:   document.getElementById('dub-reverse')?.checked || false,
     wet:       parseInt(document.getElementById('dub-wet')?.value || 100),
   };
 }
@@ -8966,6 +9008,9 @@ async function cfgFlushPresets() {
     pirate_voice:             get('pirate-voice'),
     ghost_engine:             get('ghost-engine'),
     ghost_voice:              get('ghost-voice'),
+    timeannounce_interval:    get('timeannounce-interval'),
+    timeannounce_engine:      get('timeannounce-engine'),
+    timeannounce_voice:       get('timeannounce-voice'),
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -10647,6 +10692,9 @@ function _restoreAllSettings(s) {
   set('pirate-voice',     s.pirate_voice);
   set('ghost-engine',     s.ghost_engine);
   set('ghost-voice',      s.ghost_voice);
+  set('timeannounce-interval', s.timeannounce_interval);
+  set('timeannounce-engine',   s.timeannounce_engine);
+  set('timeannounce-voice',    s.timeannounce_voice);
   // TX tab defaults (engine triggers async voice list load)
   if (s.tx_engine) {
     set('tx-engine', s.tx_engine);
@@ -10675,6 +10723,7 @@ async function specopsStopAll() {
     api('POST', '/api/pirate/stop'),
     api('POST', '/api/mystery/stop'),
     api('POST', '/api/autoid/stop'),
+    api('POST', '/api/timeannounce/stop'),
     api('POST', '/api/ghost/stop'),
     api('POST', '/api/tx/terminate'),
     api('POST', '/api/ptt', {state: false}),
@@ -10682,9 +10731,10 @@ async function specopsStopAll() {
   await Promise.allSettled(ops);
   // Reset all button states
   const resets = [
-    ['ns-start-btn',     '\u25a0 START', ''],
-    ['pirate-start-btn', '\uD83D\uDD34 ON AIR', ''],
-    ['autoid-start-btn', 'START', ''],
+    ['ns-start-btn',           '\u25a0 START', ''],
+    ['pirate-start-btn',       '\uD83D\uDD34 ON AIR', ''],
+    ['autoid-start-btn',       'START', ''],
+    ['timeannounce-start-btn', 'START', ''],
   ];
   for (const [id, text, bg] of resets) {
     const el = document.getElementById(id);
@@ -10700,18 +10750,20 @@ async function specopsStopAll() {
 
 function specopsVoiceRefresh(prefix) {
   const keyMap = {ns:'numbers_station_voice', solar:'solar_voice', mystery:'mystery_voice',
-                  autoid:'autoid_voice', pirate:'pirate_voice', ghost:'ghost_voice'};
+                  autoid:'autoid_voice', pirate:'pirate_voice', ghost:'ghost_voice',
+                  timeannounce:'timeannounce_voice'};
   _loadVoicesInto(prefix + '-engine', prefix + '-voice', keyMap[prefix]);
 }
 
 // ── Spec Ops Status Refresh (on tab open / page load) ─────────────────────
 async function specopsRefreshStatus() {
   try {
-    const [ns, pirate, mystery, autoid] = await Promise.all([
+    const [ns, pirate, mystery, autoid, ta] = await Promise.all([
       api('GET', '/api/numbers_station/status'),
       api('GET', '/api/pirate/status'),
       api('GET', '/api/mystery/status'),
       api('GET', '/api/autoid/status'),
+      api('GET', '/api/timeannounce/status'),
     ]);
     // Numbers Station
     const nsBtn = document.getElementById('ns-start-btn');
@@ -10736,11 +10788,17 @@ async function specopsRefreshStatus() {
       if (autoid.active) { aidBtn.textContent = '\u25cf ACTIVE'; aidBtn.style.background = 'var(--dim-rx)'; }
       else               { aidBtn.textContent = 'START';         aidBtn.style.background = ''; }
     }
+    // Time Announce
+    const taBtn = document.getElementById('timeannounce-start-btn');
+    if (taBtn) {
+      if (ta.active) { taBtn.textContent = '\u25cf ACTIVE'; taBtn.style.background = 'var(--cyan)'; }
+      else           { taBtn.textContent = 'START';          taBtn.style.background = ''; }
+    }
   } catch(e) {
     console.warn('specopsRefreshStatus:', e.message);
   }
   // Populate voice dropdowns for whatever engines are currently selected
-  for (const prefix of ['ns', 'solar', 'mystery', 'autoid', 'pirate', 'ghost']) {
+  for (const prefix of ['ns', 'solar', 'mystery', 'autoid', 'pirate', 'ghost', 'timeannounce']) {
     specopsVoiceRefresh(prefix);
   }
 }
@@ -10842,6 +10900,36 @@ async function autoidStop() {
   if (btn) { btn.textContent = 'START'; btn.style.background = ''; }
 }
 
+// ── Time Announce ────────────────────────────────────────────────────────
+async function timeannounceStart() {
+  const interval = parseInt(document.getElementById('timeannounce-interval')?.value) || 30;
+  const engine   = document.getElementById('timeannounce-engine')?.value || 'espeak';
+  const voice    = document.getElementById('timeannounce-voice')?.value || '';
+  const r = await api('POST', '/api/timeannounce/start', { interval_minutes: interval, engine, voice });
+  showAlert('timeannounce-alert', r.message || (r.success ? 'Started' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success) {
+    const btn = document.getElementById('timeannounce-start-btn');
+    if (btn) { btn.textContent = '● ACTIVE'; btn.style.background = 'var(--cyan)'; }
+  }
+}
+
+async function timeannounceStop() {
+  const r = await api('POST', '/api/timeannounce/stop');
+  showAlert('timeannounce-alert', r.message || 'Stopped', 'warn');
+  const btn = document.getElementById('timeannounce-start-btn');
+  if (btn) { btn.textContent = 'START'; btn.style.background = ''; }
+}
+
+async function timeannounceTest() {
+  showAlert('timeannounce-alert', 'Announcing time...', 'info', 0);
+  const r = await api('POST', '/api/timeannounce/start', {
+    interval_minutes: parseInt(document.getElementById('timeannounce-interval')?.value) || 30,
+    engine: document.getElementById('timeannounce-engine')?.value || 'espeak',
+    voice:  document.getElementById('timeannounce-voice')?.value || '',
+  });
+  showAlert('timeannounce-alert', r.message || 'Fired', r.success ? 'ok' : 'err');
+}
+
 // ── Voice Roulette ───────────────────────────────────────────────────────
 async function voiceRoulette() {
   const text = document.getElementById('tx-text')?.value?.trim();
@@ -10908,6 +10996,16 @@ async function chaosButton() {
       const text=document.getElementById('tx-text')?.value?.trim()||'Chaos.';
       const r=await api('POST','/api/transmit',{text,engine:'espeak',preset:'alien',roger_beep:false});
       return '\uD83D\uDD25 FX blast: '+r.message;
+    },
+    async () => {
+      const ghosts = ['poltergeist','passband','power_wobble','agc_seizure','split_personality','digital_ghost'];
+      const g = ghosts[Math.floor(Math.random()*ghosts.length)];
+      const r = await api('POST', '/api/ghost/start', {name: g, duration: 30});
+      return '\uD83D\uDC7B Ghost possession: ' + g + ' (' + (r.message||'') + ')';
+    },
+    async () => {
+      const r = await api('POST', '/api/timeannounce/start', {interval_minutes: 15, engine: 'espeak'});
+      return '\uD83D\uDD52 Time announce activated every 15min';
     },
   ];
   const fn = opts[Math.floor(Math.random()*opts.length)];
