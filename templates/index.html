@@ -291,6 +291,7 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
 }
 .pane.active { display: flex; flex-direction: column; }
+#pane-specops.active { flex-direction: row; }
 
 /* ═══════════════════════════════════════════════════════════
    PANEL FRAME
@@ -1687,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.62</span>
+    <span class="sb-label">v2.12.63</span>
   </div>
 </div>
 
@@ -2844,7 +2845,7 @@ hr.div  {
      PANE: SPEC OPS
      Special Ops + Ghost-in-the-Machine
 ══════════════════════════ -->
-<div id="pane-specops" class="pane" style="display:flex;overflow:hidden">
+<div id="pane-specops" class="pane" style="overflow:hidden">
   <!-- Left: scrollable content -->
   <div style="flex:1;overflow-y:auto">
   <div style="padding:var(--s4);border-bottom:2px solid var(--tx);display:flex;align-items:center;gap:var(--s4);flex-shrink:0">
