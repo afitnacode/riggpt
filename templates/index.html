@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.68</span>
+    <span class="sb-label">v2.12.69</span>
   </div>
 </div>
 
@@ -2250,6 +2250,12 @@ hr.div  {
               <option value="diagonal">DIAGONAL DRIFT</option>
               <option value="mirror">SIDEBAND MIRROR</option>
               <option value="bounce">FREQ BOUNCE</option>
+              <option value="zigzag">ZIGZAG (sawtooth)</option>
+              <option value="mode_glitch">MODE GLITCH (USB/LSB/CW/AM)</option>
+              <option value="power_fade">POWER FADE (brightness pulse)</option>
+              <option value="mode_glitch">MODE GLITCH (USB/LSB/CW/AM)</option>
+              <option value="zigzag">ZIGZAG SWEEP</option>
+              <option value="power_fade">POWER FADE</option>
             </select>
           </div>
           <!-- Panorama params -->
@@ -2307,6 +2313,60 @@ hr.div  {
                 <option value="2">2 rows</option>
                 <option value="4" selected>4 rows</option>
                 <option value="8">8 rows</option>
+              </select>
+            </div>
+          </div>
+          <!-- Mode Glitch params -->
+          <div id="wf-adv-mode_glitch" style="font-size:8px;display:none">
+            <div style="color:var(--text3);padding:2px 0;margin-bottom:2px">Cycles USB → LSB → CW → AM every N rows. Each mode has a different signal signature on wideband SDR.</div>
+            <div class="form-row" style="margin-bottom:2px">
+              <label style="font-size:8px;width:50px">ROWS</label>
+              <select id="wf-adv-glitch-rows" style="flex:1;font-size:8px">
+                <option value="2">2 (rapid glitch)</option>
+                <option value="4" selected>4 (standard)</option>
+                <option value="8">8 (slow morph)</option>
+                <option value="16">16 (dramatic)</option>
+              </select>
+            </div>
+          </div>
+          <!-- Zigzag params -->
+          <div id="wf-adv-zigzag" style="font-size:8px;display:none">
+            <div style="color:var(--text3);padding:2px 0;margin-bottom:2px">VFO sweeps up then down in a sawtooth pattern. Image appears as a snake across the band.</div>
+            <div class="form-row" style="margin-bottom:2px">
+              <label style="font-size:8px;width:50px">SPAN</label>
+              <select id="wf-adv-zz-span" style="flex:1;font-size:8px">
+                <option value="3000">3 kHz (tight)</option>
+                <option value="6000" selected>6 kHz (moderate)</option>
+                <option value="12000">12 kHz (wide)</option>
+                <option value="25000">25 kHz (extreme)</option>
+              </select>
+            </div>
+            <div class="form-row" style="margin-bottom:2px">
+              <label style="font-size:8px;width:50px">PERIOD</label>
+              <select id="wf-adv-zz-period" style="flex:1;font-size:8px">
+                <option value="8">8 rows (fast zigzag)</option>
+                <option value="16" selected>16 rows (standard)</option>
+                <option value="32">32 rows (slow wave)</option>
+              </select>
+            </div>
+          </div>
+          <!-- Power Fade params -->
+          <div id="wf-adv-power_fade" style="font-size:8px;display:none">
+            <div style="color:var(--text3);padding:2px 0;margin-bottom:2px">Modulates TX power via CI-V between rows. Image pulses bright/dim on the waterfall like breathing.</div>
+            <div class="form-row" style="margin-bottom:2px">
+              <label style="font-size:8px;width:50px">CYCLE</label>
+              <select id="wf-adv-fade-period" style="flex:1;font-size:8px">
+                <option value="8">8 rows (rapid pulse)</option>
+                <option value="16" selected>16 rows (standard)</option>
+                <option value="32">32 rows (slow breathe)</option>
+              </select>
+            </div>
+            <div class="form-row" style="margin-bottom:2px">
+              <label style="font-size:8px;width:50px">MIN %</label>
+              <select id="wf-adv-fade-min" style="flex:1;font-size:8px">
+                <option value="10">10% (dramatic fade)</option>
+                <option value="30" selected>30% (moderate)</option>
+                <option value="50">50% (subtle)</option>
               </select>
             </div>
           </div>
@@ -5887,7 +5947,7 @@ function _wfBuildFormData(cannedOverride) {
   fd.append('base_freq',      200);
   fd.append('contrast',       parseFloat(document.getElementById('wf-contrast')?.value || 1.5));
   fd.append('frame_duration', (_wfGetFrameMs() / 1000).toFixed(4));
-  fd.append('add_markers',    'true');
+  fd.append('add_markers',    'false');
   return fd;
 }
 
@@ -5955,7 +6015,7 @@ function wfGetProc() {
 // ── CI-V Advanced Waterfall ──────────────────────────────────────────────
 function wfAdvModeChange() {
   const mode = document.getElementById('wf-adv-mode')?.value || 'panorama';
-  for (const m of ['panorama','diagonal','mirror','bounce']) {
+  for (const m of ['panorama','diagonal','mirror','bounce','mode_glitch','zigzag','power_fade']) {
     const el = document.getElementById('wf-adv-' + m);
     if (el) el.style.display = m === mode ? '' : 'none';
   }
@@ -6001,10 +6061,19 @@ async function wfAdvancedTransmit() {
   } else if (mode === 'bounce') {
     payload.bounce_offset = parseInt(document.getElementById('wf-adv-bounce-offset')?.value || 10000);
     payload.bounce_rows = parseInt(document.getElementById('wf-adv-bounce-rows')?.value || 4);
+  } else if (mode === 'mode_glitch') {
+    payload.glitch_rows = parseInt(document.getElementById('wf-adv-glitch-rows')?.value || 4);
+  } else if (mode === 'zigzag') {
+    payload.zigzag_span = parseInt(document.getElementById('wf-adv-zz-span')?.value || 6000);
+    payload.zigzag_period = parseInt(document.getElementById('wf-adv-zz-period')?.value || 16);
+  } else if (mode === 'power_fade') {
+    payload.fade_period = parseInt(document.getElementById('wf-adv-fade-period')?.value || 16);
+    payload.fade_min = parseInt(document.getElementById('wf-adv-fade-min')?.value || 30);
   }
 
   const srcName = source === 'hell' ? 'HELL' : _wfSelectedCanned;
-  const modeNames = {panorama:'PANORAMA', diagonal:'DIAGONAL', mirror:'MIRROR', bounce:'BOUNCE'};
+  const modeNames = {panorama:'PANORAMA', diagonal:'DIAGONAL', mirror:'MIRROR', bounce:'BOUNCE',
+                     mode_glitch:'MODE GLITCH', zigzag:'ZIGZAG', power_fade:'POWER FADE'};
   showAlert('wf-alert', `⚡ ${modeNames[mode]} + ${srcName}: transmitting...`, 'warn', 0);
 
   try {

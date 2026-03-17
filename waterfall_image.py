@@ -849,7 +849,7 @@ def image_to_waterfall_wav(
     sharpen=0.3, equalize=True, dither=False,
     tone_curve='gamma', noise_floor=0.03,
     black_point=0, white_point=255,
-    flip_v=False, flip_h=False,
+    flip_v=True, flip_h=False,
     add_header_tone=None, add_footer_tone=None,
 ):
     if add_header_tone is not None or add_footer_tone is not None:

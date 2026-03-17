@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.68
+RigGPT v2.12.69
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.68'
+VERSION        = 'v2.12.69'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3242,7 +3242,8 @@ def api_waterfall_advanced():
             else:
                 img = fn(size=(image_width*2, image_height*2))
             pixels = process_image(img, image_width, image_height,
-                                   contrast=contrast, equalize=True, sharpen=0.3)
+                                   contrast=contrast, equalize=True, sharpen=0.3,
+                                   flip_v=True)
             pixels = np.power(np.clip(pixels, 0, 1), 0.5)
             freqs = np.linspace(base_freq, base_freq + bandwidth, image_width)
             samples_per_frame = int(SAMPLE_RATE * frame_dur)
@@ -3270,19 +3271,19 @@ def api_waterfall_advanced():
                 r_start = i * rows_per_hop
                 r_end = min(r_start + rows_per_hop, n_frames)
                 freq = orig_freq + (i * panorama_step) - (panorama_span // 2)
-                chunks.append((r_start, r_end, int(freq), 'USB'))
+                chunks.append((r_start, r_end, int(freq), 'USB', None))
                 if r_end >= n_frames:
                     break
 
         elif mode == 'diagonal':
             for r in range(n_frames):
                 freq = orig_freq + (r * diagonal_hz) - (n_frames * diagonal_hz // 2)
-                chunks.append((r, r + 1, int(freq), 'USB'))
+                chunks.append((r, r + 1, int(freq), 'USB', None))
 
         elif mode == 'mirror':
             half = n_frames // 2
-            chunks.append((0, half, orig_freq, 'USB'))
-            chunks.append((half, n_frames, orig_freq, 'LSB'))
+            chunks.append((0, half, orig_freq, 'USB', None))
+            chunks.append((half, n_frames, orig_freq, 'LSB', None))
 
         elif mode == 'bounce':
             freq_a = orig_freq
@@ -3290,7 +3291,44 @@ def api_waterfall_advanced():
             for r in range(0, n_frames, bounce_rows):
                 r_end = min(r + bounce_rows, n_frames)
                 f = freq_a if (r // bounce_rows) % 2 == 0 else freq_b
-                chunks.append((r, r_end, int(f), 'USB'))
+                chunks.append((r, r_end, int(f), 'USB', None))
+
+        elif mode == 'mode_glitch':
+            # Cycle through USB/LSB/CW/AM every few rows — each mode has
+            # a different signal signature on wideband SDR
+            glitch_modes = ['USB', 'LSB', 'CW', 'AM', 'USB', 'LSB']
+            rows_per_mode = max(1, int(data.get('glitch_rows', 4)))
+            for r in range(0, n_frames, rows_per_mode):
+                r_end = min(r + rows_per_mode, n_frames)
+                m = glitch_modes[(r // rows_per_mode) % len(glitch_modes)]
+                chunks.append((r, r_end, orig_freq, m, None))
+
+        elif mode == 'zigzag':
+            # VFO zigzags: sweeps up then down then up etc.
+            zz_span = int(data.get('zigzag_span', 6000))
+            zz_period = max(4, int(data.get('zigzag_period', 16)))
+            import math as _math
+            for r in range(n_frames):
+                # Triangle wave: goes 0→1→0→-1→0 over period
+                phase = (r % zz_period) / zz_period
+                tri = 1.0 - abs(2.0 * phase - 1.0)  # 0→1→0
+                if (r // zz_period) % 2 == 1:
+                    tri = -tri  # alternate direction
+                freq = orig_freq + int(tri * zz_span / 2)
+                chunks.append((r, r + 1, int(freq), 'USB', None))
+
+        elif mode == 'power_fade':
+            # Modulate TX power between rows — creates brightness pulsing
+            # CI-V sub 0x0A = RF power (0-255)
+            fade_period = max(4, int(data.get('fade_period', 16)))
+            fade_min = max(10, int(data.get('fade_min', 30)))   # minimum power %
+            import math as _math
+            for r in range(n_frames):
+                # Sine wave power modulation
+                phase = (r % fade_period) / fade_period
+                pwr_pct = fade_min + (100 - fade_min) * (0.5 + 0.5 * _math.sin(2 * _math.pi * phase))
+                pwr_val = int(pwr_pct / 100.0 * 255)
+                chunks.append((r, r + 1, orig_freq, 'USB', pwr_val))
 
         else:
             return jsonify({'success': False, 'message': f'Unknown mode: {mode}'}), 400
@@ -3308,7 +3346,9 @@ def api_waterfall_advanced():
 
             last_freq = None
             last_mode = None
-            for chunk_idx, (r_start, r_end, freq_hz, mode_name) in enumerate(chunks):
+            last_power = None
+            orig_power = None
+            for chunk_idx, (r_start, r_end, freq_hz, mode_name, power_val) in enumerate(chunks):
                 if freq_hz != last_freq:
                     agent.set_frequency(freq_hz)
                     last_freq = freq_hz
@@ -3317,6 +3357,12 @@ def api_waterfall_advanced():
                     agent.set_mode(mode_name)
                     last_mode = mode_name
                     time_module.sleep(0.02)
+                if power_val is not None and power_val != last_power:
+                    if orig_power is None:
+                        # Save original power on first change
+                        orig_power = agent.read_meter(0x0A) or 200
+                    agent.set_level(0x0A, power_val)
+                    last_power = power_val
 
                 chunk_frames = row_audio[r_start:r_end]
                 chunk_audio = np.concatenate(chunk_frames)
@@ -3346,6 +3392,9 @@ def api_waterfall_advanced():
                 except Exception: pass
             if orig_freq:
                 try: agent.set_frequency(orig_freq)
+                except Exception: pass
+            if orig_power is not None:
+                try: agent.set_level(0x0A, orig_power)
                 except Exception: pass
             try: agent.set_mode('USB')
             except Exception: pass
@@ -3392,7 +3441,7 @@ def api_waterfall_transmit():
     base_freq    = float(_get('base_freq',  200.0))
     bandwidth    = float(_get('bandwidth', 2700.0))
     frame_dur    = float(_get('frame_duration', 0.08))
-    add_markers  = str(_get('add_markers', 'true')).lower() == 'true'
+    add_markers  = str(_get('add_markers', 'false')).lower() == 'true'
     proc         = _wf_proc_params(request.form) if request.form else _wf_proc_params(_jb)
 
     if base_freq + bandwidth > 2800:
@@ -3433,9 +3482,9 @@ def api_waterfall_transmit():
         try:
             orchestrator.icom_agent.ptt_on()
             ptt_active = True
-            time_module.sleep(0.3)
+            time_module.sleep(0.15)
             played = orchestrator.playback_agent.play(wav_path, normalize=False)
-            time_module.sleep(0.2)
+            time_module.sleep(0.1)
             orchestrator.icom_agent.ptt_off()
             ptt_active = False
         finally:
