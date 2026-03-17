@@ -1628,7 +1628,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.58</span>
+    <span class="sb-label">v2.12.59</span>
   </div>
 </div>
 
@@ -3439,6 +3439,19 @@ hr.div  {
 
     <!-- ── CART VIEW ── -->
     <div id="clips-cart-view" style="flex:1;overflow-y:auto;padding:var(--s3)">
+
+      <!-- Bank Selector -->
+      <div style="display:flex;align-items:center;gap:var(--s2);padding:var(--s2);margin-bottom:var(--s3);
+                  background:linear-gradient(180deg,#1a1a1a,#111);border:1px solid #333;border-radius:2px">
+        <span style="font-size:8px;color:#ff9500;font-family:var(--mono);letter-spacing:.12em;flex-shrink:0">BANK</span>
+        <select id="clips-bank-sel" onchange="clipsBankSwitch()" style="flex:1;max-width:200px;font-size:9px;
+                font-family:var(--mono);background:#0a0a0a;color:#55cc55;border:1px solid #333"></select>
+        <button class="btn sm" onclick="clipsBankAdd()" style="font-size:8px;padding:2px 6px" title="New bank">+ NEW</button>
+        <button class="btn sm" onclick="clipsBankRename()" style="font-size:8px;padding:2px 6px" title="Rename bank">✎ REN</button>
+        <button class="btn sm" onclick="clipsBankDuplicate()" style="font-size:8px;padding:2px 6px" title="Duplicate bank">⧉ DUP</button>
+        <button class="btn sm" onclick="clipsBankDelete()" style="font-size:8px;padding:2px 6px;border-color:#551111;color:#ff4444" title="Delete bank">✕ DEL</button>
+        <span id="clips-bank-count" style="font-size:8px;color:#6a6a5a;font-family:var(--mono);margin-left:auto"></span>
+      </div>
 
       <!-- Tier A: JINGLES - green -->
       <div style="display:flex;align-items:center;padding:var(--s2) var(--s2);
@@ -10179,22 +10192,138 @@ const _CLIPS_TIERS = [
   { id:'c', start:12, end:17, label:'SPOTS',   color:'var(--warn)'   },
   { id:'d', start:18, end:23, label:'MISC',    color:'var(--purple)' },
 ];
-let _clipsCart = new Array(24).fill(null);  // null = empty, string = filename
+let _clipsCart = new Array(24).fill(null);  // active bank's slot array
+let _clipsBanks = [];    // [{name: 'Bank 1', slots: [24]}]
+let _clipsBankIdx = 0;   // index of active bank
 let _clipsView = 'cart';  // 'cart' | 'files'
 let _clipsAssignSlot = -1;
 
+function _clipsBanksDefault() {
+  return [{ name: 'Default', slots: new Array(24).fill(null) }];
+}
+
 function clipsCartLoad() {
   try {
-    const stored = localStorage.getItem('riggpt_clips_cart');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length === 24) _clipsCart = parsed;
+    // Migrate from old single-cart format
+    const oldCart = localStorage.getItem('riggpt_clips_cart');
+    const banksRaw = localStorage.getItem('riggpt_clips_banks');
+    if (banksRaw) {
+      const parsed = JSON.parse(banksRaw);
+      if (parsed.banks && Array.isArray(parsed.banks) && parsed.banks.length > 0) {
+        _clipsBanks = parsed.banks;
+        _clipsBankIdx = Math.max(0, Math.min(parsed.active || 0, _clipsBanks.length - 1));
+      } else {
+        _clipsBanks = _clipsBanksDefault();
+        _clipsBankIdx = 0;
+      }
+    } else if (oldCart) {
+      // Migrate old single cart into bank 0
+      const parsed = JSON.parse(oldCart);
+      if (Array.isArray(parsed) && parsed.length === 24) {
+        _clipsBanks = [{ name: 'Default', slots: parsed }];
+      } else {
+        _clipsBanks = _clipsBanksDefault();
+      }
+      _clipsBankIdx = 0;
+      localStorage.removeItem('riggpt_clips_cart');  // clean up old key
+    } else {
+      _clipsBanks = _clipsBanksDefault();
+      _clipsBankIdx = 0;
     }
-  } catch(e) { _clipsCart = new Array(24).fill(null); }
+    // Ensure all banks have valid 24-slot arrays
+    for (const bank of _clipsBanks) {
+      if (!Array.isArray(bank.slots) || bank.slots.length !== 24) {
+        bank.slots = new Array(24).fill(null);
+      }
+    }
+    _clipsCart = _clipsBanks[_clipsBankIdx].slots;
+    _clipsBankRenderSel();
+  } catch(e) {
+    _clipsBanks = _clipsBanksDefault();
+    _clipsBankIdx = 0;
+    _clipsCart = _clipsBanks[0].slots;
+  }
 }
 
 function clipsCartSave() {
-  try { localStorage.setItem('riggpt_clips_cart', JSON.stringify(_clipsCart)); } catch(e) {}
+  try {
+    // Ensure active bank's slots are in sync
+    _clipsBanks[_clipsBankIdx].slots = _clipsCart;
+    localStorage.setItem('riggpt_clips_banks', JSON.stringify({
+      banks: _clipsBanks,
+      active: _clipsBankIdx,
+    }));
+  } catch(e) {}
+}
+
+// ── Bank CRUD ──────────────────────────────────────────────────────────
+function _clipsBankRenderSel() {
+  const sel = document.getElementById('clips-bank-sel');
+  if (!sel) return;
+  sel.innerHTML = _clipsBanks.map((b, i) =>
+    `<option value="${i}" ${i === _clipsBankIdx ? 'selected' : ''}>${escHtml(b.name)} (${b.slots.filter(s=>s).length}/24)</option>`
+  ).join('');
+  const ct = document.getElementById('clips-bank-count');
+  if (ct) ct.textContent = _clipsBanks.length + ' bank' + (_clipsBanks.length === 1 ? '' : 's');
+}
+
+function clipsBankSwitch() {
+  const sel = document.getElementById('clips-bank-sel');
+  if (!sel) return;
+  // Save current bank before switching
+  _clipsBanks[_clipsBankIdx].slots = _clipsCart;
+  _clipsBankIdx = parseInt(sel.value) || 0;
+  _clipsCart = _clipsBanks[_clipsBankIdx].slots;
+  clipsCartSave();
+  clipsCartRender();
+  _clipsBankRenderSel();
+}
+
+function clipsBankAdd() {
+  const name = prompt('New bank name:', 'Bank ' + (_clipsBanks.length + 1));
+  if (!name || !name.trim()) return;
+  _clipsBanks.push({ name: name.trim(), slots: new Array(24).fill(null) });
+  _clipsBankIdx = _clipsBanks.length - 1;
+  _clipsCart = _clipsBanks[_clipsBankIdx].slots;
+  clipsCartSave();
+  clipsCartRender();
+  _clipsBankRenderSel();
+}
+
+function clipsBankRename() {
+  const current = _clipsBanks[_clipsBankIdx].name;
+  const name = prompt('Rename bank:', current);
+  if (!name || !name.trim()) return;
+  _clipsBanks[_clipsBankIdx].name = name.trim();
+  clipsCartSave();
+  _clipsBankRenderSel();
+}
+
+function clipsBankDuplicate() {
+  const src = _clipsBanks[_clipsBankIdx];
+  const name = prompt('Name for duplicate:', src.name + ' (copy)');
+  if (!name || !name.trim()) return;
+  _clipsBanks.push({ name: name.trim(), slots: [...src.slots] });
+  _clipsBankIdx = _clipsBanks.length - 1;
+  _clipsCart = _clipsBanks[_clipsBankIdx].slots;
+  clipsCartSave();
+  clipsCartRender();
+  _clipsBankRenderSel();
+}
+
+function clipsBankDelete() {
+  if (_clipsBanks.length <= 1) {
+    alert('Cannot delete the last bank.');
+    return;
+  }
+  const name = _clipsBanks[_clipsBankIdx].name;
+  if (!confirm('Delete bank "' + name + '"? This cannot be undone.')) return;
+  _clipsBanks.splice(_clipsBankIdx, 1);
+  _clipsBankIdx = Math.min(_clipsBankIdx, _clipsBanks.length - 1);
+  _clipsCart = _clipsBanks[_clipsBankIdx].slots;
+  clipsCartSave();
+  clipsCartRender();
+  _clipsBankRenderSel();
 }
 
 function clipsCartRender() {
