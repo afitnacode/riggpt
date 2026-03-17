@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.67
+RigGPT v2.12.68
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.67'
+VERSION        = 'v2.12.68'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3145,17 +3145,20 @@ def api_waterfall_hell():
 
 @app.route('/api/waterfall/advanced', methods=['POST'])
 def api_waterfall_advanced():
-    """CI-V choreographed waterfall: panorama, diagonal, mirror, bounce."""
+    """CI-V choreographed waterfall: panorama, diagonal, mirror, bounce.
+    Supports both canned images and Hellschreiber text as source."""
     if not _waterfall_ok:
         return jsonify({'success': False, 'message': 'waterfall_image module not loaded'}), 500
-    from waterfall_image import process_image, CANNED_IMAGES, SAMPLE_RATE
+    from waterfall_image import (process_image, CANNED_IMAGES, SAMPLE_RATE,
+                                 _HELL_FONT)
     import numpy as np
-    from PIL import Image
 
     data = request.json or {}
-    mode = data.get('mode', 'panorama')
+    mode   = data.get('mode', 'panorama')
+    source = data.get('source', 'image')  # 'image' or 'hell'
     canned = data.get('canned', '')
-    text   = data.get('callsign_text', '')
+    hell_text    = data.get('hell_text', '').strip().upper()
+    hell_repeat  = max(1, min(5, int(data.get('hell_repeat', 2))))
     image_width  = int(data.get('image_width', 128))
     image_height = int(data.get('image_height', 64))
     base_freq    = float(data.get('base_freq', 200))
@@ -3163,100 +3166,139 @@ def api_waterfall_advanced():
     frame_dur    = float(data.get('frame_duration', 0.1))
     contrast     = float(data.get('contrast', 2.0))
 
-    # Mode-specific params
-    panorama_span   = int(data.get('panorama_span', 30000))    # Hz spread
-    panorama_step   = int(data.get('panorama_step', 3000))     # Hz per hop
-    diagonal_hz     = int(data.get('diagonal_hz_per_row', 50)) # Hz drift per row
-    bounce_offset   = int(data.get('bounce_offset', 10000))     # Hz offset for bounce
-    bounce_freq_b   = int(data.get('bounce_freq_b', 0))       # explicit second freq (Hz)
-    bounce_rows     = int(data.get('bounce_rows', 4))          # rows per bounce
+    # CI-V mode params
+    panorama_span   = int(data.get('panorama_span', 30000))
+    panorama_step   = int(data.get('panorama_step', 3000))
+    diagonal_hz     = int(data.get('diagonal_hz_per_row', 50))
+    bounce_offset   = int(data.get('bounce_offset', 10000))
+    bounce_freq_b   = int(data.get('bounce_freq_b', 0))
+    bounce_rows     = int(data.get('bounce_rows', 4))
 
     agent = orchestrator.icom_agent
     if not agent or not agent.serial_conn or not agent.serial_conn.is_open:
         return jsonify({'success': False, 'message': 'Radio not connected'}), 503
 
-    # Save original state
     orig_freq = agent.read_frequency()
-    orig_mode = None  # we'll restore USB/LSB if mirror mode
-
-    # Build image
     _fd, img_path = tempfile.mkstemp(suffix='.png')
     os.close(_fd)
+
     try:
-        if canned:
+        # ── Generate row_audio frames from source ──────────────────────
+        row_audio = []
+
+        if source == 'hell':
+            if not hell_text:
+                return jsonify({'success': False, 'message': 'hell_text required'}), 400
+            # Build column bytes from text
+            columns = []
+            for ch in hell_text:
+                glyph = _HELL_FONT.get(ch, _HELL_FONT.get(' '))
+                for col_byte in glyph:
+                    columns.append(col_byte)
+                columns.append(0x00)
+            # Repeat
+            full_cols = []
+            for _ in range(hell_repeat):
+                full_cols.extend(columns)
+                full_cols.extend([0x00] * 3)  # gap between repeats
+
+            n_rows = 7
+            freq_spread = bandwidth / (n_rows * 4)
+            freqs = np.linspace(base_freq + bandwidth * 0.15,
+                                base_freq + bandwidth * 0.85, n_rows)
+            samples_per_col = int(SAMPLE_RATE * frame_dur)
+            t = np.linspace(0, frame_dur, samples_per_col, endpoint=False)
+            sine_basis = np.array([
+                np.sin(2.0 * np.pi * f * t) * 0.7 +
+                np.sin(2.0 * np.pi * (f - freq_spread) * t) * 0.15 +
+                np.sin(2.0 * np.pi * (f + freq_spread) * t) * 0.15
+                for f in freqs
+            ])
+            for col_byte in full_cols:
+                frame = np.zeros(samples_per_col)
+                for bit in range(n_rows):
+                    if col_byte & (1 << bit):
+                        frame += sine_basis[bit]
+                peak = np.max(np.abs(frame))
+                if peak > 0:
+                    frame = frame / peak * 0.8
+                fl = min(int(SAMPLE_RATE * 0.003), samples_per_col // 4)
+                frame[:fl] *= np.linspace(0, 1, fl)
+                frame[-fl:] *= np.linspace(1, 0, fl)
+                row_audio.append(frame)
+            n_frames = len(row_audio)
+            src_label = f'HELL "{hell_text}" ({hell_repeat}x)'
+
+        else:
+            # Image source
+            if not canned:
+                return jsonify({'success': False, 'message': 'canned image or hell_text required'}), 400
             fn, label = CANNED_IMAGES.get(canned, (None, None))
             if fn is None:
                 return jsonify({'success': False, 'message': f'Unknown canned: {canned}'}), 400
-            if canned == 'callsign' and text:
-                img = fn(size=(image_width*2, image_height*2), text=text)
+            callsign_text = data.get('callsign_text', '')
+            if canned == 'callsign' and callsign_text:
+                img = fn(size=(image_width*2, image_height*2), text=callsign_text)
             else:
                 img = fn(size=(image_width*2, image_height*2))
-        else:
-            return jsonify({'success': False, 'message': 'canned image required for advanced mode'}), 400
+            pixels = process_image(img, image_width, image_height,
+                                   contrast=contrast, equalize=True, sharpen=0.3)
+            pixels = np.power(np.clip(pixels, 0, 1), 0.5)
+            freqs = np.linspace(base_freq, base_freq + bandwidth, image_width)
+            samples_per_frame = int(SAMPLE_RATE * frame_dur)
+            t = np.linspace(0, frame_dur, samples_per_frame, endpoint=False)
+            sine_basis = np.sin(2.0 * np.pi * freqs[:, np.newaxis] * t[np.newaxis, :])
+            for row_idx in range(image_height):
+                row_amps = pixels[row_idx]
+                peak = np.max(row_amps)
+                if peak > 0.05:
+                    row_amps = row_amps / peak
+                frame = np.dot(row_amps, sine_basis)
+                fl = min(int(SAMPLE_RATE * 0.003), samples_per_frame // 4)
+                frame[:fl] *= np.linspace(0, 1, fl)
+                frame[-fl:] *= np.linspace(1, 0, fl)
+                row_audio.append(frame)
+            n_frames = len(row_audio)
+            src_label = canned
 
-        # Process to pixel array
-        pixels = process_image(img, image_width, image_height,
-                               contrast=contrast, equalize=True, sharpen=0.3)
-        # Amplitude boost (same as regular transmit)
-        pixels = np.power(np.clip(pixels, 0, 1), 0.5)
-
-        # Generate per-row audio frames
-        freqs = np.linspace(base_freq, base_freq + bandwidth, image_width)
-        samples_per_frame = int(SAMPLE_RATE * frame_dur)
-        t = np.linspace(0, frame_dur, samples_per_frame, endpoint=False)
-        sine_basis = np.sin(2.0 * np.pi * freqs[:, np.newaxis] * t[np.newaxis, :])
-
-        row_audio = []
-        for row_idx in range(image_height):
-            row_amps = pixels[row_idx]
-            peak = np.max(row_amps)
-            if peak > 0.05:
-                row_amps = row_amps / peak
-            frame = np.dot(row_amps, sine_basis)
-            fl = min(int(SAMPLE_RATE * 0.003), samples_per_frame // 4)
-            frame[:fl] *= np.linspace(0, 1, fl)
-            frame[-fl:] *= np.linspace(1, 0, fl)
-            row_audio.append(frame)
-
-        # Build chunk plan: list of (row_start, row_end, freq_hz, mode_name)
+        # ── Build chunk plan ──────────────────────────────────────────
         chunks = []
         if mode == 'panorama':
             n_hops = max(1, panorama_span // panorama_step)
-            rows_per_hop = max(1, image_height // n_hops)
+            rows_per_hop = max(1, n_frames // n_hops)
             for i in range(n_hops):
                 r_start = i * rows_per_hop
-                r_end = min(r_start + rows_per_hop, image_height)
+                r_end = min(r_start + rows_per_hop, n_frames)
                 freq = orig_freq + (i * panorama_step) - (panorama_span // 2)
                 chunks.append((r_start, r_end, int(freq), 'USB'))
-                if r_end >= image_height:
+                if r_end >= n_frames:
                     break
 
         elif mode == 'diagonal':
-            # Every row gets a slight frequency shift
-            for r in range(image_height):
-                freq = orig_freq + (r * diagonal_hz) - (image_height * diagonal_hz // 2)
+            for r in range(n_frames):
+                freq = orig_freq + (r * diagonal_hz) - (n_frames * diagonal_hz // 2)
                 chunks.append((r, r + 1, int(freq), 'USB'))
 
         elif mode == 'mirror':
-            half = image_height // 2
+            half = n_frames // 2
             chunks.append((0, half, orig_freq, 'USB'))
-            chunks.append((half, image_height, orig_freq, 'LSB'))
+            chunks.append((half, n_frames, orig_freq, 'LSB'))
 
         elif mode == 'bounce':
             freq_a = orig_freq
             freq_b = bounce_freq_b if bounce_freq_b else (orig_freq + bounce_offset)
-            for r in range(0, image_height, bounce_rows):
-                r_end = min(r + bounce_rows, image_height)
+            for r in range(0, n_frames, bounce_rows):
+                r_end = min(r + bounce_rows, n_frames)
                 f = freq_a if (r // bounce_rows) % 2 == 0 else freq_b
                 chunks.append((r, r_end, int(f), 'USB'))
 
         else:
             return jsonify({'success': False, 'message': f'Unknown mode: {mode}'}), 400
 
-        logger.info(f'WF advanced: mode={mode} chunks={len(chunks)} '
-                     f'rows={image_height} frame_dur={frame_dur}')
+        logger.info(f'WF advanced: mode={mode} source={source} chunks={len(chunks)} '
+                     f'frames={n_frames} frame_dur={frame_dur}')
 
-        # Execute the choreography
+        # ── Execute CI-V choreography ─────────────────────────────────
         ptt_active = False
         t0 = time_module.time()
         try:
@@ -3267,17 +3309,15 @@ def api_waterfall_advanced():
             last_freq = None
             last_mode = None
             for chunk_idx, (r_start, r_end, freq_hz, mode_name) in enumerate(chunks):
-                # CI-V: change freq/mode if needed
                 if freq_hz != last_freq:
                     agent.set_frequency(freq_hz)
                     last_freq = freq_hz
-                    time_module.sleep(0.02)  # 20ms settling
+                    time_module.sleep(0.02)
                 if mode_name != last_mode:
                     agent.set_mode(mode_name)
                     last_mode = mode_name
                     time_module.sleep(0.02)
 
-                # Assemble chunk audio
                 chunk_frames = row_audio[r_start:r_end]
                 chunk_audio = np.concatenate(chunk_frames)
                 peak = np.max(np.abs(chunk_audio))
@@ -3285,7 +3325,6 @@ def api_waterfall_advanced():
                     chunk_audio = chunk_audio * (0.82 / peak)
                 audio_i16 = (chunk_audio * 32767).astype(np.int16)
 
-                # Write temp WAV and play
                 _fd, chunk_wav = tempfile.mkstemp(suffix='_wfchunk.wav')
                 os.close(_fd)
                 try:
@@ -3305,7 +3344,6 @@ def api_waterfall_advanced():
             if ptt_active:
                 try: agent.ptt_off()
                 except Exception: pass
-            # Restore original frequency and mode
             if orig_freq:
                 try: agent.set_frequency(orig_freq)
                 except Exception: pass
@@ -3313,18 +3351,17 @@ def api_waterfall_advanced():
             except Exception: pass
 
         duration = round(time_module.time() - t0, 1)
-        log_transmission(f'[WF-ADV {mode}] {canned or "image"} {len(chunks)} chunks',
+        log_transmission(f'[WF-ADV {mode}] {src_label} {len(chunks)} chunks',
                          'waterfall', None, f'wf-{mode}', duration, True)
         return jsonify({
             'success': True,
-            'message': f'{mode.upper()} TX complete: {len(chunks)} chunks, {duration}s',
+            'message': f'{mode.upper()} TX complete: {src_label}, {len(chunks)} chunks, {duration}s',
             'duration': duration,
             'chunks': len(chunks),
         })
 
     except Exception as e:
         logger.error(f'WF advanced error: {e}', exc_info=True)
-        # Restore state on error
         try:
             if orig_freq: agent.set_frequency(orig_freq)
             agent.set_mode('USB')

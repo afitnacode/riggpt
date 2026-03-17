@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.67</span>
+    <span class="sb-label">v2.12.68</span>
   </div>
 </div>
 
@@ -2219,7 +2219,32 @@ hr.div  {
         </div>
         <div style="padding:var(--s2) var(--s3)">
           <div class="form-row" style="margin-bottom:var(--s2)">
-            <label style="font-size:8px">MODE</label>
+            <label style="font-size:8px">SOURCE</label>
+            <select id="wf-adv-source" style="flex:1;font-size:9px" onchange="wfAdvSourceChange()">
+              <option value="image">Canned Image (select above)</option>
+              <option value="hell">Feld-Hellschreiber Text</option>
+            </select>
+          </div>
+          <div id="wf-adv-hell-row" style="display:none;margin-bottom:var(--s2)">
+            <div class="form-row" style="margin-bottom:2px">
+              <label style="font-size:8px">TEXT</label>
+              <input type="text" id="wf-adv-hell-text" placeholder="CQ CQ DE CALLSIGN" maxlength="60"
+                oninput="this.value=this.value.toUpperCase()" style="flex:1;font-size:9px">
+            </div>
+            <div class="form-row">
+              <label style="font-size:8px">RPT</label>
+              <select id="wf-adv-hell-repeat" style="width:50px;font-size:8px">
+                <option value="1">1x</option>
+                <option value="2" selected>2x</option>
+                <option value="3">3x</option>
+              </select>
+              <span style="font-size:7px;color:var(--text3);flex:1;text-align:right">
+                Hell text uses CI-V trick below
+              </span>
+            </div>
+          </div>
+          <div class="form-row" style="margin-bottom:var(--s2)">
+            <label style="font-size:8px">TRICK</label>
             <select id="wf-adv-mode" style="flex:1;font-size:9px" onchange="wfAdvModeChange()">
               <option value="panorama">PANORAMA (freq hop)</option>
               <option value="diagonal">DIAGONAL DRIFT</option>
@@ -5936,37 +5961,51 @@ function wfAdvModeChange() {
   }
 }
 
+function wfAdvSourceChange() {
+  const src = document.getElementById('wf-adv-source')?.value || 'image';
+  const hellRow = document.getElementById('wf-adv-hell-row');
+  if (hellRow) hellRow.style.display = src === 'hell' ? '' : 'none';
+}
+
 async function wfAdvancedTransmit() {
-  const mode = document.getElementById('wf-adv-mode')?.value || 'panorama';
-  const canned = _wfSelectedCanned;
-  if (!canned) {
-    showAlert('wf-alert', 'Select a canned image first (click one above)', 'warn');
-    return;
-  }
+  const mode   = document.getElementById('wf-adv-mode')?.value || 'panorama';
+  const source = document.getElementById('wf-adv-source')?.value || 'image';
   const bw = parseInt(document.getElementById('wf-bw')?.value || 2400);
   const frameDur = _wfGetFrameMs() / 1000;
   const contrast = parseFloat(document.getElementById('wf-contrast')?.value || 2.0);
 
   const payload = {
-    mode, canned, bandwidth: bw, base_freq: 200,
+    mode, source, bandwidth: bw, base_freq: 200,
     frame_duration: frameDur, contrast,
   };
 
-  // Mode-specific params
+  if (source === 'hell') {
+    const hellText = document.getElementById('wf-adv-hell-text')?.value?.trim();
+    if (!hellText) { showAlert('wf-alert', 'Enter Hellschreiber text', 'warn'); return; }
+    payload.hell_text = hellText;
+    payload.hell_repeat = parseInt(document.getElementById('wf-adv-hell-repeat')?.value || 2);
+  } else {
+    if (!_wfSelectedCanned) {
+      showAlert('wf-alert', 'Select a canned image first (click one in the cyan box)', 'warn');
+      return;
+    }
+    payload.canned = _wfSelectedCanned;
+  }
+
+  // Trick-specific params
   if (mode === 'panorama') {
     payload.panorama_span = parseInt(document.getElementById('wf-adv-pan-span')?.value || 30000);
     payload.panorama_step = parseInt(document.getElementById('wf-adv-pan-step')?.value || 3000);
   } else if (mode === 'diagonal') {
     payload.diagonal_hz_per_row = parseInt(document.getElementById('wf-adv-diag-hz')?.value || 50);
   } else if (mode === 'bounce') {
-    const offset = parseInt(document.getElementById('wf-adv-bounce-offset')?.value || 10000);
-    payload.bounce_freq_b = 0;  // backend calculates from current VFO + offset
-    payload.bounce_offset = offset;
+    payload.bounce_offset = parseInt(document.getElementById('wf-adv-bounce-offset')?.value || 10000);
     payload.bounce_rows = parseInt(document.getElementById('wf-adv-bounce-rows')?.value || 4);
   }
 
-  const modeNames = {panorama:'PANORAMA', diagonal:'DIAGONAL DRIFT', mirror:'SIDEBAND MIRROR', bounce:'FREQ BOUNCE'};
-  showAlert('wf-alert', `⚡ ${modeNames[mode] || mode}: transmitting...`, 'warn', 0);
+  const srcName = source === 'hell' ? 'HELL' : _wfSelectedCanned;
+  const modeNames = {panorama:'PANORAMA', diagonal:'DIAGONAL', mirror:'MIRROR', bounce:'BOUNCE'};
+  showAlert('wf-alert', `⚡ ${modeNames[mode]} + ${srcName}: transmitting...`, 'warn', 0);
 
   try {
     const r = await api('POST', '/api/waterfall/advanced', payload);
