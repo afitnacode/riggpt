@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.64
+RigGPT v2.12.65
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.64'
+VERSION        = 'v2.12.65'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3096,6 +3096,53 @@ def api_waterfall_canned():
     return jsonify({'images': [{'id': k, 'label': v[1]} for k, v in CANNED_IMAGES.items()]})
 
 
+@app.route('/api/waterfall/hell', methods=['POST'])
+def api_waterfall_hell():
+    """Transmit Feld-Hellschreiber text on the waterfall."""
+    if not _waterfall_ok:
+        return jsonify({'success': False, 'message': 'waterfall_image module not loaded'}), 500
+    from waterfall_image import hellschreiber_to_wav
+    data = request.json or {}
+    text = data.get('text', '').strip()
+    if not text:
+        return jsonify({'success': False, 'message': 'text required'}), 400
+    bandwidth    = float(data.get('bandwidth', 2400))
+    base_freq    = float(data.get('base_freq', 200))
+    col_duration = float(data.get('col_duration', 0.1225))
+    repeat       = max(1, min(5, int(data.get('repeat', 2))))
+    _fd, wav_path = tempfile.mkstemp(suffix='_hell.wav')
+    os.close(_fd)
+    ptt_active = False
+    try:
+        wav_path = hellschreiber_to_wav(
+            text, output_wav=wav_path,
+            bandwidth=bandwidth, base_freq=base_freq,
+            col_duration=col_duration, repeat=repeat,
+        )
+        dur_est = os.path.getsize(wav_path) / (44100 * 2)  # mono 16-bit
+        orchestrator.icom_agent.ptt_on()
+        ptt_active = True
+        time_module.sleep(0.15)
+        orchestrator.playback_agent.play(wav_path, normalize=False)
+        time_module.sleep(0.2)
+        orchestrator.icom_agent.ptt_off()
+        ptt_active = False
+        log_transmission(f'[HELL] {text}', 'hellschreiber', None, 'hell',
+                         round(dur_est, 1), True)
+        return jsonify({'success': True,
+                        'message': f'Hellschreiber TX: "{text}" ({dur_est:.1f}s, {repeat}x repeat)',
+                        'duration': round(dur_est, 1)})
+    except Exception as e:
+        logger.error(f'Hellschreiber TX error: {e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        if ptt_active:
+            try: orchestrator.icom_agent.ptt_off()
+            except Exception: pass
+        try: os.remove(wav_path)
+        except Exception: pass
+
+
 @app.route('/api/waterfall/transmit', methods=['POST'])
 def api_waterfall_transmit():
     if not _waterfall_ok:
@@ -4011,7 +4058,7 @@ def api_settings_post():
         # Audio device
         'audio_device',
         # Waterfall ART
-        'wf_bw', 'wf_sideband', 'wf_contrast', 'wf_dur',
+        'wf_bw', 'wf_sideband', 'wf_contrast', 'wf_speed_preset', 'wf_frame_ms',
         # SSTV
         'sstv_vox',
         # Beacon form defaults

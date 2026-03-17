@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.64</span>
+    <span class="sb-label">v2.12.65</span>
   </div>
 </div>
 
@@ -2117,6 +2117,53 @@ hr.div  {
         <button class="btn" onclick="wfStartPreview()">▶ PREVIEW</button>
         <button class="btn" onclick="wfStop()">■ STOP</button>
       </div>
+
+      <!-- Hellschreiber Mode -->
+      <div class="sec-head" style="flex-shrink:0;display:flex;align-items:center;gap:var(--s3)">
+        <span>FELD-HELLSCHREIBER</span>
+        <span style="font-size:8px;color:var(--text3);font-weight:400">classic pixel text on waterfall</span>
+      </div>
+      <div style="padding:var(--s3) var(--s4);border-bottom:var(--b1);flex-shrink:0">
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label>TEXT</label>
+          <input type="text" id="wf-hell-text" placeholder="CQ CQ DE CALLSIGN" maxlength="60"
+            oninput="this.value=this.value.toUpperCase()" style="flex:1">
+        </div>
+        <div style="display:flex;gap:var(--s3);margin-bottom:var(--s2);align-items:center">
+          <div class="form-row" style="flex:1;margin:0">
+            <label style="font-size:8px">SPEED</label>
+            <select id="wf-hell-speed" style="flex:1;font-size:9px">
+              <option value="0.1225">Standard (122ms)</option>
+              <option value="0.100">Fast (100ms)</option>
+              <option value="0.080">Turbo (80ms)</option>
+              <option value="0.060">SDR# (60ms)</option>
+              <option value="0.150">Slow (150ms)</option>
+            </select>
+          </div>
+          <div class="form-row" style="flex:0.5;margin:0">
+            <label style="font-size:8px">RPT</label>
+            <select id="wf-hell-repeat" style="flex:1;font-size:9px">
+              <option value="1">1x</option>
+              <option value="2" selected>2x</option>
+              <option value="3">3x</option>
+              <option value="5">5x</option>
+            </select>
+          </div>
+        </div>
+        <div style="font-size:8px;color:var(--text3);font-family:var(--mono);margin-bottom:var(--s2)" id="wf-hell-info">
+          Feld-Hell: 7-row bitmap font, each column = one audio frame. Text scrolls across SDR waterfall.
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" onclick="wfTransmitHell()" style="background:#2a1a00;border-color:#ff9500;color:#ff9500">
+            ⚡ TX HELL</button>
+          <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='CQ CQ DE DICK'">CQ</button>
+          <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='73 DE DICK'">73</button>
+          <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='HELLO WORLD'">TEST</button>
+        </div>
+      </div>
+
+      <!-- Remaining empty space fills naturally -->
+      <div style="flex:1"></div>
     </div>
 
     <!-- Right: processing params -->
@@ -2127,9 +2174,26 @@ hr.div  {
         <input type="number" id="wf-bw" value="2400" min="500" max="4000" style="flex:1">
       </div>
       <div class="form-row">
-        <label>DURATION</label>
-        <input type="number" id="wf-dur" value="30" min="5" max="120" style="flex:1">
-        <span style="font-size:var(--fz-xs);color:var(--text3);white-space:nowrap;padding:0 var(--s2)">s</span>
+        <label>TARGET</label>
+        <select id="wf-speed-preset" style="flex:1" onchange="wfSpeedPresetChange()">
+          <option value="67">IC-7610 Fast (15fps)</option>
+          <option value="100" selected>IC-7610 Mid (10fps)</option>
+          <option value="200">IC-7610 Slow (5fps)</option>
+          <option value="83">IC-7300 Fast (12fps)</option>
+          <option value="40">SDR# (25fps)</option>
+          <option value="50">Thetis (20fps)</option>
+          <option value="67">GQRX (15fps)</option>
+          <option value="100">KiwiSDR (10fps)</option>
+          <option value="167">WebSDR (6fps)</option>
+          <option value="custom">Custom...</option>
+        </select>
+      </div>
+      <div class="form-row" id="wf-custom-dur-row" style="display:none">
+        <label>FRAME ms</label>
+        <input type="number" id="wf-frame-ms" value="100" min="20" max="500" style="flex:1" oninput="wfSpeedInfoUpdate()">
+      </div>
+      <div style="padding:2px 8px;font-size:8px;font-family:var(--mono);color:var(--text3);border-bottom:var(--b1)">
+        <span id="wf-speed-info">64 rows × 100ms = 6.4s TX time</span>
       </div>
       <div class="form-row">
         <label>SIDEBAND</label>
@@ -5640,22 +5704,46 @@ async function loadWaterfallCanned() {
   if (cs) cs.oninput = function() { document.getElementById('wf-contrast-val').textContent = this.value; };
 }
 
-let _wfSelectedCanned = '';  // tracks the last canned image previewed
+// ── SDR Speed Presets ──────────────────────────────────────────
+function _wfGetFrameMs() {
+  const sel = document.getElementById('wf-speed-preset');
+  if (!sel) return 100;
+  if (sel.value === 'custom') {
+    return parseInt(document.getElementById('wf-frame-ms')?.value || 100);
+  }
+  return parseInt(sel.value);
+}
+
+function wfSpeedPresetChange() {
+  const sel = document.getElementById('wf-speed-preset');
+  const customRow = document.getElementById('wf-custom-dur-row');
+  if (customRow) customRow.style.display = sel?.value === 'custom' ? '' : 'none';
+  wfSpeedInfoUpdate();
+}
+
+function wfSpeedInfoUpdate() {
+  const ms = _wfGetFrameMs();
+  const rows = 64;
+  const totalSec = (rows * ms / 1000).toFixed(1);
+  const fps = (1000 / ms).toFixed(0);
+  const el = document.getElementById('wf-speed-info');
+  if (el) el.textContent = `${rows} rows × ${ms}ms = ${totalSec}s TX (${fps} fps)`;
+}
+
+let _wfSelectedCanned = '';
 
 async function loadCannedPreview(name) {
   _wfSelectedCanned = name;
   const bw  = document.getElementById('wf-bw')?.value      || 2400;
   const ct  = document.getElementById('wf-contrast')?.value || 1.5;
-  const dur = parseInt(document.getElementById('wf-dur')?.value || 30);
-  // /api/waterfall/preview uses multipart form data, not JSON
+  const frameMs = _wfGetFrameMs();
   const fd = new FormData();
   fd.append('canned',       name);
   fd.append('bandwidth',    parseInt(bw));
   fd.append('contrast',     parseFloat(ct));
-  fd.append('frame_duration', parseFloat((dur / 64).toFixed(4)));
+  fd.append('frame_duration', (frameMs / 1000).toFixed(4));
   const res = await fetch('/api/waterfall/preview', {method:'POST', body: fd});
   const r   = await res.json();
-  // Backend returns 'preview' as a data URI (data:image/png;base64,...)
   if (r.success && r.preview) {
     const b64 = r.preview.replace(/^data:image\/png;base64,/, '');
     drawWaterfall(b64);
@@ -5682,17 +5770,13 @@ async function wfStartPreview() { await loadCannedPreview('smiley'); }
 function wfStop() {}
 
 function _wfBuildFormData(cannedOverride) {
-  const p   = wfGetProc();
   const fd  = new FormData();
   const can = cannedOverride || _wfSelectedCanned;
   if (can) fd.append('canned', can);
-  fd.append('bandwidth',      p.bandwidth);
+  fd.append('bandwidth',      parseInt(document.getElementById('wf-bw')?.value || 2400));
   fd.append('base_freq',      200);
-  fd.append('contrast',       p.contrast);
-  // Duration: back-compute frame_duration from desired total TX seconds.
-  // total_time ≈ image_height * frame_duration, default image_height=64
-  const frameDur = parseFloat((p.duration / 64).toFixed(4));
-  fd.append('frame_duration', frameDur);
+  fd.append('contrast',       parseFloat(document.getElementById('wf-contrast')?.value || 1.5));
+  fd.append('frame_duration', (_wfGetFrameMs() / 1000).toFixed(4));
   fd.append('add_markers',    'true');
   return fd;
 }
@@ -5731,12 +5815,30 @@ async function wfTransmitText() {
   showAlert('wf-alert', r.message||(r.success?'TX complete':'Failed'), r.success?'ok':'err');
 }
 
+async function wfTransmitHell() {
+  const text = document.getElementById('wf-hell-text')?.value?.trim();
+  if (!text) { showAlert('wf-alert', 'Enter Hellschreiber text', 'warn'); return; }
+  const colDur = parseFloat(document.getElementById('wf-hell-speed')?.value || 0.1225);
+  const repeat = parseInt(document.getElementById('wf-hell-repeat')?.value || 2);
+  const bw     = parseInt(document.getElementById('wf-bw')?.value || 2400);
+  showAlert('wf-alert', `Transmitting Feld-Hell: "${text}" (${repeat}x)...`, 'warn', 0);
+  try {
+    const r = await api('POST', '/api/waterfall/hell', {
+      text, bandwidth: bw, base_freq: 200,
+      col_duration: colDur, repeat,
+    });
+    showAlert('wf-alert', r.message || (r.success ? 'Hell TX complete' : 'Failed'), r.success ? 'ok' : 'err');
+  } catch(e) {
+    showAlert('wf-alert', 'Hell TX error: ' + e.message, 'err');
+  }
+}
+
 function wfGetProc() {
   return {
-    bandwidth:  parseInt(document.getElementById('wf-bw')?.value  || 2400),
-    duration:   parseInt(document.getElementById('wf-dur')?.value || 30),
-    sideband:   document.getElementById('wf-sideband')?.value     || 'usb',
-    contrast:   parseFloat(document.getElementById('wf-contrast')?.value || 1.5),
+    bandwidth:       parseInt(document.getElementById('wf-bw')?.value  || 2400),
+    frame_duration:  _wfGetFrameMs() / 1000,
+    sideband:        document.getElementById('wf-sideband')?.value     || 'usb',
+    contrast:        parseFloat(document.getElementById('wf-contrast')?.value || 1.5),
   };
 }
 
@@ -9133,9 +9235,10 @@ async function cfgFlushPresets() {
     discord_inject_format: get('discord-inject-format'),
     // WF ART
     wf_bw:       get('wf-bw'),
-    wf_sideband: get('wf-sideband'),
-    wf_contrast: get('wf-contrast'),
-    wf_dur:      get('wf-dur'),
+    wf_sideband:      get('wf-sideband'),
+    wf_contrast:      get('wf-contrast'),
+    wf_speed_preset:  get('wf-speed-preset'),
+    wf_frame_ms:      get('wf-frame-ms'),
     // SSTV
     sstv_vox: checked('sstv-vox') ? 'true' : 'false',
     // Beacon form defaults
@@ -10812,10 +10915,12 @@ function _restoreAllSettings(s) {
   set('discord-inject-target', s.discord_inject_target);
   set('discord-inject-format', s.discord_inject_format);
   // WF ART
-  set('wf-bw',       s.wf_bw);
-  set('wf-sideband', s.wf_sideband);
-  set('wf-contrast', s.wf_contrast);
-  set('wf-dur',      s.wf_dur);
+  set('wf-bw',           s.wf_bw);
+  set('wf-sideband',     s.wf_sideband);
+  set('wf-contrast',     s.wf_contrast);
+  set('wf-speed-preset', s.wf_speed_preset);
+  set('wf-frame-ms',     s.wf_frame_ms);
+  wfSpeedPresetChange();
   if (s.wf_contrast) {
     const v = document.getElementById('wf-contrast-val');
     if (v) v.textContent = s.wf_contrast;

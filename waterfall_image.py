@@ -586,6 +586,118 @@ def make_wave_collapse(size=(128, 64)):
     return Image.fromarray(arr, 'L')
 
 
+# ── Feld-Hellschreiber Encoder ────────────────────────────────────────────────
+# Classic Feld-Hell: 7-pixel tall bitmap font, each column is one audio frame.
+# Text scrolls horizontally across the waterfall. Each row = one frequency.
+# Lit pixels produce sine tones; dark pixels are silence.
+# Column rate: ~8.6 columns/sec (122.5ms per column) for standard Feld-Hell,
+# but we allow tuning to match SDR scroll speed.
+
+# 5x7 bitmap font — each char is a list of 5 column bytes (bit 0 = top row)
+_HELL_FONT = {
+    'A': [0x7E,0x09,0x09,0x09,0x7E], 'B': [0x7F,0x49,0x49,0x49,0x36],
+    'C': [0x3E,0x41,0x41,0x41,0x22], 'D': [0x7F,0x41,0x41,0x41,0x3E],
+    'E': [0x7F,0x49,0x49,0x49,0x41], 'F': [0x7F,0x09,0x09,0x09,0x01],
+    'G': [0x3E,0x41,0x49,0x49,0x3A], 'H': [0x7F,0x08,0x08,0x08,0x7F],
+    'I': [0x41,0x41,0x7F,0x41,0x41], 'J': [0x20,0x40,0x40,0x40,0x3F],
+    'K': [0x7F,0x08,0x14,0x22,0x41], 'L': [0x7F,0x40,0x40,0x40,0x40],
+    'M': [0x7F,0x02,0x0C,0x02,0x7F], 'N': [0x7F,0x02,0x04,0x08,0x7F],
+    'O': [0x3E,0x41,0x41,0x41,0x3E], 'P': [0x7F,0x09,0x09,0x09,0x06],
+    'Q': [0x3E,0x41,0x51,0x21,0x5E], 'R': [0x7F,0x09,0x19,0x29,0x46],
+    'S': [0x26,0x49,0x49,0x49,0x32], 'T': [0x01,0x01,0x7F,0x01,0x01],
+    'U': [0x3F,0x40,0x40,0x40,0x3F], 'V': [0x0F,0x30,0x40,0x30,0x0F],
+    'W': [0x3F,0x40,0x30,0x40,0x3F], 'X': [0x63,0x14,0x08,0x14,0x63],
+    'Y': [0x03,0x04,0x78,0x04,0x03], 'Z': [0x61,0x51,0x49,0x45,0x43],
+    '0': [0x3E,0x51,0x49,0x45,0x3E], '1': [0x00,0x42,0x7F,0x40,0x00],
+    '2': [0x62,0x51,0x49,0x49,0x46], '3': [0x22,0x41,0x49,0x49,0x36],
+    '4': [0x18,0x14,0x12,0x7F,0x10], '5': [0x27,0x45,0x45,0x45,0x39],
+    '6': [0x3E,0x49,0x49,0x49,0x32], '7': [0x01,0x71,0x09,0x05,0x03],
+    '8': [0x36,0x49,0x49,0x49,0x36], '9': [0x26,0x49,0x49,0x49,0x3E],
+    ' ': [0x00,0x00,0x00,0x00,0x00], '.': [0x00,0x60,0x60,0x00,0x00],
+    ',': [0x00,0x80,0x60,0x00,0x00], '!': [0x00,0x00,0x5F,0x00,0x00],
+    '?': [0x02,0x01,0x59,0x09,0x06], '-': [0x08,0x08,0x08,0x08,0x08],
+    '/': [0x40,0x20,0x10,0x08,0x04], ':': [0x00,0x36,0x36,0x00,0x00],
+    '=': [0x14,0x14,0x14,0x14,0x14], '+': [0x08,0x08,0x3E,0x08,0x08],
+    '(': [0x00,0x1C,0x22,0x41,0x00], ')': [0x00,0x41,0x22,0x1C,0x00],
+    '@': [0x3E,0x41,0x5D,0x55,0x0E], '#': [0x14,0x7F,0x14,0x7F,0x14],
+    '$': [0x24,0x2A,0x7F,0x2A,0x12], '%': [0x23,0x13,0x08,0x64,0x62],
+}
+
+
+def hellschreiber_encode(text, bandwidth=2400.0, base_freq=200.0,
+                         col_duration=0.1225, repeat=2, sample_rate=44100):
+    """
+    Encode text as Feld-Hellschreiber audio for SDR waterfall display.
+    
+    Each character is 5 columns × 7 rows. Each column becomes one audio frame.
+    Each row maps to a frequency within the bandwidth. Lit pixels produce tones.
+    Text is transmitted `repeat` times (standard Hell repeats 2x for readability).
+    
+    Returns: numpy array of audio samples (float, -1 to 1)
+    """
+    text = text.upper()
+    
+    # Build column data: list of 7-bit columns
+    columns = []
+    for ch in text:
+        glyph = _HELL_FONT.get(ch, _HELL_FONT.get(' '))
+        for col_byte in glyph:
+            columns.append(col_byte)
+        columns.append(0x00)  # 1-column gap between characters
+    
+    # 7 frequency rows spanning the bandwidth
+    n_rows = 7
+    freqs = np.linspace(base_freq + bandwidth * 0.2,
+                        base_freq + bandwidth * 0.8, n_rows)
+    
+    samples_per_col = int(sample_rate * col_duration)
+    t = np.linspace(0, col_duration, samples_per_col, endpoint=False)
+    
+    # Pre-compute sine basis for all 7 frequencies
+    sine_basis = np.array([np.sin(2.0 * np.pi * f * t) for f in freqs])
+    
+    all_frames = []
+    for _ in range(repeat):
+        for col_byte in columns:
+            frame = np.zeros(samples_per_col)
+            for bit in range(n_rows):
+                if col_byte & (1 << bit):
+                    frame += sine_basis[bit]
+            # Normalize this frame
+            peak = np.max(np.abs(frame))
+            if peak > 0:
+                frame = frame / peak * 0.7
+            # Fade edges to prevent clicks
+            fl = min(int(sample_rate * 0.003), samples_per_col // 4)
+            frame[:fl] *= np.linspace(0, 1, fl)
+            frame[-fl:] *= np.linspace(1, 0, fl)
+            all_frames.append(frame)
+        # Gap between repeats
+        all_frames.append(np.zeros(int(sample_rate * 0.5)))
+    
+    audio = np.concatenate(all_frames)
+    peak = np.max(np.abs(audio))
+    if peak > 0:
+        audio = audio * (0.8 / peak)
+    return audio
+
+
+def hellschreiber_to_wav(text, output_wav=None, **kwargs):
+    """Encode Hellschreiber text to WAV file. Returns path."""
+    if output_wav is None:
+        output_wav = tempfile.mktemp(suffix='_hell.wav')
+    audio = hellschreiber_encode(text, **kwargs)
+    audio_i16 = (audio * 32767).astype(np.int16)
+    with wave.open(output_wav, 'w') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(kwargs.get('sample_rate', SAMPLE_RATE))
+        wf.writeframes(audio_i16.tobytes())
+    dur = len(audio) / kwargs.get('sample_rate', SAMPLE_RATE)
+    logger.info(f'Hellschreiber: "{text}" -> {os.path.getsize(output_wav)//1024}KB, {dur:.1f}s')
+    return output_wav
+
+
 CANNED_IMAGES = {
     # Standard shapes
     'smiley':   (make_smiley,   'Smiley Face'),

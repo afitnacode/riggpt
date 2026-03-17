@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.12.64 -- Installer
+# RigGPT v2.12.65 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,7 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.12.64"
+VERSION="2.12.65"
 
 # -- Parse flags ------------------------------------------------
 # -y / --yes  : skip upgrade confirmation prompt (for scripted installs)
