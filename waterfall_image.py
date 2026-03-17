@@ -647,14 +647,21 @@ def hellschreiber_encode(text, bandwidth=2400.0, base_freq=200.0,
     
     # 7 frequency rows spanning the bandwidth
     n_rows = 7
-    freqs = np.linspace(base_freq + bandwidth * 0.2,
-                        base_freq + bandwidth * 0.8, n_rows)
+    # Spread rows across 70% of bandwidth (centered) for better visibility
+    freqs = np.linspace(base_freq + bandwidth * 0.15,
+                        base_freq + bandwidth * 0.85, n_rows)
     
     samples_per_col = int(sample_rate * col_duration)
     t = np.linspace(0, col_duration, samples_per_col, endpoint=False)
     
-    # Pre-compute sine basis for all 7 frequencies
-    sine_basis = np.array([np.sin(2.0 * np.pi * f * t) for f in freqs])
+    # Each tone includes fundamental + slight spread for wider waterfall dots
+    freq_spread = bandwidth / (n_rows * 4)  # spread each dot slightly
+    sine_basis = np.array([
+        np.sin(2.0 * np.pi * f * t) * 0.7 +
+        np.sin(2.0 * np.pi * (f - freq_spread) * t) * 0.15 +
+        np.sin(2.0 * np.pi * (f + freq_spread) * t) * 0.15
+        for f in freqs
+    ])
     
     all_frames = []
     for _ in range(repeat):
@@ -838,8 +845,8 @@ def image_to_waterfall_wav(
     image_width=128, image_height=64,
     base_freq=200.0, bandwidth=2400.0, frame_duration=0.08,
     invert=False, normalize=True, add_markers=True,
-    brightness=1.0, contrast=1.5, gamma=0.7,
-    sharpen=0.0, equalize=False, dither=False,
+    brightness=1.0, contrast=2.0, gamma=1.0,
+    sharpen=0.3, equalize=True, dither=False,
     tone_curve='gamma', noise_floor=0.03,
     black_point=0, white_point=255,
     flip_v=False, flip_h=False,
@@ -877,8 +884,18 @@ def image_to_waterfall_wav(
         pip[:fl] *= np.linspace(0,1,fl); pip[-fl:] *= np.linspace(1,0,fl)
         all_frames += [pip, np.zeros(int(SAMPLE_RATE*0.1))]
 
+    # Amplitude boost: SDR waterfalls use log/power color maps, so linear
+    # pixel→amplitude mapping makes mid-tones nearly invisible.
+    # Applying sqrt (power 0.5) to amplitudes boosts mid-tones significantly.
+    boosted = np.power(np.clip(pixels, 0, 1), 0.5)
+
     for row_idx in range(image_height):
-        frame = np.dot(pixels[row_idx], sine_basis)
+        row_amps = boosted[row_idx]
+        # Per-row peak normalization — ensures each row uses full amplitude range
+        row_peak = np.max(row_amps)
+        if row_peak > 0.05:
+            row_amps = row_amps / row_peak
+        frame = np.dot(row_amps, sine_basis)
         fl    = min(int(SAMPLE_RATE*0.005), samples_per_frame//4)
         frame[:fl] *= np.linspace(0,1,fl); frame[-fl:] *= np.linspace(1,0,fl)
         all_frames.append(frame)

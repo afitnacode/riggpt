@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.65</span>
+    <span class="sb-label">v2.12.66</span>
   </div>
 </div>
 
@@ -2086,83 +2086,86 @@ hr.div  {
 <div id="pane-wfall" class="pane">
   <div style="display:grid;grid-template-columns:1fr 320px;height:100%;overflow:hidden">
     <!-- Left: image/text + controls -->
-    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
+    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow-y:auto">
       <div class="panel-header">
         <span class="panel-title">WATERFALL IMAGE TX</span>
         <span id="wf-info" style="font-size:var(--fz-xs);color:var(--text3)"></span>
       </div>
       <div class="alert-strip" id="wf-alert"></div>
 
-      <!-- Canned image selector -->
-      <div class="sec-head" style="flex-shrink:0">CANNED IMAGES</div>
-      <div id="wf-canned-list" style="display:flex;flex-wrap:wrap;gap:var(--s2);padding:var(--s3) var(--s4);border-bottom:var(--b1);flex-shrink:0">
-        <span style="font-size:var(--fz-xs);color:var(--text3)">Loading...</span>
-      </div>
-
-      <!-- Waterfall canvas preview -->
-      <canvas id="wf-canvas" height="180" style="display:block;width:100%;height:180px;background:var(--bg1);border-bottom:var(--b1);flex-shrink:0;cursor:crosshair"></canvas>
-      <div id="wf-overlay" class="wf-overlay"></div>
-
-      <!-- Waterfall text TX -->
-      <div class="sec-head" style="flex-shrink:0">TEXT → WATERFALL</div>
-      <div class="form-row" style="flex-shrink:0">
-        <label>TEXT</label>
-        <input type="text" id="wf-text-inp" placeholder="CQ CQ DE CALLSIGN" maxlength="40"
-          oninput="this.value=this.value.toUpperCase()" style="flex:1">
-        <button class="btn sm" onclick="wfTextPreset('CQ CQ DE DICK')" style="flex-shrink:0">CQ</button>
-        <button class="btn sm" onclick="wfTextPreset('73 DE DICK')" style="flex-shrink:0">73</button>
-      </div>
-      <div class="btn-row" style="flex-shrink:0">
-        <button class="btn primary" onclick="wfTransmitText()">⬛ TX TEXT</button>
-        <button class="btn" onclick="wfStartPreview()">▶ PREVIEW</button>
-        <button class="btn" onclick="wfStop()">■ STOP</button>
-      </div>
-
-      <!-- Hellschreiber Mode -->
-      <div class="sec-head" style="flex-shrink:0;display:flex;align-items:center;gap:var(--s3)">
-        <span>FELD-HELLSCHREIBER</span>
-        <span style="font-size:8px;color:var(--text3);font-weight:400">classic pixel text on waterfall</span>
-      </div>
-      <div style="padding:var(--s3) var(--s4);border-bottom:var(--b1);flex-shrink:0">
-        <div class="form-row" style="margin-bottom:var(--s2)">
-          <label>TEXT</label>
-          <input type="text" id="wf-hell-text" placeholder="CQ CQ DE CALLSIGN" maxlength="60"
-            oninput="this.value=this.value.toUpperCase()" style="flex:1">
+      <!-- ═══ SECTION 1: CANNED IMAGES ═══ -->
+      <div style="margin:var(--s3);border:1px solid var(--cyan);background:var(--bg1)">
+        <div style="padding:4px 8px;background:rgba(0,187,221,.08);border-bottom:1px solid var(--cyan);
+                    display:flex;align-items:center;gap:var(--s3)">
+          <span style="font-size:9px;font-weight:700;color:var(--cyan);letter-spacing:.12em">&#9679; CANNED IMAGES</span>
+          <span style="font-size:8px;color:var(--text3)">click to preview, TX IMAGE to transmit</span>
         </div>
-        <div style="display:flex;gap:var(--s3);margin-bottom:var(--s2);align-items:center">
-          <div class="form-row" style="flex:1;margin:0">
-            <label style="font-size:8px">SPEED</label>
-            <select id="wf-hell-speed" style="flex:1;font-size:9px">
-              <option value="0.1225">Standard (122ms)</option>
-              <option value="0.100">Fast (100ms)</option>
-              <option value="0.080">Turbo (80ms)</option>
-              <option value="0.060">SDR# (60ms)</option>
-              <option value="0.150">Slow (150ms)</option>
-            </select>
+        <div id="wf-canned-list" style="display:flex;flex-wrap:wrap;gap:var(--s2);padding:var(--s3)">
+          <span style="font-size:var(--fz-xs);color:var(--text3)">Loading...</span>
+        </div>
+        <!-- Preview canvas -->
+        <canvas id="wf-canvas" height="180" style="display:block;width:100%;height:180px;background:#000;cursor:crosshair"></canvas>
+        <div id="wf-overlay" class="wf-overlay"></div>
+      </div>
+
+      <!-- ═══ SECTION 2: TEXT → WATERFALL ═══ -->
+      <div style="margin:0 var(--s3) var(--s3);border:1px solid var(--green);background:var(--bg1)">
+        <div style="padding:4px 8px;background:rgba(57,211,83,.08);border-bottom:1px solid var(--green);
+                    display:flex;align-items:center;gap:var(--s3)">
+          <span style="font-size:9px;font-weight:700;color:var(--green);letter-spacing:.12em">&#9679; TEXT → WATERFALL</span>
+          <span style="font-size:8px;color:var(--text3)">renders text as waterfall image</span>
+        </div>
+        <div style="padding:var(--s3)">
+          <div class="form-row" style="margin-bottom:var(--s2)">
+            <label>TEXT</label>
+            <input type="text" id="wf-text-inp" placeholder="CQ CQ DE CALLSIGN" maxlength="40"
+              oninput="this.value=this.value.toUpperCase()" style="flex:1">
+            <button class="btn sm" onclick="wfTextPreset('CQ CQ DE DICK')" style="flex-shrink:0">CQ</button>
+            <button class="btn sm" onclick="wfTextPreset('73 DE DICK')" style="flex-shrink:0">73</button>
           </div>
-          <div class="form-row" style="flex:0.5;margin:0">
+          <div class="btn-row">
+            <button class="btn primary" onclick="wfTransmitText()" style="background:#0a1a0a;border-color:var(--green);color:var(--green)">&#9635; TX TEXT</button>
+            <button class="btn" onclick="wfStartPreview()">&#9654; PREVIEW</button>
+            <button class="btn" onclick="wfStop()">&#9632; STOP</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ SECTION 3: FELD-HELLSCHREIBER ═══ -->
+      <div style="margin:0 var(--s3) var(--s3);border:1px solid #ff9500;background:var(--bg1)">
+        <div style="padding:4px 8px;background:rgba(255,149,0,.08);border-bottom:1px solid #ff9500;
+                    display:flex;align-items:center;gap:var(--s3)">
+          <span style="font-size:9px;font-weight:700;color:#ff9500;letter-spacing:.12em">&#9679; FELD-HELLSCHREIBER</span>
+          <span style="font-size:8px;color:var(--text3)">classic pixel text — scrolls across SDR waterfall</span>
+        </div>
+        <div style="padding:var(--s3)">
+          <div class="form-row" style="margin-bottom:var(--s2)">
+            <label>TEXT</label>
+            <input type="text" id="wf-hell-text" placeholder="CQ CQ DE CALLSIGN" maxlength="60"
+              oninput="this.value=this.value.toUpperCase()" style="flex:1">
+          </div>
+          <div class="form-row" style="margin-bottom:var(--s2)">
             <label style="font-size:8px">RPT</label>
-            <select id="wf-hell-repeat" style="flex:1;font-size:9px">
+            <select id="wf-hell-repeat" style="width:60px;font-size:9px">
               <option value="1">1x</option>
               <option value="2" selected>2x</option>
               <option value="3">3x</option>
               <option value="5">5x</option>
             </select>
+            <span style="font-size:8px;color:var(--text3);flex:1;text-align:right;font-family:var(--mono)" id="wf-hell-info">
+              uses TARGET speed from TX Parameters ▸
+            </span>
           </div>
-        </div>
-        <div style="font-size:8px;color:var(--text3);font-family:var(--mono);margin-bottom:var(--s2)" id="wf-hell-info">
-          Feld-Hell: 7-row bitmap font, each column = one audio frame. Text scrolls across SDR waterfall.
-        </div>
-        <div class="btn-row">
-          <button class="btn primary" onclick="wfTransmitHell()" style="background:#2a1a00;border-color:#ff9500;color:#ff9500">
-            ⚡ TX HELL</button>
-          <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='CQ CQ DE DICK'">CQ</button>
-          <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='73 DE DICK'">73</button>
-          <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='HELLO WORLD'">TEST</button>
+          <div class="btn-row">
+            <button class="btn primary" onclick="wfTransmitHell()" style="background:#2a1a00;border-color:#ff9500;color:#ff9500">
+              &#9889; TX HELL</button>
+            <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='CQ CQ DE DICK'">CQ</button>
+            <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='73 DE DICK'">73</button>
+            <button class="btn sm" onclick="document.getElementById('wf-hell-text').value='HELLO WORLD'">TEST</button>
+          </div>
         </div>
       </div>
 
-      <!-- Remaining empty space fills naturally -->
       <div style="flex:1"></div>
     </div>
 
@@ -5818,10 +5821,10 @@ async function wfTransmitText() {
 async function wfTransmitHell() {
   const text = document.getElementById('wf-hell-text')?.value?.trim();
   if (!text) { showAlert('wf-alert', 'Enter Hellschreiber text', 'warn'); return; }
-  const colDur = parseFloat(document.getElementById('wf-hell-speed')?.value || 0.1225);
+  const colDur = _wfGetFrameMs() / 1000;  // use unified TARGET speed
   const repeat = parseInt(document.getElementById('wf-hell-repeat')?.value || 2);
   const bw     = parseInt(document.getElementById('wf-bw')?.value || 2400);
-  showAlert('wf-alert', `Transmitting Feld-Hell: "${text}" (${repeat}x)...`, 'warn', 0);
+  showAlert('wf-alert', `Transmitting Feld-Hell: "${text}" (${repeat}x, ${(_wfGetFrameMs())}ms/col)...`, 'warn', 0);
   try {
     const r = await api('POST', '/api/waterfall/hell', {
       text, bandwidth: bw, base_freq: 200,
