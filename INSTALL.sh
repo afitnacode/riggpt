@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.12.63 -- Installer
+# RigGPT v2.12.64 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,7 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.12.63"
+VERSION="2.12.64"
 
 # -- Parse flags ------------------------------------------------
 # -y / --yes  : skip upgrade confirmation prompt (for scripted installs)
@@ -154,6 +154,49 @@ for f in "$INSTALL_DIR/gunicorn.ctl" "$INSTALL_DIR/gunicorn.pid" "$INSTALL_DIR/g
     [ -f "$f" ] && rm -f "$f" && echo "  Cleaned: $f"
 done
 systemctl stop "$SERVICE" 2>/dev/null || true
+sleep 1
+
+# Check if port 5000 is still held by a stale process
+_stale_check() {
+    STALE_PID=$(ss -tlnp 'sport = :5000' 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)
+    if [ -z "$STALE_PID" ]; then
+        STALE_PID=$(lsof -ti :5000 2>/dev/null | head -1)
+    fi
+    echo "$STALE_PID"
+}
+
+STALE_PID=$(_stale_check)
+if [ -n "$STALE_PID" ]; then
+    STALE_CMD=$(ps -p "$STALE_PID" -o comm= 2>/dev/null || echo "unknown")
+    echo "  WARNING: Port 5000 still held by PID $STALE_PID ($STALE_CMD)"
+    echo "  Sending SIGTERM to PID $STALE_PID..."
+    kill "$STALE_PID" 2>/dev/null || true
+    # Wait up to 5s for graceful shutdown
+    for _w in $(seq 1 10); do
+        sleep 0.5
+        kill -0 "$STALE_PID" 2>/dev/null || break
+    done
+    # Still alive? Force kill
+    if kill -0 "$STALE_PID" 2>/dev/null; then
+        echo "  Process $STALE_PID did not exit — sending SIGKILL..."
+        kill -9 "$STALE_PID" 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
+# Belt-and-suspenders: kill any stray gunicorn workers
+pkill -f "gunicorn.*app:app" 2>/dev/null || true
+sleep 0.5
+
+# Final port check
+STALE_PID=$(_stale_check)
+if [ -n "$STALE_PID" ]; then
+    echo "  ERROR: Port 5000 STILL held by PID $STALE_PID after kill attempts"
+    echo "  Run manually: sudo kill -9 $STALE_PID"
+    echo "  Then re-run: bash INSTALL.sh"
+    exit 1
+fi
+echo "  Port 5000 is free ✓"
 
 # -- Install directory ──────────────────────────────────────────
 echo "[4/7] Installing files to $INSTALL_DIR..."
@@ -284,11 +327,25 @@ done
 
 echo -n "  Waiting for HTTP port 5000"
 BOUND=0
-for i in $(seq 1 60); do
-    sleep 1; echo -n "."
+for i in $(seq 1 30); do
+    sleep 2; echo -n "."
     CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 \
            "http://localhost:5000/api/status" 2>/dev/null || echo "0")
     [ "$CODE" = "200" ] && BOUND=1 && break
+    # Every 10s, show what's happening
+    if [ $((i % 5)) -eq 0 ]; then
+        SVC_STATUS=$(systemctl is-active "$SERVICE" 2>/dev/null || echo "unknown")
+        PORT_PID=$(ss -tlnp 'sport = :5000' 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)
+        if [ "$SVC_STATUS" != "active" ]; then
+            echo ""
+            echo "  Service status: $SVC_STATUS (not running)"
+            echo "  Check logs: journalctl -u $SERVICE -n 30 --no-pager"
+            break
+        elif [ -n "$PORT_PID" ]; then
+            echo " [bound by PID $PORT_PID, waiting for /api/status]"
+            echo -n "  "
+        fi
+    fi
 done
 echo ""
 
