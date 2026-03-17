@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.60
+RigGPT v2.12.61
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.60'
+VERSION        = 'v2.12.61'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -8170,7 +8170,7 @@ def _ghost_whisper(ghost_name: str, stop: threading.Event):
     text    = random.choice(phrases)
     preset  = random.choice(presets)
     pitch   = random.randint(-8, 8)
-    speed   = random.randint(60, 160)
+    speed   = random.randint(60, 160) / 100.0  # 0.6x - 1.6x
     engine  = _app_settings.get('ghost_engine', 'espeak')
     voice   = _app_settings.get('ghost_voice', '') or None
     _ghost_log_event(f'{ghost_name}: TX "{text}" [{engine}/{voice or "default"} {preset} p={pitch} s={speed}]')
@@ -8474,7 +8474,7 @@ def _ghost_run_exorcist(stop: threading.Event, duration: int = 60):
             orchestrator.execute(
                 scream, engine=_exo_engine, voice=_exo_voice,
                 preset='horror', pitch=random.randint(-8, 8),
-                speed=random.randint(60, 140), roger_beep=False
+                speed=random.randint(60, 140) / 100.0, roger_beep=False
             )
         except Exception as e:
             _ghost_log_event(f'EXORCIST scream error: {e}')
@@ -8491,7 +8491,7 @@ def _ghost_run_exorcist(stop: threading.Event, duration: int = 60):
                         new_scream, engine=_exo_engine, voice=_exo_voice,
                         preset=random.choice(['alien', 'demon', 'cave', 'underwater', 'robot']),
                         pitch=random.randint(-12, 12),
-                        speed=random.randint(50, 180), roger_beep=False
+                        speed=random.randint(50, 180) / 100.0, roger_beep=False
                     )
                 except Exception:
                     pass
