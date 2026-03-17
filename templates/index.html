@@ -1007,6 +1007,7 @@ kbd {
 .fx-group:nth-child(3) .fx-group-title { color: #44aaff; } /* blue  - PITCH */
 .fx-group:nth-child(4) .fx-group-title { color: #ff4444; } /* red   - DISTORTION */
 .fx-group:nth-child(5) .fx-group-title { color: #cc66ff; } /* violet - MODULATION */
+.fx-group:nth-child(6) .fx-group-title { color: #ff9500; } /* amber  - VU METER */
 .fx-knob-row {
   display: flex;
   flex-direction: column;
@@ -1628,7 +1629,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.56</span>
+    <span class="sb-label">v2.12.57</span>
   </div>
 </div>
 
@@ -3489,6 +3490,10 @@ hr.div  {
             <input type="checkbox" id="dub-normalize"> NORM
           </label>
         </div>
+        <!-- Selected clip indicator -->
+        <div id="dub-selected-clip" style="display:none;padding:3px 8px;background:#0e0e0e;
+             border-bottom:1px solid #2a2a2a;font-size:9px;font-family:var(--mono);
+             letter-spacing:.04em"></div>
         <!-- Preset strip -->
         <div class="preset-strip" style="flex-shrink:0;flex-wrap:wrap;gap:2px;row-gap:2px;border-bottom:var(--b1)">
           <button class="preset-btn active" id="dub-preset-btn-clean"       onclick="dubPreset('clean')">CLEAN</button>
@@ -3559,6 +3564,35 @@ hr.div  {
               <div class="fx-knob"><label>TREM</label><input type="range" id="dub-tremolo" min="0" max="100" value="0" oninput="dubUpdate('tremolo',this.value)"><span class="fx-val" id="dv-tremolo">OFF</span></div>
               <div class="fx-knob"><label>ECHO</label><input type="range" id="dub-echo" min="0" max="100" value="0" oninput="dubUpdate('echo',this.value)"><span class="fx-val" id="dv-echo">OFF</span></div>
               <div class="fx-knob"><label>REVERB</label><input type="range" id="dub-reverb" min="0" max="100" value="0" oninput="dubUpdate('reverb',this.value)"><span class="fx-val" id="dv-reverb">OFF</span></div>
+            </div>
+          </div>
+          <!-- VU Meter -->
+          <div class="fx-group" style="min-height:100px">
+            <div class="fx-group-title" style="color:#ff9500">VU METER</div>
+            <div style="padding:var(--s2) var(--s3);display:flex;flex-direction:column;gap:4px;flex:1;justify-content:center">
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono);width:10px">L</span>
+                <div style="flex:1;display:flex;gap:1px;height:10px" id="vu-bar-l"></div>
+                <span id="vu-val-l" style="font-size:8px;color:#55cc55;font-family:var(--mono);width:28px;text-align:right">-∞</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono);width:10px">R</span>
+                <div style="flex:1;display:flex;gap:1px;height:10px" id="vu-bar-r"></div>
+                <span id="vu-val-r" style="font-size:8px;color:#55cc55;font-family:var(--mono);width:28px;text-align:right">-∞</span>
+              </div>
+              <div style="display:flex;padding-left:14px;padding-right:32px;justify-content:space-between">
+                <span style="font-size:6px;color:#444;font-family:var(--mono)">-40</span>
+                <span style="font-size:6px;color:#444;font-family:var(--mono)">-20</span>
+                <span style="font-size:6px;color:#444;font-family:var(--mono)">-10</span>
+                <span style="font-size:6px;color:#444;font-family:var(--mono)">-6</span>
+                <span style="font-size:6px;color:#444;font-family:var(--mono)">-3</span>
+                <span style="font-size:6px;color:#ff4444;font-family:var(--mono)">0</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding-top:2px;border-top:1px solid #1a1a1a">
+                <span style="font-size:7px;color:#6a6a5a;font-family:var(--mono)">PEAK</span>
+                <span id="vu-peak" style="font-size:9px;color:#ff9500;font-family:var(--mono)">— dB</span>
+                <button onclick="_vuReset()" style="font-size:7px;background:#1a1a1a;border:1px solid #333;color:#6a6a5a;cursor:pointer;padding:1px 4px;font-family:var(--mono)">RST</button>
+              </div>
             </div>
           </div>
         </div>
@@ -6058,6 +6092,92 @@ function dubUpdate(type, val) {
   dubUpdateChainDisplay();
 }
 
+// ── VU Meter (80s LED bar) ───────────────────────────────────────────────
+const _VU_SEGS = 20;
+let _vuPeakL = -Infinity, _vuPeakR = -Infinity;
+let _vuAnim = null;
+
+function _vuInit() {
+  for (const ch of ['l','r']) {
+    const bar = document.getElementById('vu-bar-' + ch);
+    if (!bar || bar.children.length) continue;
+    for (let i = 0; i < _VU_SEGS; i++) {
+      const seg = document.createElement('div');
+      seg.style.cssText = 'flex:1;height:100%;border-radius:1px;';
+      // Green -> yellow -> red gradient across segments
+      if (i < 12) seg.style.background = '#1a1a1a';  // will light green
+      else if (i < 16) seg.style.background = '#1a1a1a';  // will light yellow
+      else seg.style.background = '#1a1a1a';  // will light red
+      seg.dataset.on = '0';
+      bar.appendChild(seg);
+    }
+  }
+}
+
+function _vuSetLevel(ch, db) {
+  const bar = document.getElementById('vu-bar-' + ch);
+  const valEl = document.getElementById('vu-val-' + ch);
+  if (!bar) return;
+  const segs = bar.children;
+  // Map dB to segments: -40dB=0 segs, 0dB=20 segs
+  const norm = Math.max(0, Math.min(1, (db + 40) / 40));
+  const lit = Math.round(norm * _VU_SEGS);
+  for (let i = 0; i < _VU_SEGS; i++) {
+    if (i < lit) {
+      if (i < 12) segs[i].style.background = '#33cc33';
+      else if (i < 16) segs[i].style.background = '#cccc00';
+      else segs[i].style.background = '#ff3333';
+    } else {
+      segs[i].style.background = '#1a1a1a';
+    }
+  }
+  if (valEl) valEl.textContent = db > -40 ? db.toFixed(0) + ' dB' : '-∞';
+  // Peak hold
+  if (ch === 'l' && db > _vuPeakL) _vuPeakL = db;
+  if (ch === 'r' && db > _vuPeakR) _vuPeakR = db;
+  const peakEl = document.getElementById('vu-peak');
+  if (peakEl) {
+    const pk = Math.max(_vuPeakL, _vuPeakR);
+    peakEl.textContent = pk > -40 ? pk.toFixed(1) + ' dB' : '— dB';
+    peakEl.style.color = pk > -3 ? '#ff3333' : pk > -6 ? '#cccc00' : '#ff9500';
+  }
+}
+
+function _vuAnimate() {
+  // Simulated VU during preview/TX — bounces based on audio element
+  const aud = document.getElementById('dub-audio');
+  if (aud && !aud.paused) {
+    // Simulate L/R from time position variance
+    const base = -12 + Math.sin(aud.currentTime * 8) * 8;
+    _vuSetLevel('l', base + (Math.random() * 6 - 3));
+    _vuSetLevel('r', base + (Math.random() * 6 - 3));
+  } else if (_txActive) {
+    const base = -8 + Math.sin(Date.now() / 150) * 6;
+    _vuSetLevel('l', base + (Math.random() * 4 - 2));
+    _vuSetLevel('r', base + (Math.random() * 4 - 2));
+  } else {
+    // Decay
+    _vuSetLevel('l', -60);
+    _vuSetLevel('r', -60);
+    cancelAnimationFrame(_vuAnim);
+    _vuAnim = null;
+    return;
+  }
+  _vuAnim = requestAnimationFrame(_vuAnimate);
+}
+
+function _vuStart() {
+  if (!_vuAnim) _vuAnim = requestAnimationFrame(_vuAnimate);
+}
+function _vuReset() {
+  _vuPeakL = -Infinity;
+  _vuPeakR = -Infinity;
+  _vuSetLevel('l', -60);
+  _vuSetLevel('r', -60);
+  const peakEl = document.getElementById('vu-peak');
+  if (peakEl) { peakEl.textContent = '— dB'; peakEl.style.color = '#ff9500'; }
+}
+
 function dubUpdateChainDisplay() {
   const gi = id => parseInt(document.getElementById(id)?.value || 0);
   const parts = [];
@@ -6300,7 +6420,10 @@ async function _dubCall(dry_run) {
     payload.text   = text;
     payload.engine = engine;
     if (voice) payload.voice = voice;
-  } else { showDubAlert('Provide text to synthesize or upload a WAV/audio file', 'warn'); return null; }
+  } else if (_dubSelectedClip?.name) {
+    // Selected clip from cart — route through backend clip loader
+    payload.clip_name = _dubSelectedClip.name;
+  } else { showDubAlert('Select a clip, type text, or upload a file', 'warn'); return null; }
 
   return await api('POST', '/api/trenchtown/transmit', payload);
 }
@@ -6308,6 +6431,7 @@ async function _dubCall(dry_run) {
 async function dubTransmit() {
   showDubAlert('Transmitting with FX...', 'warn', 0);
   setTxState(true);
+  _vuStart();
   try {
     const r = await _dubCall(false);
     if (!r) return;
@@ -6327,6 +6451,7 @@ async function dubPreview() {
     const pp   = document.getElementById('dub-preview-player');
     aud.src = url;
     aud.play();
+    _vuStart();
     pp.classList.add('show');
     // Draw waveform from returned audio for visual feedback
     const actx = new AudioContext();
@@ -9763,7 +9888,7 @@ function tripClear() {
   vfxPreset('normal');   // set default VFX preset and highlight CLEAN button
   startSSE();
   dubUpdateChainDisplay();
-  // Clips: load cart assignments from localStorage and set initial view state
+  _vuInit();
   clipsCartLoad();
   // Hide search/sort controls on load (CART view is default, FILES view only)
   document.querySelectorAll('.clips-files-only').forEach(el => el.style.display = 'none');
@@ -9854,7 +9979,7 @@ function clipsRender() {
     const nameSafe = escHtml(f.name);
     const nameAttr = f.name.replace(/"/g,'&quot;');
     return `
-<div class="clips-card" onclick="clipsPlay('${nameAttr}')" title="Click to transmit over air">
+<div class="clips-card" onclick="clipsSelectByName('${nameAttr}')" ondblclick="clipsPlay('${nameAttr}')" title="Click to select for FX · Double-click for instant play">
   <div class="clips-card-ext">${escHtml(f.ext||'?')}</div>
   <div class="clips-card-name">${nameSafe}</div>
   <div class="clips-card-meta">
@@ -10080,14 +10205,17 @@ function clipsCartRender() {
         const src  = file ? (file.source === 's3' ? 'S3' : 'LOCAL') : '?';
         const srcCol = file && file.source === 's3' ? 'var(--warn)' : tier.color;
         const shortName = name.replace(/\.[^.]+$/, '');
+        const isSel = _dubSelectedClip && _dubSelectedClip.slot === i;
+        const selStyle = isSel ? 'box-shadow:0 0 12px rgba(255,149,0,.6),inset 0 0 20px rgba(255,149,0,.15);border-color:#ff9500;' : '';
         html += `<div style="position:relative;display:flex;flex-direction:column;align-items:center;
           justify-content:center;min-height:76px;padding:var(--s3) var(--s2);text-align:center;
-          border:2px solid ${tier.color};background:color-mix(in srgb,${tier.color} 10%,transparent);
-          cursor:pointer;gap:2px;transition:background 100ms" onclick="clipsCartPlay(${i})"
+          border:2px solid ${isSel ? '#ff9500' : tier.color};background:color-mix(in srgb,${tier.color} 10%,transparent);
+          cursor:pointer;gap:2px;transition:background 100ms,box-shadow 200ms;${selStyle}" onclick="clipsCartSelect(${i})"
+          ondblclick="clipsCartPlay(${i})"
           ondragover="event.preventDefault();this.style.boxShadow='0 0 0 2px var(--cyan)'"
           ondragleave="this.style.boxShadow=''"
           ondrop="clipsSlotDrop(event,${i})"
-          title="Click to transmit: ${escHtml(name)}" class="clips-cart-btn">
+          title="Click to select for FX · Double-click for instant play: ${escHtml(name)}" class="clips-cart-btn">
           <div style="position:absolute;top:3px;left:4px;font-size:7px;font-weight:700;
                       color:${tier.color};letter-spacing:.04em">${escHtml(ext.slice(0,4))}</div>
           <button onclick="event.stopPropagation();clipsCartClear(${i})"
@@ -10117,6 +10245,47 @@ function clipsCartRender() {
     grid.innerHTML = html;
     if (countEl) countEl.textContent = assigned + '/6';
   });
+}
+
+// ── Clip selection for FX chain ────────────────────────────────────────────
+let _dubSelectedClip = null;  // {name, slot} of selected clip for FX processing
+
+function clipsCartSelect(slot) {
+  const name = _clipsCart[slot];
+  if (!name) { clipsCartAssign(slot); return; }
+  _dubSelectedClip = {name, slot};
+  _dubUpdateSelectedUI();
+}
+
+function clipsSelectByName(name) {
+  if (!name) return;
+  _dubSelectedClip = {name, slot: null};
+  _dubUpdateSelectedUI();
+}
+
+function _dubUpdateSelectedUI() {
+  // Highlight selected cart slot
+  document.querySelectorAll('.clips-cart-btn').forEach(el => {
+    el.style.boxShadow = '';
+  });
+  if (_dubSelectedClip?.slot !== null && _dubSelectedClip?.slot !== undefined) {
+    const btns = document.querySelectorAll('.clips-cart-btn');
+    // Find the slot's button — cart buttons are rendered in order per tier
+    // Easier: just re-render to pick up visual state
+  }
+  // Update FX chain selected indicator
+  const lbl = document.getElementById('dub-selected-clip');
+  if (lbl) {
+    if (_dubSelectedClip) {
+      const short = _dubSelectedClip.name.replace(/\.[^.]+$/, '');
+      lbl.innerHTML = `<span style="color:#ff9500">&#9654;</span> <span style="color:#55cc55">${escHtml(short)}</span>`;
+      lbl.style.display = '';
+    } else {
+      lbl.style.display = 'none';
+    }
+  }
+  // Re-render to show selection highlight
+  clipsCartRender();
 }
 
 async function clipsCartPlay(slot) {

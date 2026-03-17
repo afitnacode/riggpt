@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.56
+RigGPT v2.12.57
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -391,7 +391,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.56'
+VERSION        = 'v2.12.57'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7473,6 +7473,20 @@ def api_trenchtown_transmit():
     engine  = data.get('engine', 'espeak')
     fx      = data.get('effects', {})
     dry_run = data.get('dry_run', False)
+    clip_name = data.get('clip_name', '').strip()
+
+    # If clip_name provided, load from clips directory
+    if clip_name and not wav_b64:
+        clip = next((f for f in _clips_files if f['name'] == clip_name), None)
+        if not clip:
+            return jsonify({'success': False, 'message': f'Clip not found: {clip_name}'}), 404
+        clip_path = clip.get('cached_path') or clip.get('path')
+        if not clip_path or not os.path.exists(clip_path):
+            return jsonify({'success': False, 'message': f'Clip file missing: {clip_name}'}), 404
+        import base64 as _b64
+        with open(clip_path, 'rb') as _cf:
+            wav_b64 = _b64.b64encode(_cf.read()).decode('ascii')
+        logger.info(f'Trenchtown: loaded clip {clip_name!r} ({len(wav_b64)} b64 chars)')
 
     if not wav_b64 and not text:
         return jsonify({'success': False, 'message': 'No audio source (wav_b64 or text required)'}), 400
