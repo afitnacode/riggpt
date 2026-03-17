@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.66
+RigGPT v2.12.67
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.66'
+VERSION        = 'v2.12.67'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3140,6 +3140,199 @@ def api_waterfall_hell():
             try: orchestrator.icom_agent.ptt_off()
             except Exception: pass
         try: os.remove(wav_path)
+        except Exception: pass
+
+
+@app.route('/api/waterfall/advanced', methods=['POST'])
+def api_waterfall_advanced():
+    """CI-V choreographed waterfall: panorama, diagonal, mirror, bounce."""
+    if not _waterfall_ok:
+        return jsonify({'success': False, 'message': 'waterfall_image module not loaded'}), 500
+    from waterfall_image import process_image, CANNED_IMAGES, SAMPLE_RATE
+    import numpy as np
+    from PIL import Image
+
+    data = request.json or {}
+    mode = data.get('mode', 'panorama')
+    canned = data.get('canned', '')
+    text   = data.get('callsign_text', '')
+    image_width  = int(data.get('image_width', 128))
+    image_height = int(data.get('image_height', 64))
+    base_freq    = float(data.get('base_freq', 200))
+    bandwidth    = float(data.get('bandwidth', 2400))
+    frame_dur    = float(data.get('frame_duration', 0.1))
+    contrast     = float(data.get('contrast', 2.0))
+
+    # Mode-specific params
+    panorama_span   = int(data.get('panorama_span', 30000))    # Hz spread
+    panorama_step   = int(data.get('panorama_step', 3000))     # Hz per hop
+    diagonal_hz     = int(data.get('diagonal_hz_per_row', 50)) # Hz drift per row
+    bounce_offset   = int(data.get('bounce_offset', 10000))     # Hz offset for bounce
+    bounce_freq_b   = int(data.get('bounce_freq_b', 0))       # explicit second freq (Hz)
+    bounce_rows     = int(data.get('bounce_rows', 4))          # rows per bounce
+
+    agent = orchestrator.icom_agent
+    if not agent or not agent.serial_conn or not agent.serial_conn.is_open:
+        return jsonify({'success': False, 'message': 'Radio not connected'}), 503
+
+    # Save original state
+    orig_freq = agent.read_frequency()
+    orig_mode = None  # we'll restore USB/LSB if mirror mode
+
+    # Build image
+    _fd, img_path = tempfile.mkstemp(suffix='.png')
+    os.close(_fd)
+    try:
+        if canned:
+            fn, label = CANNED_IMAGES.get(canned, (None, None))
+            if fn is None:
+                return jsonify({'success': False, 'message': f'Unknown canned: {canned}'}), 400
+            if canned == 'callsign' and text:
+                img = fn(size=(image_width*2, image_height*2), text=text)
+            else:
+                img = fn(size=(image_width*2, image_height*2))
+        else:
+            return jsonify({'success': False, 'message': 'canned image required for advanced mode'}), 400
+
+        # Process to pixel array
+        pixels = process_image(img, image_width, image_height,
+                               contrast=contrast, equalize=True, sharpen=0.3)
+        # Amplitude boost (same as regular transmit)
+        pixels = np.power(np.clip(pixels, 0, 1), 0.5)
+
+        # Generate per-row audio frames
+        freqs = np.linspace(base_freq, base_freq + bandwidth, image_width)
+        samples_per_frame = int(SAMPLE_RATE * frame_dur)
+        t = np.linspace(0, frame_dur, samples_per_frame, endpoint=False)
+        sine_basis = np.sin(2.0 * np.pi * freqs[:, np.newaxis] * t[np.newaxis, :])
+
+        row_audio = []
+        for row_idx in range(image_height):
+            row_amps = pixels[row_idx]
+            peak = np.max(row_amps)
+            if peak > 0.05:
+                row_amps = row_amps / peak
+            frame = np.dot(row_amps, sine_basis)
+            fl = min(int(SAMPLE_RATE * 0.003), samples_per_frame // 4)
+            frame[:fl] *= np.linspace(0, 1, fl)
+            frame[-fl:] *= np.linspace(1, 0, fl)
+            row_audio.append(frame)
+
+        # Build chunk plan: list of (row_start, row_end, freq_hz, mode_name)
+        chunks = []
+        if mode == 'panorama':
+            n_hops = max(1, panorama_span // panorama_step)
+            rows_per_hop = max(1, image_height // n_hops)
+            for i in range(n_hops):
+                r_start = i * rows_per_hop
+                r_end = min(r_start + rows_per_hop, image_height)
+                freq = orig_freq + (i * panorama_step) - (panorama_span // 2)
+                chunks.append((r_start, r_end, int(freq), 'USB'))
+                if r_end >= image_height:
+                    break
+
+        elif mode == 'diagonal':
+            # Every row gets a slight frequency shift
+            for r in range(image_height):
+                freq = orig_freq + (r * diagonal_hz) - (image_height * diagonal_hz // 2)
+                chunks.append((r, r + 1, int(freq), 'USB'))
+
+        elif mode == 'mirror':
+            half = image_height // 2
+            chunks.append((0, half, orig_freq, 'USB'))
+            chunks.append((half, image_height, orig_freq, 'LSB'))
+
+        elif mode == 'bounce':
+            freq_a = orig_freq
+            freq_b = bounce_freq_b if bounce_freq_b else (orig_freq + bounce_offset)
+            for r in range(0, image_height, bounce_rows):
+                r_end = min(r + bounce_rows, image_height)
+                f = freq_a if (r // bounce_rows) % 2 == 0 else freq_b
+                chunks.append((r, r_end, int(f), 'USB'))
+
+        else:
+            return jsonify({'success': False, 'message': f'Unknown mode: {mode}'}), 400
+
+        logger.info(f'WF advanced: mode={mode} chunks={len(chunks)} '
+                     f'rows={image_height} frame_dur={frame_dur}')
+
+        # Execute the choreography
+        ptt_active = False
+        t0 = time_module.time()
+        try:
+            agent.ptt_on()
+            ptt_active = True
+            time_module.sleep(0.15)
+
+            last_freq = None
+            last_mode = None
+            for chunk_idx, (r_start, r_end, freq_hz, mode_name) in enumerate(chunks):
+                # CI-V: change freq/mode if needed
+                if freq_hz != last_freq:
+                    agent.set_frequency(freq_hz)
+                    last_freq = freq_hz
+                    time_module.sleep(0.02)  # 20ms settling
+                if mode_name != last_mode:
+                    agent.set_mode(mode_name)
+                    last_mode = mode_name
+                    time_module.sleep(0.02)
+
+                # Assemble chunk audio
+                chunk_frames = row_audio[r_start:r_end]
+                chunk_audio = np.concatenate(chunk_frames)
+                peak = np.max(np.abs(chunk_audio))
+                if peak > 0:
+                    chunk_audio = chunk_audio * (0.82 / peak)
+                audio_i16 = (chunk_audio * 32767).astype(np.int16)
+
+                # Write temp WAV and play
+                _fd, chunk_wav = tempfile.mkstemp(suffix='_wfchunk.wav')
+                os.close(_fd)
+                try:
+                    import wave as _wave
+                    with _wave.open(chunk_wav, 'w') as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(SAMPLE_RATE)
+                        wf.writeframes(audio_i16.tobytes())
+                    orchestrator.playback_agent.play(chunk_wav, normalize=False)
+                finally:
+                    try: os.remove(chunk_wav)
+                    except Exception: pass
+
+            time_module.sleep(0.2)
+        finally:
+            if ptt_active:
+                try: agent.ptt_off()
+                except Exception: pass
+            # Restore original frequency and mode
+            if orig_freq:
+                try: agent.set_frequency(orig_freq)
+                except Exception: pass
+            try: agent.set_mode('USB')
+            except Exception: pass
+
+        duration = round(time_module.time() - t0, 1)
+        log_transmission(f'[WF-ADV {mode}] {canned or "image"} {len(chunks)} chunks',
+                         'waterfall', None, f'wf-{mode}', duration, True)
+        return jsonify({
+            'success': True,
+            'message': f'{mode.upper()} TX complete: {len(chunks)} chunks, {duration}s',
+            'duration': duration,
+            'chunks': len(chunks),
+        })
+
+    except Exception as e:
+        logger.error(f'WF advanced error: {e}', exc_info=True)
+        # Restore state on error
+        try:
+            if orig_freq: agent.set_frequency(orig_freq)
+            agent.set_mode('USB')
+            agent.ptt_off()
+        except Exception: pass
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        try: os.remove(img_path)
         except Exception: pass
 
 
