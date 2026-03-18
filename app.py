@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.80
+RigGPT v2.12.81
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.80'
+VERSION        = 'v2.12.81'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -8825,6 +8825,7 @@ _sentient_stop     = threading.Event()
 _sentient_stats    = {'heard': 0, 'replied': 0, 'bot': 0, 'human': 0}
 _sentient_log: list = []       # transcript entries (capped at 100)
 _sentient_energy   = 0         # current RMS energy level
+_sentient_whisper_engine = ''  # 'faster' or 'openai' (set on start)
 
 # Handshake: dual-tone 1337Hz + 2600Hz, 150ms
 _HANDSHAKE_F1 = 1337
@@ -8902,20 +8903,46 @@ def _sentient_listener_loop():
     silence_chunks = int(silence_sec / 0.5)  # chunks of silence before processing
     bytes_per_chunk = chunk_size * 2  # 16-bit mono
 
-    # Load whisper model
+    # Load whisper model — try faster-whisper first (3-4x faster on CPU)
     _sentient_log_entry('SYSTEM', f'Loading Whisper model: {whisper_model}...')
+    _whisper_engine = None  # 'faster' or 'openai'
+    global _sentient_whisper_engine
+    model = None
     try:
-        import whisper
-        model = whisper.load_model(whisper_model)
-        _sentient_log_entry('SYSTEM', f'Whisper {whisper_model} loaded OK')
+        from faster_whisper import WhisperModel
+        model = WhisperModel(whisper_model, device='cpu', compute_type='int8')
+        _whisper_engine = 'faster'
+        _sentient_whisper_engine = 'faster'
+        _sentient_log_entry('SYSTEM', f'faster-whisper {whisper_model} loaded (CTranslate2, int8 CPU)')
     except ImportError:
-        _sentient_log_entry('ERROR', 'openai-whisper not installed. Run: pip3 install openai-whisper --break-system-packages')
-        _sentient_active = False
-        return
+        _sentient_log_entry('SYSTEM', 'faster-whisper not found, trying openai-whisper...')
+        try:
+            import whisper
+            model = whisper.load_model(whisper_model)
+            _whisper_engine = 'openai'
+            _sentient_whisper_engine = 'openai'
+            _sentient_log_entry('SYSTEM', f'openai-whisper {whisper_model} loaded (CPU, fp32)')
+        except ImportError:
+            _sentient_log_entry('ERROR',
+                'No Whisper installed. Install one:\n'
+                '  pip3 install faster-whisper --break-system-packages  (recommended, 3-4x faster)\n'
+                '  pip3 install openai-whisper --break-system-packages  (original, slower)')
+            _sentient_active = False
+            return
     except Exception as e:
         _sentient_log_entry('ERROR', f'Failed to load Whisper: {e}')
         _sentient_active = False
         return
+
+    def _transcribe(wav_path):
+        """Transcribe audio file. Returns text string."""
+        if _whisper_engine == 'faster':
+            segments, info = model.transcribe(wav_path, language='en',
+                                              beam_size=1, vad_filter=True)
+            return ' '.join(s.text for s in segments).strip()
+        else:
+            result = model.transcribe(wav_path, language='en', fp16=False)
+            return result.get('text', '').strip()
 
     # Start arecord
     cmd = ['arecord', '-D', device, '-f', 'S16_LE', '-r', str(sr), '-c', '1', '-t', 'raw', '-q']
@@ -8986,8 +9013,7 @@ def _sentient_listener_loop():
                             wf.setframerate(sr)
                             wf.writeframes((audio_f32 * 32767).astype(np.int16).tobytes())
 
-                        result = model.transcribe(wav_path, language='en', fp16=False)
-                        text = result.get('text', '').strip()
+                        text = _transcribe(wav_path)
                     finally:
                         try: os.remove(wav_path)
                         except Exception: pass
@@ -9158,6 +9184,7 @@ def api_sentient_status():
         'log': _sentient_log[-20:],
         'mode': _app_settings.get('sentient_mode', 'engage'),
         'model': _app_settings.get('sentient_whisper_model', 'base'),
+        'whisper_engine': _sentient_whisper_engine,
     })
 
 

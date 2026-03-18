@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.80</span>
+    <span class="sb-label">v2.12.81</span>
   </div>
 </div>
 
@@ -3660,11 +3660,11 @@ hr.div  {
       <div class="form-row">
         <label style="min-width:70px">WHISPER</label>
         <select id="sent-whisper-model" style="flex:1;font-size:9px">
-          <option value="tiny">tiny (39M, fastest)</option>
-          <option value="base" selected>base (74M, good balance)</option>
-          <option value="small">small (244M, accurate)</option>
-          <option value="medium">medium (769M, very accurate)</option>
-          <option value="large">large (1.5G, best)</option>
+          <option value="tiny">tiny (39M) ~1-2s/10s audio ⚡</option>
+          <option value="base" selected>base (74M) ~2-4s/10s audio ✓</option>
+          <option value="small">small (244M) ~8-12s ⚠️</option>
+          <option value="medium">medium (769M) ~20-30s ⛔</option>
+          <option value="large">large (1.5G) GPU only ⛔</option>
         </select>
       </div>
       <div class="form-row">
@@ -12199,7 +12199,10 @@ async function _sentPoll() {
 
     // Model display
     const md = document.getElementById('sent-model-display');
-    if (md) md.textContent = r.model || '—';
+    if (md) {
+      const eng = r.whisper_engine === 'faster' ? 'faster-whisper' : r.whisper_engine === 'openai' ? 'openai-whisper' : '—';
+      md.textContent = r.model ? `${r.model} (${eng})` : '—';
+    }
 
     // Mode display
     const modeDisp = document.getElementById('sent-mode-display');
