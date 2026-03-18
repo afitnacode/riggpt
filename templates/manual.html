@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RigGPT User Manual — v2.12.74</title>
+<title>RigGPT User Manual — v2.12.75</title>
 <style>
   :root {
     --bg:      #0a0a0b;
@@ -466,7 +466,7 @@
 
 <h1>RigGPT</h1>
 <div class="doc-subtitle">
-  User Manual &amp; API Reference &nbsp;·&nbsp; v2.12.74 &nbsp;·&nbsp; 2026-03-16<br>
+  User Manual &amp; API Reference &nbsp;·&nbsp; v2.12.75 &nbsp;·&nbsp; 2026-03-16<br>
   AI-augmented voice agent for Icom amateur radio transceivers
 </div>
 
@@ -644,6 +644,10 @@ WAV Cache:/opt/riggpt/wav_cache/
   <tr><td>DEBUG</td><td>Toggles a live log panel showing API calls and timing.</td></tr>
 </table>
 
+<h3>Example Prompts</h3>
+<p>Right column shows categorized example prompts (On-Air, Utility, Weird). Click to load, or use PLAY/TX buttons for direct action.</p>
+<p>Prompts are fully editable: click ✎ EDIT to enter edit mode. Change titles, prompts, and categories inline. Add new prompts with + ADD PROMPT. Click SAVE to persist to the server. RESET restores built-in defaults. Custom prompts survive across sessions.</p>
+
 <hr>
 
 <h2 id="tab-sstv"><span class="h2-icon">08</span> SSTV Tab</h2>
@@ -673,39 +677,75 @@ WAV Cache:/opt/riggpt/wav_cache/
 
 <hr>
 
-<h2 id="tab-waterfall"><span class="h2-icon">09</span> Waterfall Tab</h2>
+<h2 id="tab-waterfall"><span class="h2-icon">09</span> Waterfall Art Tab</h2>
 
-<p>Transmit images as waterfall/spectrogram patterns — visible in software-defined radio spectrum displays.</p>
+<p>Transmit images, text, and Feld-Hellschreiber as waterfall/spectrogram patterns visible on any SDR. Three distinct sections, color-coded for clarity.</p>
 
-<h3>Image Types</h3>
-<ul>
-  <li><strong>Canned images</strong> — predefined test patterns (grid, checkerboard, bars, etc.)</li>
-  <li><strong>Custom upload</strong> — any image file converted to waterfall format</li>
-  <li><strong>Generative</strong> — 12 algorithmic generators: Plasma, Mandelbrot, Lissajous, Galaxy Vortex, and others. Supports random selection and auto-cycling.</li>
-</ul>
+<h3>Canned Images (cyan)</h3>
+<p>25+ predefined images: Smiley Face, Skull &amp; Crossbones, Fractal Tree, DNA Double Helix, ECG Heartbeat, Mandelbrot Slice, and many more. Click to preview, then TX IMAGE in the right panel to transmit.</p>
+
+<h3>Text → Waterfall (green)</h3>
+<p>Type any text and it renders as a waterfall image using the callsign font. Quick presets for CQ and 73 messages.</p>
+
+<h3>Feld-Hellschreiber (amber)</h3>
+<p>Classic ham radio pixel-text mode. Text renders as a 5×7 bitmap font — each column becomes one audio frame with 7 simultaneous tones. Text scrolls horizontally across the SDR waterfall. Configurable repeat (1-5x). Uses the shared TARGET speed from TX Parameters.</p>
+
+<h3>TX Parameters (right panel)</h3>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td>BW Hz</td><td>Bandwidth in Hz (default 2400, max 4000). Wider = larger image on waterfall.</td></tr>
+  <tr><td>TARGET</td><td>SDR speed preset: IC-7610 Fast/Mid/Slow, IC-7300, SDR#, Thetis, GQRX, KiwiSDR, WebSDR, Custom. Auto-calculates frame duration.</td></tr>
+  <tr><td>SIDEBAND</td><td>USB or LSB transmission mode.</td></tr>
+  <tr><td>CONTRAST</td><td>Image contrast enhancement (0.5-3.0).</td></tr>
+</table>
+
+<h3>CI-V Tricks (amber, right panel)</h3>
+<p>Advanced modes that use CI-V serial commands to manipulate VFO frequency and mode <em>between rows</em> during transmission. These create spectacular effects on wideband SDR receivers (KiwiSDR, WebSDR, panadapters). Works with both canned images and Hellschreiber text.</p>
+
+<table>
+  <tr><th>Trick</th><th>Description</th></tr>
+  <tr><td>PANORAMA</td><td>Hops VFO across 10-100kHz span in steps. Image becomes a multi-channel billboard on wideband SDR.</td></tr>
+  <tr><td>DIAGONAL DRIFT</td><td>Shifts VFO per row. Image appears at an angle on the waterfall.</td></tr>
+  <tr><td>SIDEBAND MIRROR</td><td>First half USB, second half LSB. Image mirrors on waterfall — Rorschach effect.</td></tr>
+  <tr><td>FREQ BOUNCE</td><td>Alternates between two frequencies. Twin interlaced images on wideband SDR.</td></tr>
+  <tr><td>MODE GLITCH</td><td>Cycles USB→LSB→CW→AM every N rows. Each mode has different signal signature.</td></tr>
+  <tr><td>ZIGZAG</td><td>VFO sweeps up then down in triangle wave. Snake pattern across band.</td></tr>
+  <tr><td>POWER FADE</td><td>Modulates TX power via CI-V between rows. Image pulses bright/dim.</td></tr>
+</table>
+
+<div class="callout tip">
+  <div class="label">Contrast Tips</div>
+  SDR waterfalls use logarithmic color maps. RigGPT applies sqrt() amplitude boost and per-row normalization automatically. Default contrast=2.0 + equalize=on for maximum visibility. Images are auto-flipped vertically so they appear right-side-up on scrolling waterfalls.
+</div>
 
 <hr>
 
 <h2 id="tab-schedule"><span class="h2-icon">10</span> Schedule Tab</h2>
 
-<p>Schedule one-shot or repeating transmissions using cron syntax. Powered by APScheduler.</p>
+<p>Schedule one-shot or repeating transmissions using cron syntax. Two sections: Beacons (left) and Scheduled TX (right). Powered by APScheduler.</p>
+
+<h3>Beacons</h3>
+<p>Quick-create repeating transmissions with an interval in minutes. SOURCE selector lets you choose any TTS engine, CW (Morse), or a Clip file from the Clips library.</p>
+<p>QUICK presets: 🆔 ID (10min), 📢 CQ (30min), 🌡 WX (60min), 🧪 TEST (1min), and 🌿 4:20 (creates a daily 4:20pm scheduled entry instantly).</p>
+
+<h3>Scheduled TX</h3>
+<p>Full cron-based scheduling. Visual cron builder with individual fields plus a quick presets dropdown. Supports both TTS and Clip playback.</p>
 
 <h3>Beacon Fields</h3>
 <table>
   <tr><th>Field</th><th>Description</th></tr>
   <tr><td>Cron</td><td>Standard 5-field cron expression: <code>minute hour day month weekday</code></td></tr>
-  <tr><td>Text</td><td>Message to transmit on schedule.</td></tr>
-  <tr><td>Engine / Voice</td><td>TTS engine and voice for this beacon (independent of Transmit tab settings).</td></tr>
-  <tr><td>TX On Air</td><td>If unchecked, plays preview only (no PTT).</td></tr>
-  <tr><td>Enabled</td><td>Toggle beacon without deleting it.</td></tr>
-  <tr><td>FIRE NOW</td><td>Immediate one-shot trigger for testing.</td></tr>
+  <tr><td>Type</td><td>TTS (text-to-speech) or CLIP (audio file from Clips library).</td></tr>
+  <tr><td>Text</td><td>Message to transmit (TTS mode only).</td></tr>
+  <tr><td>Engine / Voice</td><td>TTS engine and voice (independent of Console settings).</td></tr>
+  <tr><td>Clip File</td><td>Audio file from Clips library (CLIP mode only).</td></tr>
 </table>
 
 <div class="callout tip">
   <div class="label">Cron Examples</div>
   <code>*/15 * * * *</code> — every 15 minutes<br>
   <code>0 9 * * 1-5</code> — 09:00 weekdays<br>
-  <code>30 14 * * 6,0</code> — 14:30 on weekends
+  <code>20 16 * * *</code> — daily at 4:20pm
 </div>
 
 <hr>
@@ -741,9 +781,15 @@ WAV Cache:/opt/riggpt/wav_cache/
   <tr><td>AI CONFIG</td><td>Ollama host, default model, AI provider selection.</td></tr>
   <tr><td>PIPER</td><td>Piper TTS binary path and model directory.</td></tr>
   <tr><td>FASTKOKO LOCAL TTS</td><td>FastKoko server host and port.</td></tr>
+  <tr><td>ACID TRIP EMOJI</td><td>Agent A and Agent B emoji selectors (moved here from Acid Trip tab for cleaner layout).</td></tr>
   <tr><td>EXPORT / IMPORT</td><td>Full config backup as JSON. Optional plaintext API key export.</td></tr>
   <tr><td>GONG</td><td>Path to Taco Bell gong WAV file (played on demand from any tab).</td></tr>
 </table>
+
+<div class="callout tip">
+  <div class="label">API CFG Tab</div>
+  Two-column layout: API Keys (left) and API Integrations (right). All cloud provider keys, Ollama URL, Discord bot token, and engine configuration live here.
+</div>
 
 <!-- ══════════════════════════════════════════════════════════
      ACID TRIP
@@ -946,9 +992,65 @@ WAV Cache:/opt/riggpt/wav_cache/
 </table>
 
 <!-- ══════════════════════════════════════════════════════════
+     SPEC OPS
+══════════════════════════════════════════════════════════ -->
+<h2 id="tab-specops"><span class="h2-icon">14</span> Spec Ops Tab</h2>
+
+<p>Automated radio chaos. Multiple independent operations run simultaneously, with a Mission Control sidebar showing real-time status.</p>
+
+<h3>Operations</h3>
+<table>
+  <tr><th>Op</th><th>Description</th></tr>
+  <tr><td>Numbers Station</td><td>Cold War-style digit groups. 4-6 groups of 5 digits, spoken as words ("niner"), repeated once. Configurable cadence: Slow (~30 digits/min), Medium (~45), Fast (~65).</td></tr>
+  <tr><td>Solar Weather</td><td>Fetches NOAA planetary K-index. AUTO-TX announces when K exceeds threshold. Manual CHECK + ANNOUNCE buttons.</td></tr>
+  <tr><td>Mystery TX</td><td>Random clip or AI line transmitted at a random time within a configurable window.</td></tr>
+  <tr><td>Auto-ID</td><td>Periodic callsign identification. Supports TTS and CW (Morse).</td></tr>
+  <tr><td>Time Announce</td><td>Periodic UTC/local time announcement.</td></tr>
+  <tr><td>Voice Roulette</td><td>Transmits whatever is in the TX box using a random engine, voice, FX preset, pitch, and speed.</td></tr>
+  <tr><td>Pirate Broadcast</td><td>Periodically transmits absurd fake news headlines in a random voice.</td></tr>
+  <tr><td>Chaos Button</td><td>Fires a random special op. Could be anything.</td></tr>
+</table>
+
+<h3>Ghost-in-the-Machine</h3>
+<p>CI-V possession engine. Directly manipulates radio hardware via serial commands. Requires connected radio.</p>
+<table>
+  <tr><th>Ghost</th><th>Effect</th></tr>
+  <tr><td>VFO Poltergeist</td><td>Randomly drifts VFO frequency ±50-5000 Hz</td></tr>
+  <tr><td>Passband Possession</td><td>Cycles IF filter bandwidth 1→2→3→2→1</td></tr>
+  <tr><td>RF Power Wobble</td><td>Sinusoidal TX power modulation via CI-V</td></tr>
+  <tr><td>AGC Seizure</td><td>Rapid AGC cycling FAST→MID→SLOW→OFF</td></tr>
+  <tr><td>Split Personality</td><td>Enables SPLIT, randomly offsets VFO-B</td></tr>
+  <tr><td>Digital Ghost</td><td>Keys PTT, transmits random CW fragments</td></tr>
+  <tr><td>The Exorcist</td><td>All sub-ghosts simultaneously + screaming AI TX</td></tr>
+</table>
+
+<h3>Mission Control (right sidebar)</h3>
+<p>Fixed sidebar showing real-time status of all operations. Active ops show green LED + countdown to next fire. Ghost shows pulsing red LED with possession type. NEXT FIRE shows which op fires soonest. ACTIVE OPS count and RADIO TX/RX state. Polls every 3 seconds (only when Spec Ops tab is active).</p>
+
+<hr>
+
+<!-- ══════════════════════════════════════════════════════════
+     CLIPS
+══════════════════════════════════════════════════════════ -->
+<h2 id="tab-clips"><span class="h2-icon">15</span> Clips Tab</h2>
+
+<p>Radio automation media player with named cart banks. Play audio files over the air via PTT.</p>
+
+<h3>Features</h3>
+<table>
+  <tr><th>Feature</th><th>Description</th></tr>
+  <tr><td>Cart Banks</td><td>Unlimited named banks, each with 4 tiers × 6 slots (24 per bank). Add, rename, duplicate, delete banks.</td></tr>
+  <tr><td>File Sources</td><td>Local directory (default <code>/home/riggpt/clips/</code>) + optional Amazon S3 bucket.</td></tr>
+  <tr><td>Interaction</td><td>Single-click = select (amber glow). Double-click = instant play. Selected clip feeds into FX Chain.</td></tr>
+  <tr><td>FX Chain</td><td>1980s hi-fi aesthetic. Per-section LED colors. VU meter with peak hold. REV toggle for reverse playback.</td></tr>
+</table>
+
+<hr>
+
+<!-- ══════════════════════════════════════════════════════════
      TTS ENGINES
 ══════════════════════════════════════════════════════════ -->
-<h2 id="tts-espeak"><span class="h2-icon">14</span> TTS: eSpeak</h2>
+<h2 id="tts-espeak"><span class="h2-icon">16</span> TTS: eSpeak</h2>
 <p>Offline, zero-latency. Robotic character that works well for non-human personas. No API key required.</p>
 <p>Voices follow eSpeak voice string format: <code>en-us</code>, <code>en-gb</code>, <code>en-us+m3</code>, <code>en-us+f3</code>, etc. The <code>+m</code> and <code>+f</code> suffixes select male/female variants.</p>
 
@@ -1832,6 +1934,33 @@ systemctl daemon-reload
      CHANGELOG
 ══════════════════════════════════════════════════════════ -->
 <h2 id="changelog"><span class="h2-icon">40</span> Changelog</h2>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.12.74</span>
+    <span class="cl-date">2026-03-18</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag fix">fix</span> <strong>Ghost/Exorcist speed bug</strong> &mdash; sox crashed on every ghost whisper and exorcist scream. speed=random.randint(60,160) passed raw int (104) instead of float (1.04). All effects presets silently skipped.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Spec Ops pane leaking</strong> &mdash; inline display:flex overrode CSS display:none, making Spec Ops visible on every tab.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Upside-down waterfall art</strong> &mdash; flip_v=True now default. Images display right-side-up on scrolling waterfalls.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Roger beep after WF art</strong> &mdash; was add_markers sweep tones, now defaulted to off.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Acid Trip dangling sentences</strong> &mdash; num_predict floor (150) was in the log but not the actual payload. Fixed payload + added sentence trimmer to _sanitise_trip_reply().</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Solar Weather K-index</strong> &mdash; switched to reliable NOAA products endpoint, handles both array and object formats, added fallback.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>INSTALL.sh stale process</strong> &mdash; detects port 5000 held after systemctl stop, SIGTERM→SIGKILL escalation, diagnostics during port wait.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Settings persistence</strong> &mdash; added ~40 missing trip settings (FX, Discord influence, topic, all checkboxes) to flush/restore.</li>
+    <li><span class="cl-tag new">new</span> <strong>Mission Control sidebar</strong> &mdash; fixed right panel on Spec Ops showing all ops as LED badges with live countdowns. Ghost pulsing red. NEXT FIRE, ACTIVE OPS count, TX/RX state.</li>
+    <li><span class="cl-tag new">new</span> <strong>SDR Speed Presets</strong> &mdash; TARGET dropdown replacing raw duration: IC-7610 Fast/Mid/Slow, IC-7300, SDR#, Thetis, GQRX, KiwiSDR, WebSDR, Custom. Auto-calculates frame_duration.</li>
+    <li><span class="cl-tag new">new</span> <strong>Feld-Hellschreiber</strong> &mdash; classic pixel-text mode. 5×7 bitmap font (A-Z, 0-9, 15 special chars). Text scrolls across SDR waterfall. Configurable speed and repeat.</li>
+    <li><span class="cl-tag new">new</span> <strong>7 CI-V Waterfall Tricks</strong> &mdash; Panorama (freq hop billboard), Diagonal Drift, Sideband Mirror (Rorschach), Frequency Bounce, Mode Glitch (USB/LSB/CW/AM cycling), Zigzag (sawtooth VFO), Power Fade (CI-V power modulation). All work with both images and Hellschreiber.</li>
+    <li><span class="cl-tag new">new</span> <strong>WF ART visual redesign</strong> &mdash; three distinct colored sections (cyan/green/amber). Amplitude boost (sqrt) + per-row normalization for SDR visibility.</li>
+    <li><span class="cl-tag new">new</span> <strong>Numbers Station cadence</strong> &mdash; Slow/Medium/Fast presets with heavy punctuation pauses. Persists to config.</li>
+    <li><span class="cl-tag new">new</span> <strong>Schedule 4:20pm</strong> &mdash; one-click 🌿 button creates daily 4:20pm schedule instantly.</li>
+    <li><span class="cl-tag new">new</span> <strong>AI editable prompts</strong> &mdash; edit titles, prompts, categories inline. Persists to server. Reset to defaults.</li>
+    <li><span class="cl-tag new">new</span> <strong>Acid Trip cleanup</strong> &mdash; persona presets removed, emoji moved to Config tab. max_tok default raised to 150.</li>
+    <li><span class="cl-tag new">new</span> <strong>API CFG layout</strong> &mdash; removed Info column, now 2-column (API Keys + Integrations split 50/50).</li>
+  </ul></div>
+</div>
 
 <div class="cl-entry">
   <div class="cl-header">
