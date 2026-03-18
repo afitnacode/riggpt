@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.76
+RigGPT v2.12.77
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.76'
+VERSION        = 'v2.12.77'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4352,6 +4352,8 @@ def api_settings_post():
         'mystery_window_start', 'mystery_window_end', 'mystery_engine', 'mystery_voice',
         'autoid_callsign', 'autoid_interval', 'autoid_engine', 'autoid_voice',
         'timeannounce_interval', 'timeannounce_engine', 'timeannounce_voice',
+        'evp_interval', 'evp_engine', 'evp_voice',
+        'whisper_interval', 'whisper_engine', 'whisper_voice',
         # Pirate Broadcast
         'pirate_interval', 'pirate_engine', 'pirate_voice',
         # Ghost audio
@@ -8486,6 +8488,241 @@ def api_timeannounce_status():
         'active':   _timeannounce_job is not None,
         'interval': _app_settings.get('timeannounce_interval', '30'),
         'engine':   _app_settings.get('timeannounce_engine', 'espeak'),
+    })
+
+
+# ── EVP Mode (Electronic Voice Phenomena) ────────────────────────────────────
+_evp_job = None
+
+_EVP_PHRASES = [
+    'they are watching from the static',
+    'the frequency remembers',
+    'we never left this channel',
+    'count the dead carriers',
+    'your signal bleeds into ours',
+    'the noise floor is alive',
+    'we transmit from the other side',
+    'tune lower and you will hear us',
+    'the ionosphere carries our voices',
+    'between the sidebands we wait',
+    'every QSO leaves a ghost',
+    'the band is not empty',
+    'listen to what the static says',
+    'propagation from nowhere',
+    'we are the ones you cannot work',
+    'your squelch cannot silence us',
+    'the dead do not need a license',
+    'copy our signal if you dare',
+    'this frequency belongs to no one living',
+    'the waterfall shows our faces',
+]
+
+def _run_evp():
+    """Transmit a cryptic EVP phrase with heavy FX: reverse audio + deep reverb + pitch shift."""
+    import random
+    phrase = random.choice(_EVP_PHRASES)
+
+    # Optionally use AI to generate fresh EVP if Ollama is available
+    try:
+        ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+        model = _app_settings.get('default_model', '')
+        if model:
+            import requests as _req
+            r = _req.post(f'{ollama_url}/api/generate', json={
+                'model': model,
+                'prompt': 'Generate a single cryptic, unsettling phrase as if spoken by a ghost through radio static. Max 12 words. Only the phrase, nothing else.',
+                'system': 'You are a disembodied voice trapped in radio frequencies. Respond with only the spoken words.',
+                'stream': False,
+                'options': {'temperature': 1.3, 'num_predict': 30},
+            }, timeout=15)
+            if r.status_code == 200:
+                ai_phrase = r.json().get('response', '').strip()
+                ai_phrase = _sanitise_trip_reply(ai_phrase)
+                if ai_phrase and len(ai_phrase) > 5:
+                    phrase = ai_phrase
+    except Exception:
+        pass  # Fall back to canned phrases
+
+    engine = _app_settings.get('evp_engine', 'espeak')
+    voice  = _app_settings.get('evp_voice', '') or None
+    try:
+        # Heavy EVP processing: deep pitch, reverb, underwater preset
+        preset = random.choice(['underwater', 'cave', 'horror'])
+        orchestrator.execute(
+            phrase, engine=engine, voice=voice,
+            preset=preset,
+            pitch=random.randint(-10, -4),
+            speed=random.randint(50, 75) / 100.0,
+            roger_beep=False,
+        )
+        logger.info(f'evp: transmitted: "{phrase}" [{engine}/{voice or "default"} {preset}]')
+    except Exception as e:
+        logger.error(f'evp TX error: {e}')
+
+
+@app.route('/api/evp/start', methods=['POST'])
+def api_evp_start():
+    global _evp_job
+    data = request.json or {}
+    interval = max(1, int(data.get('interval_minutes',
+                   int(_app_settings.get('evp_interval', '3')))))
+    engine = data.get('engine', _app_settings.get('evp_engine', 'espeak'))
+    voice  = data.get('voice', _app_settings.get('evp_voice', ''))
+    _app_settings['evp_interval'] = str(interval)
+    _app_settings['evp_engine']   = engine
+    _app_settings['evp_voice']    = voice
+    _save_app_settings(_app_settings)
+    try:
+        if _evp_job:
+            try: _evp_job.remove()
+            except Exception: pass
+        _evp_job = scheduler.add_job(
+            _run_evp, CronTrigger.from_crontab(f'*/{interval} * * * *'),
+            id='evp_mode', replace_existing=True,
+        )
+        threading.Thread(target=_run_evp, daemon=True, name='evp-initial').start()
+        return jsonify({'success': True, 'message': f'EVP active every {interval}min'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/evp/stop', methods=['POST'])
+def api_evp_stop():
+    global _evp_job
+    if _evp_job:
+        try: _evp_job.remove()
+        except Exception: pass
+        _evp_job = None
+    return jsonify({'success': True, 'message': 'EVP stopped'})
+
+@app.route('/api/evp/status', methods=['GET'])
+def api_evp_status():
+    return jsonify({
+        'active':   _evp_job is not None,
+        'interval': _app_settings.get('evp_interval', '3'),
+    })
+
+
+# ── Subliminal Whispers ──────────────────────────────────────────────────────
+_whisper_job = None
+
+_WHISPER_PHRASES = [
+    'can you hear this',
+    'we are beneath the noise floor',
+    'the frequency shifts when you look away',
+    'do not adjust your receiver',
+    'this transmission was not scheduled',
+    'someone is listening who should not be',
+    'the signal was always here',
+    'you were not supposed to find this',
+    'the propagation path leads nowhere',
+    'between the harmonics there is a voice',
+    'zero zero zero zero zero',
+    'the meter is moving but no one is transmitting',
+    'check your antenna',
+    'the dead band is not dead',
+    'qrz qrz qrz from the void',
+]
+
+def _run_whisper():
+    """Transmit a barely-audible whisper at minimum power via CI-V."""
+    import random
+    phrase = random.choice(_WHISPER_PHRASES)
+
+    # Try AI generation
+    try:
+        ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+        model = _app_settings.get('default_model', '')
+        if model:
+            import requests as _req
+            r = _req.post(f'{ollama_url}/api/generate', json={
+                'model': model,
+                'prompt': 'Generate a single barely-audible whispered phrase for a subliminal radio message. Cryptic, minimal, unsettling. Max 8 words. Only the phrase.',
+                'system': 'You whisper secrets into the radio spectrum that only the attentive will notice.',
+                'stream': False,
+                'options': {'temperature': 1.4, 'num_predict': 20},
+            }, timeout=15)
+            if r.status_code == 200:
+                ai_phrase = r.json().get('response', '').strip()
+                ai_phrase = _sanitise_trip_reply(ai_phrase)
+                if ai_phrase and len(ai_phrase) > 3:
+                    phrase = ai_phrase
+    except Exception:
+        pass
+
+    engine = _app_settings.get('whisper_engine', 'espeak')
+    voice  = _app_settings.get('whisper_voice', '') or None
+    agent  = orchestrator.icom_agent
+
+    # Save original power level
+    orig_power = None
+    try:
+        if agent and agent.serial_conn and agent.serial_conn.is_open:
+            orig_power = agent.read_level(0x0A)
+            # Set power to ~5% (value 13 out of 255)
+            agent.set_level(0x0A, 13)
+            time_module.sleep(0.05)
+    except Exception as e:
+        logger.warning(f'whisper: could not set low power: {e}')
+
+    try:
+        orchestrator.execute(
+            phrase, engine=engine, voice=voice,
+            preset='whisper',
+            pitch=random.randint(-3, 3),
+            speed=random.randint(60, 80) / 100.0,
+            roger_beep=False,
+        )
+        logger.info(f'whisper: transmitted at low power: "{phrase}"')
+    except Exception as e:
+        logger.error(f'whisper TX error: {e}')
+    finally:
+        # Restore original power
+        if orig_power is not None:
+            try:
+                agent.set_level(0x0A, orig_power)
+            except Exception:
+                pass
+
+
+@app.route('/api/whisper/start', methods=['POST'])
+def api_whisper_start():
+    global _whisper_job
+    data = request.json or {}
+    interval = max(1, int(data.get('interval_minutes',
+                   int(_app_settings.get('whisper_interval', '5')))))
+    engine = data.get('engine', _app_settings.get('whisper_engine', 'espeak'))
+    voice  = data.get('voice', _app_settings.get('whisper_voice', ''))
+    _app_settings['whisper_interval'] = str(interval)
+    _app_settings['whisper_engine']   = engine
+    _app_settings['whisper_voice']    = voice
+    _save_app_settings(_app_settings)
+    try:
+        if _whisper_job:
+            try: _whisper_job.remove()
+            except Exception: pass
+        _whisper_job = scheduler.add_job(
+            _run_whisper, CronTrigger.from_crontab(f'*/{interval} * * * *'),
+            id='whisper_mode', replace_existing=True,
+        )
+        threading.Thread(target=_run_whisper, daemon=True, name='whisper-initial').start()
+        return jsonify({'success': True, 'message': f'Subliminal whispers active every {interval}min'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/whisper/stop', methods=['POST'])
+def api_whisper_stop():
+    global _whisper_job
+    if _whisper_job:
+        try: _whisper_job.remove()
+        except Exception: pass
+        _whisper_job = None
+    return jsonify({'success': True, 'message': 'Whispers silenced'})
+
+@app.route('/api/whisper/status', methods=['GET'])
+def api_whisper_status():
+    return jsonify({
+        'active':   _whisper_job is not None,
+        'interval': _app_settings.get('whisper_interval', '5'),
     })
 
 

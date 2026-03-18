@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.76</span>
+    <span class="sb-label">v2.12.77</span>
   </div>
 </div>
 
@@ -3345,6 +3345,53 @@ hr.div  {
         </button>
         <div id="chaos-result" style="font-size:9px;color:var(--warn);margin-top:var(--s3);min-height:14px"></div>
       </div>
+      <!-- EVP MODE -->
+      <div style="border:1px solid var(--border2);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:#8844ff;letter-spacing:.1em;margin-bottom:var(--s2)">&#128123; EVP MODE</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Electronic Voice Phenomena. AI generates cryptic phrases, heavy reverb + pitch shift. Ghost voices from the ether.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="number" id="evp-interval" value="3" min="1" max="30" style="width:44px;font-size:9px">
+          <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
+          <select id="evp-engine" style="flex:1;font-size:9px" onchange="specopsVoiceRefresh('evp')">
+            <option value="espeak">eSpeak</option><option value="piper">Piper</option>
+            <option value="edge">Edge TTS</option><option value="gtts">Google TTS</option>
+            <option value="elevenlabs">ElevenLabs</option><option value="fastkoko">FastKoko</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <select id="evp-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
+        </div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn sm primary" id="evp-start-btn" onclick="evpStart()">&#9632; START</button>
+          <button class="btn sm warn" onclick="evpStop()">STOP</button>
+          <button class="btn sm" onclick="evpTest()">&#9654; TEST</button>
+        </div>
+        <div class="alert-strip" id="evp-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- SUBLIMINAL WHISPERS -->
+      <div style="border:1px solid var(--border2);padding:var(--s3);background:var(--bg1)">
+        <div style="font-size:9px;font-weight:700;color:#446688;letter-spacing:.1em;margin-bottom:var(--s2)">&#129323; SUBLIMINAL WHISPERS</div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:var(--s2)">Barely-audible AI whispers at minimum TX power (5%). Ghostly murmuring that only the attentive will notice.</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <input type="number" id="whisper-interval" value="5" min="1" max="30" style="width:44px;font-size:9px">
+          <span style="font-size:9px;color:var(--text3);align-self:center">min</span>
+          <select id="whisper-engine" style="flex:1;font-size:9px" onchange="specopsVoiceRefresh('whisper')">
+            <option value="espeak">eSpeak</option><option value="piper">Piper</option>
+            <option value="edge">Edge TTS</option><option value="gtts">Google TTS</option>
+            <option value="elevenlabs">ElevenLabs</option><option value="fastkoko">FastKoko</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <select id="whisper-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
+        </div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn sm primary" id="whisper-start-btn" onclick="whisperStart()">&#9632; START</button>
+          <button class="btn sm warn" onclick="whisperStop()">STOP</button>
+          <button class="btn sm" onclick="whisperTest()">&#9654; TEST</button>
+        </div>
+        <div class="alert-strip" id="whisper-alert" style="margin-top:var(--s2)"></div>
+      </div>
 
   </div><!-- /row 2 -->
 
@@ -3527,6 +3574,18 @@ hr.div  {
         <span class="mc-led" id="mc-led-pirate"></span>
         <span class="mc-name">PIRATE</span>
         <span class="mc-timer" id="mc-timer-pirate">OFF</span>
+      </div>
+
+      <div class="mc-badge" id="mc-evp">
+        <span class="mc-led" id="mc-led-evp"></span>
+        <span class="mc-name">EVP</span>
+        <span class="mc-timer" id="mc-timer-evp">OFF</span>
+      </div>
+
+      <div class="mc-badge" id="mc-whisper">
+        <span class="mc-led" id="mc-led-whisper"></span>
+        <span class="mc-name">WHISPER</span>
+        <span class="mc-timer" id="mc-timer-whisper">OFF</span>
       </div>
 
       <!-- Divider -->
@@ -9638,6 +9697,12 @@ async function cfgFlushPresets() {
     timeannounce_interval:    get('timeannounce-interval'),
     timeannounce_engine:      get('timeannounce-engine'),
     timeannounce_voice:       get('timeannounce-voice'),
+    evp_interval:             get('evp-interval'),
+    evp_engine:               get('evp-engine'),
+    evp_voice:                get('evp-voice'),
+    whisper_interval:         get('whisper-interval'),
+    whisper_engine:           get('whisper-engine'),
+    whisper_voice:            get('whisper-voice'),
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -11368,6 +11433,12 @@ function _restoreAllSettings(s) {
   set('timeannounce-interval', s.timeannounce_interval);
   set('timeannounce-engine',   s.timeannounce_engine);
   set('timeannounce-voice',    s.timeannounce_voice);
+  set('evp-interval',          s.evp_interval);
+  set('evp-engine',            s.evp_engine);
+  set('evp-voice',             s.evp_voice);
+  set('whisper-interval',      s.whisper_interval);
+  set('whisper-engine',        s.whisper_engine);
+  set('whisper-voice',         s.whisper_voice);
   // TX tab defaults (engine triggers async voice list load)
   if (s.tx_engine) {
     set('tx-engine', s.tx_engine);
@@ -11397,6 +11468,8 @@ async function specopsStopAll() {
     api('POST', '/api/mystery/stop'),
     api('POST', '/api/autoid/stop'),
     api('POST', '/api/timeannounce/stop'),
+    api('POST', '/api/evp/stop'),
+    api('POST', '/api/whisper/stop'),
     api('POST', '/api/ghost/stop'),
     api('POST', '/api/tx/terminate'),
     api('POST', '/api/ptt', {state: false}),
@@ -11424,7 +11497,7 @@ async function specopsStopAll() {
 function specopsVoiceRefresh(prefix) {
   const keyMap = {ns:'numbers_station_voice', solar:'solar_voice', mystery:'mystery_voice',
                   autoid:'autoid_voice', pirate:'pirate_voice', ghost:'ghost_voice',
-                  timeannounce:'timeannounce_voice'};
+                  timeannounce:'timeannounce_voice', evp:'evp_voice', whisper:'whisper_voice'};
   _loadVoicesInto(prefix + '-engine', prefix + '-voice', keyMap[prefix]);
 }
 
@@ -11452,13 +11525,15 @@ function _mcCountdown(op, intervalMin) {
 
 async function _mcUpdate() {
   try {
-    const [ns, pirate, mystery, autoid, ta, ghost] = await Promise.all([
+    const [ns, pirate, mystery, autoid, ta, ghost, evp, whisper] = await Promise.all([
       api('GET', '/api/numbers_station/status'),
       api('GET', '/api/pirate/status'),
       api('GET', '/api/mystery/status'),
       api('GET', '/api/autoid/status'),
       api('GET', '/api/timeannounce/status'),
       api('GET', '/api/ghost/status'),
+      api('GET', '/api/evp/status'),
+      api('GET', '/api/whisper/status'),
     ]);
 
     const nsInt = parseInt(ns.interval || 5);
@@ -11481,6 +11556,16 @@ async function _mcUpdate() {
     _mcSetBadge('pirate', pirate.active, pirate.active ? _mcCountdown('pirate', pirInt) : 'OFF');
     if (!pirate.active) delete _mcStartTimes['pirate'];
 
+    // EVP
+    const evpInt = parseInt(evp.interval || 3);
+    _mcSetBadge('evp', evp.active, evp.active ? _mcCountdown('evp', evpInt) : 'OFF');
+    if (!evp.active) delete _mcStartTimes['evp'];
+
+    // Whisper
+    const whInt = parseInt(whisper.interval || 5);
+    _mcSetBadge('whisper', whisper.active, whisper.active ? _mcCountdown('whisper', whInt) : 'OFF');
+    if (!whisper.active) delete _mcStartTimes['whisper'];
+
     // Ghost
     const ghostActive = ghost.active || false;
     _mcSetBadge('ghost', ghostActive, ghostActive ? 'ACTIVE' : 'CLEAR');
@@ -11501,7 +11586,7 @@ async function _mcUpdate() {
     }
 
     // Active count
-    const activeOps = [ns.active, mystery.active, autoid.active, ta.active, pirate.active, ghostActive]
+    const activeOps = [ns.active, mystery.active, autoid.active, ta.active, pirate.active, evp.active, whisper.active, ghostActive]
       .filter(Boolean).length;
     const countEl = document.getElementById('mc-active-count');
     if (countEl) {
@@ -11519,6 +11604,8 @@ async function _mcUpdate() {
     if (pirate.active) activeIntervals.push({name: 'PIRATE', min: pirInt, op: 'pirate'});
     if (autoid.active) activeIntervals.push({name: 'AUTO-ID', min: aidInt, op: 'autoid'});
     if (ta.active) activeIntervals.push({name: 'TIME ANN', min: taInt, op: 'timeannounce'});
+    if (evp.active) activeIntervals.push({name: 'EVP', min: evpInt, op: 'evp'});
+    if (whisper.active) activeIntervals.push({name: 'WHISPER', min: whInt, op: 'whisper'});
     for (const ai of activeIntervals) {
       if (!_mcStartTimes[ai.op]) continue;
       const elapsed = (Date.now() - _mcStartTimes[ai.op]) / 1000;
@@ -11742,6 +11829,64 @@ async function timeannounceTest() {
   showAlert('timeannounce-alert', r.message || 'Fired', r.success ? 'ok' : 'err');
 }
 
+// ── EVP Mode ─────────────────────────────────────────────────────────────
+async function evpStart() {
+  const interval = parseInt(document.getElementById('evp-interval')?.value) || 3;
+  const engine   = document.getElementById('evp-engine')?.value || 'espeak';
+  const voice    = document.getElementById('evp-voice')?.value || '';
+  const r = await api('POST', '/api/evp/start', { interval_minutes: interval, engine, voice });
+  showAlert('evp-alert', r.message || (r.success ? 'Active' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success) {
+    const btn = document.getElementById('evp-start-btn');
+    if (btn) { btn.textContent = '● ACTIVE'; btn.style.background = 'var(--dim-tx)'; }
+    cfgFlushPresets();
+  }
+}
+async function evpStop() {
+  const r = await api('POST', '/api/evp/stop');
+  showAlert('evp-alert', r.message || 'Stopped', 'warn');
+  const btn = document.getElementById('evp-start-btn');
+  if (btn) { btn.textContent = '■ START'; btn.style.background = ''; }
+}
+async function evpTest() {
+  showAlert('evp-alert', 'Summoning EVP...', 'info', 0);
+  const r = await api('POST', '/api/evp/start', {
+    interval_minutes: parseInt(document.getElementById('evp-interval')?.value) || 3,
+    engine: document.getElementById('evp-engine')?.value || 'espeak',
+    voice:  document.getElementById('evp-voice')?.value || '',
+  });
+  showAlert('evp-alert', r.message || 'Fired', r.success ? 'ok' : 'err');
+}
+
+// ── Subliminal Whispers ──────────────────────────────────────────────────
+async function whisperStart() {
+  const interval = parseInt(document.getElementById('whisper-interval')?.value) || 5;
+  const engine   = document.getElementById('whisper-engine')?.value || 'espeak';
+  const voice    = document.getElementById('whisper-voice')?.value || '';
+  const r = await api('POST', '/api/whisper/start', { interval_minutes: interval, engine, voice });
+  showAlert('whisper-alert', r.message || (r.success ? 'Active' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success) {
+    const btn = document.getElementById('whisper-start-btn');
+    if (btn) { btn.textContent = '● ACTIVE'; btn.style.background = 'var(--dim-tx)'; }
+    cfgFlushPresets();
+  }
+}
+async function whisperStop() {
+  const r = await api('POST', '/api/whisper/stop');
+  showAlert('whisper-alert', r.message || 'Silenced', 'warn');
+  const btn = document.getElementById('whisper-start-btn');
+  if (btn) { btn.textContent = '■ START'; btn.style.background = ''; }
+}
+async function whisperTest() {
+  showAlert('whisper-alert', 'Whispering...', 'info', 0);
+  const r = await api('POST', '/api/whisper/start', {
+    interval_minutes: parseInt(document.getElementById('whisper-interval')?.value) || 5,
+    engine: document.getElementById('whisper-engine')?.value || 'espeak',
+    voice:  document.getElementById('whisper-voice')?.value || '',
+  });
+  showAlert('whisper-alert', r.message || 'Fired', r.success ? 'ok' : 'err');
+}
+
 // ── Voice Roulette ───────────────────────────────────────────────────────
 async function voiceRoulette() {
   const text = document.getElementById('tx-text')?.value?.trim();
@@ -11818,6 +11963,14 @@ async function chaosButton() {
     async () => {
       const r = await api('POST', '/api/timeannounce/start', {interval_minutes: 15, engine: 'espeak'});
       return '\uD83D\uDD52 Time announce activated every 15min';
+    },
+    async () => {
+      const r = await api('POST', '/api/evp/start', {interval_minutes: 2, engine: 'espeak'});
+      return '\uD83D\uDC7B EVP mode activated — ghost voices from the static';
+    },
+    async () => {
+      const r = await api('POST', '/api/whisper/start', {interval_minutes: 3, engine: 'espeak'});
+      return '\uD83E\uDD2B Subliminal whispers at minimum power...';
     },
   ];
   const fn = opts[Math.floor(Math.random()*opts.length)];
