@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.86
+RigGPT v2.12.87
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.86'
+VERSION        = 'v2.12.87'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -9129,7 +9129,6 @@ def _sentient_listener_loop():
     silent_count = 0
     is_speaking = False
     _noise_samples = []
-    _energy_history = []
     _speech_energy_sum = 0
     _speech_energy_n = 0
 
@@ -9151,21 +9150,18 @@ def _sentient_listener_loop():
             _sentient_health['peak'] = peak
             _sentient_energy = rms
 
-            # Rolling energy average (last 20 chunks = 10s)
-            _energy_history.append(rms)
-            if len(_energy_history) > 20:
-                _energy_history.pop(0)
-            rolling_avg = sum(_energy_history) / len(_energy_history) if _energy_history else rms
-
-            # Noise floor: track during non-speech
+            # Noise floor: only track during non-speech periods
             if not is_speaking:
                 _noise_samples.append(rms)
                 if len(_noise_samples) > 30:
                     _noise_samples.pop(0)
-                _sentient_health['noise_floor'] = int(sum(_noise_samples) / len(_noise_samples)) if _noise_samples else 0
+                noise_floor = int(sum(_noise_samples) / len(_noise_samples)) if _noise_samples else 0
+                _sentient_health['noise_floor'] = noise_floor
 
-            # HF-aware VAD: energy must exceed threshold AND rise 15% above rolling avg
-            speech_detected = rms > energy_threshold and rms > rolling_avg * 1.15
+            # HF VAD: just use calibrated threshold.
+            # The threshold is set to 1.3x noise by calibration — that's the right level.
+            # No rolling average (it drifts up during speech and adapts out the signal).
+            speech_detected = rms > energy_threshold
             _sentient_health['speaking'] = speech_detected
             _process_utterance = False
 
@@ -9174,7 +9170,7 @@ def _sentient_listener_loop():
                     is_speaking = True
                     _speech_energy_sum = 0
                     _speech_energy_n = 0
-                    _sentient_log_entry('LISTEN', f'\u25b6 speech (RMS={rms}, avg={int(rolling_avg)}, thresh={energy_threshold})')
+                    _sentient_log_entry('LISTEN', f'\u25b6 speech (RMS={rms}, thresh={energy_threshold})')
                 speech_buffer.append(chunk)
                 _speech_energy_sum += rms
                 _speech_energy_n += 1
@@ -9182,10 +9178,10 @@ def _sentient_listener_loop():
             elif is_speaking:
                 speech_buffer.append(chunk)
                 silent_count += 1
-                # HF pause: energy drops below 70% of speech average
+                # HF pause: energy drops below 85% of speech average
                 speech_avg = _speech_energy_sum / max(_speech_energy_n, 1)
-                is_deep_pause = rms < speech_avg * 0.7
-                needed = silence_chunks if is_deep_pause else silence_chunks + 2
+                is_pause = rms < speech_avg * 0.85
+                needed = silence_chunks if is_pause else silence_chunks + 3
                 if silent_count >= needed:
                     is_speaking = False
                     audio_data = np.concatenate(speech_buffer)
@@ -9193,8 +9189,8 @@ def _sentient_listener_loop():
                     silent_count = 0
                     _process_utterance = True
 
-            # Max buffer: 8s continuous audio -> force process
-            if is_speaking and len(speech_buffer) > 16:
+            # Max buffer: 6s continuous audio -> force process
+            if is_speaking and len(speech_buffer) > 12:
                 is_speaking = False
                 audio_data = np.concatenate(speech_buffer)
                 speech_buffer = []
