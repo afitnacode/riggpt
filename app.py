@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.84
+RigGPT v2.12.85
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.84'
+VERSION        = 'v2.12.85'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -9053,16 +9053,16 @@ def _sentient_listener_loop():
         # Threshold should be well above the ambient noise to avoid
         # permanent "speech detected" state. 2.5x noise floor is safe.
         if test_rms > 0:
-            auto_threshold = int(test_rms * 2.5)
+            auto_threshold = int(test_rms * 1.3)
             if energy_threshold < test_rms:
                 _sentient_log_entry('SYSTEM',
                     f'⚠ Energy threshold ({energy_threshold}) is BELOW noise floor ({test_rms})! '
-                    f'Auto-calibrating to {auto_threshold} (2.5x noise)')
+                    f'Auto-calibrating to {auto_threshold} (1.3x noise)')
                 energy_threshold = auto_threshold
             elif energy_threshold < auto_threshold:
                 _sentient_log_entry('SYSTEM',
                     f'Energy threshold ({energy_threshold}) is close to noise floor ({test_rms}). '
-                    f'Raising to {auto_threshold} for reliable detection.')
+                    f'Raising to {auto_threshold} (1.3x noise) for HF.')
                 energy_threshold = auto_threshold
             else:
                 _sentient_log_entry('SYSTEM',
@@ -9123,12 +9123,13 @@ def _sentient_listener_loop():
                     _noise_samples.pop(0)
                 _sentient_health['noise_floor'] = int(sum(_noise_samples) / len(_noise_samples)) if _noise_samples else 0
             _sentient_energy = rms
+            _process_utterance = False
 
             if rms > energy_threshold:
                 # Speech detected
                 if not is_speaking:
                     is_speaking = True
-                    _sentient_log_entry('LISTEN', '▶ speech detected')
+                    _sentient_log_entry('LISTEN', f'▶ speech detected (RMS={rms} > thresh={energy_threshold})')
                 speech_buffer.append(chunk)
                 silent_count = 0
             elif is_speaking:
@@ -9141,140 +9142,155 @@ def _sentient_listener_loop():
                     audio_data = np.concatenate(speech_buffer)
                     speech_buffer = []
                     silent_count = 0
+                    _process_utterance = True
+            # Max buffer safety: if buffer has been growing > 12 seconds,
+            # force-process even without clean silence detection.
+            # HF radio noise fluctuates constantly — clean silence may never come.
+            max_buffer_sec = 12
+            if is_speaking and len(speech_buffer) > (max_buffer_sec / 0.5):
+                _sentient_log_entry('LISTEN', f'⏱ buffer max ({max_buffer_sec}s) — force processing')
+                is_speaking = False
+                audio_data = np.concatenate(speech_buffer)
+                speech_buffer = []
+                silent_count = 0
+                _process_utterance = True
 
-                    dur_sec = len(audio_data) / sr
-                    if dur_sec < 0.5:
-                        continue  # too short
+            if not _process_utterance:
+                continue
 
-                    # Check handshake
-                    is_bot = _sentient_detect_handshake(audio_data, sr)
-                    source = 'BOT' if is_bot else 'HUMAN'
-                    _sentient_stats['heard'] += 1
-                    if is_bot:
-                        _sentient_stats['bot'] += 1
-                    else:
-                        _sentient_stats['human'] += 1
+            dur_sec = len(audio_data) / sr
+            if dur_sec < 0.5:
+                continue  # too short
 
-                    # Whisper transcription
-                    _fd, wav_path = tempfile.mkstemp(suffix='_sentient.wav')
-                    os.close(_fd)
+            # Check handshake
+            is_bot = _sentient_detect_handshake(audio_data, sr)
+            source = 'BOT' if is_bot else 'HUMAN'
+            _sentient_stats['heard'] += 1
+            if is_bot:
+                _sentient_stats['bot'] += 1
+            else:
+                _sentient_stats['human'] += 1
+
+            # Whisper transcription
+            _fd, wav_path = tempfile.mkstemp(suffix='_sentient.wav')
+            os.close(_fd)
+            try:
+                import wave as _wave
+                audio_f32 = audio_data / 32768.0
+                with _wave.open(wav_path, 'w') as wf:
+                    wf.setnchannels(1); wf.setsampwidth(2)
+                    wf.setframerate(sr)
+                    wf.writeframes((audio_f32 * 32767).astype(np.int16).tobytes())
+
+                text = _transcribe(wav_path)
+            finally:
+                try: os.remove(wav_path)
+                except Exception: pass
+
+            if not text or len(text) < 2:
+                continue
+
+            _sentient_log_entry('HEARD', text, source)
+
+            # Decide whether to respond
+            should_respond = False
+            if mode == 'monitor':
+                pass  # never respond
+            elif mode == 'engage':
+                should_respond = not is_bot  # respond to humans only
+            elif mode == 'hivemind':
+                should_respond = True  # respond to everyone including bots
+            elif mode == 'selective':
+                should_respond = trigger_word in text.lower()
+
+            if not should_respond:
+                continue
+
+            # Generate AI response
+            _sentient_log_entry('THINK', f'generating response to: {text[:50]}...')
+            try:
+                persona = _app_settings.get('sentient_persona',
+                    'You are a sentient ham radio. Respond to what you hear. Under 25 words. Slightly cryptic.')
+                ai_model = _app_settings.get('sentient_ai_model', '') or \
+                           _app_settings.get('default_model', '')
+                temp = float(_app_settings.get('sentient_temp', '0.9'))
+                ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+
+                # Build context
+                src_tag = 'another AI radio station' if is_bot else 'a human operator'
+                system_prompt = f'{persona}\nYou just heard {src_tag} say the following on the radio.'
+
+                payload = {
+                    'model': ai_model,
+                    'messages': [
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': text},
+                    ],
+                    'stream': False,
+                    'options': {'temperature': temp, 'num_predict': 80, 'num_ctx': 4096},
+                }
+                r = requests.post(f'{ollama_url}/api/chat', json=payload, timeout=30)
+                reply = ''
+                if r.status_code == 200:
+                    reply = r.json().get('message', {}).get('content', '').strip()
+                    reply = _sanitise_trip_reply(reply)
+
+                if not reply:
+                    _sentient_log_entry('ERROR', 'AI returned empty response')
+                    continue
+
+                _sentient_log_entry('REPLY', reply, 'SELF')
+
+                # Transmit response
+                engine = _app_settings.get('sentient_tx_engine', 'espeak')
+                voice = _app_settings.get('sentient_tx_voice', '') or None
+                preset = _app_settings.get('sentient_tx_preset', 'normal')
+
+                # Prepend handshake tone if enabled
+                if handshake_enabled:
+                    hs_path = _sentient_handshake_wav()
                     try:
-                        import wave as _wave
-                        audio_f32 = audio_data / 32768.0
-                        with _wave.open(wav_path, 'w') as wf:
-                            wf.setnchannels(1); wf.setsampwidth(2)
-                            wf.setframerate(sr)
-                            wf.writeframes((audio_f32 * 32767).astype(np.int16).tobytes())
-
-                        text = _transcribe(wav_path)
+                        ptt_active = False
+                        orchestrator.icom_agent.ptt_on()
+                        ptt_active = True
+                        time_module.sleep(0.15)
+                        orchestrator.playback_agent.play(hs_path, normalize=False)
                     finally:
-                        try: os.remove(wav_path)
+                        try: os.remove(hs_path)
                         except Exception: pass
+                        # Don't PTT off yet — voice follows immediately
 
-                    if not text or len(text) < 2:
-                        continue
+                    # Now transmit the voice (PTT already on)
+                    text_clean = _clean_tts_text(reply)
+                    if engine == 'espeak':
+                        raw_wav = orchestrator.espeak_agent.synthesize(text_clean, voice=voice or 'en-us')
+                    elif engine == 'fastkoko':
+                        raw_wav = orchestrator.fastkoko_agent.synthesize(text_clean, voice=voice)
+                    elif engine == 'edge':
+                        raw_wav = orchestrator.edge_agent.synthesize(text_clean, voice=voice)
+                    elif engine == 'piper':
+                        raw_wav = orchestrator.piper_agent.synthesize(text_clean, voice=voice)
+                    elif engine == 'elevenlabs':
+                        raw_wav = orchestrator.eleven_agent.synthesize(text_clean, voice_id=voice)
+                    else:
+                        raw_wav = orchestrator.espeak_agent.synthesize(text_clean, voice=voice or 'en-us')
 
-                    _sentient_log_entry('HEARD', text, source)
+                    if raw_wav:
+                        fx_wav = orchestrator.effects_agent.apply(raw_wav, preset=preset)
+                        orchestrator.playback_agent.play(fx_wav, normalize=False)
+                    time_module.sleep(0.2)
+                    if ptt_active:
+                        orchestrator.icom_agent.ptt_off()
+                else:
+                    orchestrator.execute(reply, engine=engine, voice=voice,
+                                         preset=preset, roger_beep=False)
 
-                    # Decide whether to respond
-                    should_respond = False
-                    if mode == 'monitor':
-                        pass  # never respond
-                    elif mode == 'engage':
-                        should_respond = not is_bot  # respond to humans only
-                    elif mode == 'hivemind':
-                        should_respond = True  # respond to everyone including bots
-                    elif mode == 'selective':
-                        should_respond = trigger_word in text.lower()
+                _sentient_stats['replied'] += 1
+                log_transmission(f'[SENTIENT→{source}] {reply}', engine, voice,
+                                 f'sentient-{mode}', 0, True)
 
-                    if not should_respond:
-                        continue
-
-                    # Generate AI response
-                    _sentient_log_entry('THINK', f'generating response to: {text[:50]}...')
-                    try:
-                        persona = _app_settings.get('sentient_persona',
-                            'You are a sentient ham radio. Respond to what you hear. Under 25 words. Slightly cryptic.')
-                        ai_model = _app_settings.get('sentient_ai_model', '') or \
-                                   _app_settings.get('default_model', '')
-                        temp = float(_app_settings.get('sentient_temp', '0.9'))
-                        ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
-
-                        # Build context
-                        src_tag = 'another AI radio station' if is_bot else 'a human operator'
-                        system_prompt = f'{persona}\nYou just heard {src_tag} say the following on the radio.'
-
-                        payload = {
-                            'model': ai_model,
-                            'messages': [
-                                {'role': 'system', 'content': system_prompt},
-                                {'role': 'user', 'content': text},
-                            ],
-                            'stream': False,
-                            'options': {'temperature': temp, 'num_predict': 80, 'num_ctx': 4096},
-                        }
-                        r = requests.post(f'{ollama_url}/api/chat', json=payload, timeout=30)
-                        reply = ''
-                        if r.status_code == 200:
-                            reply = r.json().get('message', {}).get('content', '').strip()
-                            reply = _sanitise_trip_reply(reply)
-
-                        if not reply:
-                            _sentient_log_entry('ERROR', 'AI returned empty response')
-                            continue
-
-                        _sentient_log_entry('REPLY', reply, 'SELF')
-
-                        # Transmit response
-                        engine = _app_settings.get('sentient_tx_engine', 'espeak')
-                        voice = _app_settings.get('sentient_tx_voice', '') or None
-                        preset = _app_settings.get('sentient_tx_preset', 'normal')
-
-                        # Prepend handshake tone if enabled
-                        if handshake_enabled:
-                            hs_path = _sentient_handshake_wav()
-                            try:
-                                ptt_active = False
-                                orchestrator.icom_agent.ptt_on()
-                                ptt_active = True
-                                time_module.sleep(0.15)
-                                orchestrator.playback_agent.play(hs_path, normalize=False)
-                            finally:
-                                try: os.remove(hs_path)
-                                except Exception: pass
-                                # Don't PTT off yet — voice follows immediately
-
-                            # Now transmit the voice (PTT already on)
-                            text_clean = _clean_tts_text(reply)
-                            if engine == 'espeak':
-                                raw_wav = orchestrator.espeak_agent.synthesize(text_clean, voice=voice or 'en-us')
-                            elif engine == 'fastkoko':
-                                raw_wav = orchestrator.fastkoko_agent.synthesize(text_clean, voice=voice)
-                            elif engine == 'edge':
-                                raw_wav = orchestrator.edge_agent.synthesize(text_clean, voice=voice)
-                            elif engine == 'piper':
-                                raw_wav = orchestrator.piper_agent.synthesize(text_clean, voice=voice)
-                            elif engine == 'elevenlabs':
-                                raw_wav = orchestrator.eleven_agent.synthesize(text_clean, voice_id=voice)
-                            else:
-                                raw_wav = orchestrator.espeak_agent.synthesize(text_clean, voice=voice or 'en-us')
-
-                            if raw_wav:
-                                fx_wav = orchestrator.effects_agent.apply(raw_wav, preset=preset)
-                                orchestrator.playback_agent.play(fx_wav, normalize=False)
-                            time_module.sleep(0.2)
-                            if ptt_active:
-                                orchestrator.icom_agent.ptt_off()
-                        else:
-                            orchestrator.execute(reply, engine=engine, voice=voice,
-                                                 preset=preset, roger_beep=False)
-
-                        _sentient_stats['replied'] += 1
-                        log_transmission(f'[SENTIENT→{source}] {reply}', engine, voice,
-                                         f'sentient-{mode}', 0, True)
-
-                    except Exception as e:
-                        _sentient_log_entry('ERROR', f'AI/TX error: {e}')
+            except Exception as e:
+                _sentient_log_entry('ERROR', f'AI/TX error: {e}')
 
     except Exception as e:
         _sentient_log_entry('ERROR', f'Listener crashed: {e}')
@@ -9357,7 +9373,7 @@ def api_sentient_calibrate():
             return jsonify({'success': False, 'message': 'Capture failed'}), 500
         samples = np.frombuffer(result.stdout, dtype=np.int16).astype(np.float32)
         rms = int(np.sqrt(np.mean(samples ** 2)))
-        recommended = max(200, int(rms * 2.5))
+        recommended = max(200, int(rms * 1.3))
         return jsonify({
             'success': True,
             'noise_floor': rms,

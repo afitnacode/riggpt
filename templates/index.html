@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.84</span>
+    <span class="sb-label">v2.12.85</span>
   </div>
 </div>
 
@@ -12364,7 +12364,7 @@ async function _sentPoll() {
           h.noise_floor > 1000 ? '#ffcc00' : '#555');
     // Show threshold vs noise relationship
     const calThresh = h.calibrated_threshold || parseInt(document.getElementById('sent-energy')?.value || 300);
-    const noiseOk = !h.noise_floor || calThresh > h.noise_floor * 1.5;
+    const noiseOk = !h.noise_floor || calThresh > h.noise_floor * 1.1;
     _hSet('sent-health-clip', noiseOk ? `thresh: ${calThresh}` : `⚠ thresh ${calThresh} < noise!`,
           noiseOk ? '#555' : '#ff3333');
     _hSet('sent-health-speech', h.speaking ? '▶ ACTIVE' : '—',
