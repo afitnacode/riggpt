@@ -1554,7 +1554,7 @@ hr.div  {
 .stale { color: var(--text-dim) !important; }
 .stale::after { content: ' [stale]'; font-size: 8px; color: var(--warn); }
 /* ── LLM Provider Cards ─────────────────────────────────────*/
-.llm-provider { border-bottom:var(--b1); padding:var(--s4) var(--s4) var(--s3); flex-shrink:0; }
+.llm-provider { border:1px solid var(--border2); background:var(--bg1); flex-shrink:0; }
 .llm-provider-hdr { display:flex; align-items:center; gap:var(--s3); margin-bottom:var(--s2); }
 .llm-provider-name { font-size:var(--fz-sm); font-weight:500; color:var(--text1); flex:1; }
 .llm-status-ok   { font-size:var(--fz-xs); padding:1px 5px; border-radius:2px; color:var(--green); border:1px solid var(--green); }
@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.75</span>
+    <span class="sb-label">v2.12.76</span>
   </div>
 </div>
 
@@ -3006,70 +3006,85 @@ hr.div  {
      API keys, integrations, engine status
 ══════════════════════════ -->
 <div id="pane-apicfg" class="pane">
-  <div style="display:grid;grid-template-columns:1fr 1fr;height:100%;overflow:hidden">
+  <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
 
-    <!-- API Keys -->
-    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
-      <div class="panel-header"><span class="panel-title">API KEYS</span></div>
-      <div class="form-row">
-        <label>ELEVENLABS</label>
-        <div class="key-row" style="flex:1">
-          <input type="password" id="set-el-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
-          <button class="btn sm" onclick="saveKey('elevenlabs')">SAVE</button>
-          <button class="btn sm" onclick="testKey('elevenlabs')">TEST</button>
-        </div>
-      </div>
-      <div class="form-row">
-        <label>SPEECHIFY</label>
-        <div class="key-row" style="flex:1">
-          <input type="password" id="set-sf-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
-          <button class="btn sm" onclick="saveKey('speechify')">SAVE</button>
-          <button class="btn sm" onclick="testKey('speechify')">TEST</button>
-        </div>
-      </div>
-      <div class="form-row">
-        <label>OPENAI</label>
-        <div class="key-row" style="flex:1">
-          <input type="password" id="set-oa-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
-          <button class="btn sm" onclick="saveKey('openai')">SAVE</button>
-          <button class="btn sm" onclick="testKey('openai')">TEST</button>
-        </div>
-      </div>
-      <div class="alert-strip" id="set-key-alert"></div>
-      <div class="sec-head" style="flex-shrink:0">AMAZON S3 (CLIPS)</div>
-      <div class="form-row">
-        <label>ACCESS KEY</label>
-        <div class="key-row" style="flex:1">
-          <input type="password" id="set-s3-access-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
-          <button class="btn sm" onclick="saveS3Keys()">SAVE</button>
-        </div>
-      </div>
-      <div class="form-row">
-        <label>SECRET KEY</label>
-        <div class="key-row" style="flex:1">
-          <input type="password" id="set-s3-secret-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
-        </div>
-      </div>
-      <div class="alert-strip" id="set-s3-alert"></div>
-      <div class="sec-head" style="flex-shrink:0">ENGINE STATUS</div>
-      <div class="engine-grid" id="set-engine-grid">
-        <div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">Loading...</div>
-      </div>
-      <div class="btn-row border-top" style="flex-shrink:0;margin-top:auto">
-        <button class="btn sm" onclick="loadEngineStatus()">&#8634; ENGINE STATUS</button>
-      </div>
+    <div class="panel-header" style="flex-shrink:0;display:flex;align-items:center;gap:var(--s3)">
+      <span class="panel-title">API CONFIGURATION</span>
+      <button class="btn sm" onclick="loadLlmProviders()">&#8634; REFRESH</button>
     </div>
+    <div class="alert-strip" id="set-key-alert"></div>
+    <div class="alert-strip" id="cfg-llm-alert"></div>
 
-    <!-- API Integrations -->
-    <div style="display:flex;flex-direction:column;overflow:hidden">
-      <div class="panel-header">
-        <span class="panel-title">API INTEGRATIONS</span>
-        <button class="btn sm" onclick="loadLlmProviders()">&#8634;</button>
+    <!-- Scrollable grid of all config cards -->
+    <div style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:var(--s3);padding:var(--s3);align-content:start">
+
+      <!-- TTS API Keys Card -->
+      <div style="border:1px solid var(--border2);background:var(--bg1)">
+        <div style="padding:4px 8px;background:var(--bg2);border-bottom:1px solid var(--border2);font-size:9px;font-weight:700;color:var(--cyan);letter-spacing:.1em">TTS API KEYS</div>
+        <div style="padding:var(--s3)">
+          <div class="form-row" style="margin-bottom:var(--s2)">
+            <label style="min-width:80px">ELEVENLABS</label>
+            <div class="key-row" style="flex:1">
+              <input type="password" id="set-el-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
+              <button class="btn sm" onclick="saveKey('elevenlabs')">SAVE</button>
+              <button class="btn sm" onclick="testKey('elevenlabs')">TEST</button>
+            </div>
+          </div>
+          <div class="form-row" style="margin-bottom:var(--s2)">
+            <label style="min-width:80px">SPEECHIFY</label>
+            <div class="key-row" style="flex:1">
+              <input type="password" id="set-sf-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
+              <button class="btn sm" onclick="saveKey('speechify')">SAVE</button>
+              <button class="btn sm" onclick="testKey('speechify')">TEST</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <label style="min-width:80px">OPENAI TTS</label>
+            <div class="key-row" style="flex:1">
+              <input type="password" id="set-oa-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
+              <button class="btn sm" onclick="saveKey('openai')">SAVE</button>
+              <button class="btn sm" onclick="testKey('openai')">TEST</button>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="scroll-body" id="cfg-llm-grid" style="flex:1;overflow-y:auto">
+
+      <!-- Amazon S3 Card -->
+      <div style="border:1px solid var(--border2);background:var(--bg1)">
+        <div style="padding:4px 8px;background:var(--bg2);border-bottom:1px solid var(--border2);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.1em">AMAZON S3 (CLIPS)</div>
+        <div style="padding:var(--s3)">
+          <div class="form-row" style="margin-bottom:var(--s2)">
+            <label style="min-width:80px">ACCESS KEY</label>
+            <div class="key-row" style="flex:1">
+              <input type="password" id="set-s3-access-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
+              <button class="btn sm" onclick="saveS3Keys()">SAVE</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <label style="min-width:80px">SECRET KEY</label>
+            <div class="key-row" style="flex:1">
+              <input type="password" id="set-s3-secret-key" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" style="flex:1" autocomplete="new-password" form="pw-form">
+            </div>
+          </div>
+          <div class="alert-strip" id="set-s3-alert"></div>
+        </div>
+      </div>
+
+      <!-- Dynamic LLM provider cards injected here by JS -->
+      <div id="cfg-llm-grid" style="display:contents">
         <div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">Loading&hellip;</div>
       </div>
-      <div class="alert-strip" id="cfg-llm-alert"></div>
+
+    </div>
+
+    <!-- Engine status bar at bottom -->
+    <div style="border-top:var(--b1);flex-shrink:0">
+      <div class="engine-grid" id="set-engine-grid" style="padding:var(--s2) var(--s4)">
+        <div style="color:var(--text3);font-size:var(--fz-xs)">Loading...</div>
+      </div>
+      <div class="btn-row" style="padding:0 var(--s4) var(--s2)">
+        <button class="btn sm" onclick="loadEngineStatus()">&#8634; ENGINE STATUS</button>
+      </div>
     </div>
 
   </div>
@@ -7094,10 +7109,7 @@ async function loadLlmProviders() {
   const intgrs = r.providers.filter(p => p.category === 'integration');
   let html = '';
   if (llms.length)   html += llms.map(p => _renderLlmCard(p)).join('');
-  if (intgrs.length) {
-    html += `<div style="padding:2px var(--s4);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-top:var(--b1);margin-top:var(--s2)">Integrations</div>`;
-    html += intgrs.map(p => _renderLlmCard(p)).join('');
-  }
+  if (intgrs.length) html += intgrs.map(p => _renderLlmCard(p)).join('');
   if (!html) html = '<div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">No providers configured.</div>';
   grid.innerHTML = html;
   // Wire pw-form to new password inputs
@@ -7153,10 +7165,11 @@ function _renderLlmCard(p) {
   }).join('');
 
   return `<div class="llm-provider" id="llm-card-${p.id}">
-    <div class="llm-provider-hdr">
+    <div style="padding:4px 8px;background:var(--bg2);border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:var(--s3)">
       <span class="llm-provider-name">${escHtml(p.name)}</span>
       <span class="${statusClass}" id="llm-status-${p.id}">${statusText}</span>
     </div>
+    <div style="padding:var(--s3)">
     <div class="llm-desc">${escHtml(p.description)}
       ${p.docs_url ? `<a class="llm-docs" href="${escHtml(p.docs_url)}" target="_blank"> docs ↗</a>` : ''}
     </div>
@@ -7167,6 +7180,7 @@ function _renderLlmCard(p) {
       <button class="btn sm err" onclick="clearLlmKey('${p.id}')">✕ CLEAR</button>
     </div>
     <div class="alert-strip" id="llm-alert-${p.id}"></div>
+    </div>
   </div>`;
 }
 
