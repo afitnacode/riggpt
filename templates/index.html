@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.82</span>
+    <span class="sb-label">v2.12.83</span>
   </div>
 </div>
 
@@ -3655,8 +3655,15 @@ hr.div  {
       <div class="sec-head" style="flex-shrink:0">LISTENING</div>
       <div class="form-row">
         <label style="min-width:70px">DEVICE</label>
-        <input type="text" id="sent-audio-in" placeholder="plughw:0,0" style="flex:1;font-size:9px">
+        <select id="sent-audio-in" style="flex:1;font-size:9px">
+          <option value="">(detecting...)</option>
+        </select>
+        <button class="btn sm" onclick="sentDetectDevices()" title="Scan capture devices" style="flex-shrink:0">&#8634;</button>
       </div>
+      <div class="btn-row" style="flex-shrink:0;padding:0 var(--s4) var(--s2)">
+        <button class="btn sm" onclick="sentTestCapture()" style="flex:1;font-size:8px">🎤 TEST CAPTURE (2s)</button>
+      </div>
+      <div class="alert-strip" id="sent-capture-alert" style="flex-shrink:0"></div>
       <div class="form-row">
         <label style="min-width:70px">WHISPER</label>
         <select id="sent-whisper-model" style="flex:1;font-size:9px">
@@ -5134,7 +5141,7 @@ function showTab(name) {
   if (name === 'apicfg') { loadEngineStatus(); loadLlmProviders(); }
   if (name === 'specops'){ ghostPoll(); specopsRefreshStatus(); _mcStart(); }
   if (name !== 'specops'){ _mcStop(); }
-  if (name === 'sentient'){ _sentPollStart(); }
+  if (name === 'sentient'){ _sentPollStart(); sentDetectDevices(); }
   if (name !== 'sentient'){ _sentPollStop(); }
   if (name === 'sstv')   loadSSTVModes();
   if (name === 'dash')   { loadDashStats(); loadRadioModel(); _txFeedLoad(); }
@@ -12163,6 +12170,65 @@ async function whisperTest() {
 // ── Sentient Radio ───────────────────────────────────────────────────────
 let _sentPollTimer = null;
 let _sentSparkHistory = [];
+
+async function sentDetectDevices() {
+  const sel = document.getElementById('sent-audio-in');
+  if (!sel) return;
+  try {
+    const r = await api('GET', '/api/audio/devices');
+    const devices = r.capture_devices || [];
+    const current = r.current_device || 'default';
+    const saved = sel.value || '';
+    sel.innerHTML = '';
+    // Always add the auto-detected device first
+    if (current) {
+      const opt = document.createElement('option');
+      opt.value = current;
+      opt.textContent = `${current} (auto-detected)`;
+      sel.appendChild(opt);
+    }
+    // Add other capture devices from arecord -l
+    for (const d of devices) {
+      if (d.device === current) continue;  // skip duplicate
+      const opt = document.createElement('option');
+      opt.value = d.device;
+      opt.textContent = `${d.device} — ${d.description.slice(0, 60)}`;
+      sel.appendChild(opt);
+    }
+    // Add 'default' fallback
+    if (current !== 'default') {
+      const opt = document.createElement('option');
+      opt.value = 'default';
+      opt.textContent = 'default (ALSA default)';
+      sel.appendChild(opt);
+    }
+    // Restore saved selection or use auto-detected
+    sel.value = saved || current;
+    showAlert('sent-capture-alert', `Found ${devices.length} capture device(s). Selected: ${sel.value}`, 'ok', 3000);
+  } catch(e) {
+    showAlert('sent-capture-alert', 'Device scan failed: ' + e.message, 'err');
+  }
+}
+
+async function sentTestCapture() {
+  const device = document.getElementById('sent-audio-in')?.value || '';
+  showAlert('sent-capture-alert', `Recording 2s from ${device || '(auto)'}...`, 'warn', 0);
+  try {
+    const r = await api('POST', '/api/audio/capture_test', { device });
+    if (r.success) {
+      let msg = `✓ ${r.device}: ${r.duration}s captured, RMS=${r.rms}, peak=${r.peak}`;
+      let level = 'ok';
+      if (r.silence) { msg += ' ⚠️ SILENCE — no audio signal'; level = 'warn'; }
+      if (r.clipping > 0) { msg += ` ⚠️ CLIPPING (${r.clipping})`; level = 'warn'; }
+      if (r.rms > 50 && !r.silence && r.clipping === 0) msg += ' — audio looks good!';
+      showAlert('sent-capture-alert', msg, level, 8000);
+    } else {
+      showAlert('sent-capture-alert', r.message || 'Capture test failed', 'err');
+    }
+  } catch(e) {
+    showAlert('sent-capture-alert', 'Test error: ' + e.message, 'err');
+  }
+}
 
 function sentModeChange() {
   const mode = document.getElementById('sent-mode')?.value || 'engage';

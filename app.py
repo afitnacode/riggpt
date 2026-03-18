@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.82
+RigGPT v2.12.83
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.82'
+VERSION        = 'v2.12.83'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -3734,11 +3734,81 @@ def api_audio_devices():
     try:
         r  = subprocess.run(['aplay', '-L'], capture_output=True, text=True, timeout=5)
         r2 = subprocess.run(['aplay', '-l'], capture_output=True, text=True, timeout=5)
+        r3 = subprocess.run(['arecord', '-l'], capture_output=True, text=True, timeout=5)
+        # Parse capture devices from arecord -l
+        capture_devices = []
+        for line in r3.stdout.splitlines():
+            if line.startswith('card '):
+                try:
+                    card_num = int(line.split(':')[0].replace('card', '').strip())
+                    capture_devices.append({
+                        'device': f'plughw:{card_num},0',
+                        'description': line.strip(),
+                    })
+                except (ValueError, IndexError):
+                    pass
         return jsonify({'current_device': AUDIO_DEVICE,
                         'devices_list':   r.stdout.strip().splitlines(),
-                        'hardware_cards': r2.stdout.strip()})
+                        'hardware_cards': r2.stdout.strip(),
+                        'capture_devices': capture_devices,
+                        'capture_raw': r3.stdout.strip()})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/audio/capture_test', methods=['POST'])
+def api_audio_capture_test():
+    """Record 2 seconds from a capture device and report audio stats."""
+    data = request.json or {}
+    device = data.get('device', '').strip() or AUDIO_DEVICE or 'default'
+    sr = 16000
+    duration = 2  # seconds
+    import numpy as np
+
+    cmd = ['arecord', '-D', device, '-f', 'S16_LE', '-r', str(sr),
+           '-c', '1', '-t', 'raw', '-d', str(duration), '-q']
+    logger.info(f'capture_test: {" ".join(cmd)}')
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=duration + 5)
+        if result.returncode != 0:
+            stderr = result.stderr.decode('utf-8', errors='replace')[:200]
+            return jsonify({
+                'success': False,
+                'message': f'arecord failed (exit {result.returncode}): {stderr}',
+                'device': device,
+            })
+        raw = result.stdout
+        if len(raw) < 100:
+            return jsonify({
+                'success': False,
+                'message': f'No audio data captured ({len(raw)} bytes). Device may not have a capture channel.',
+                'device': device,
+            })
+        samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+        rms = int(np.sqrt(np.mean(samples ** 2)))
+        peak = int(np.max(np.abs(samples)))
+        clip_count = int(np.sum(np.abs(samples) > 32000))
+        duration_actual = len(samples) / sr
+        silence = rms < 50
+        return jsonify({
+            'success': True,
+            'device': device,
+            'duration': round(duration_actual, 2),
+            'samples': len(samples),
+            'rms': rms,
+            'peak': peak,
+            'clipping': clip_count,
+            'silence': silence,
+            'message': (
+                f'Capture OK: {duration_actual:.1f}s, RMS={rms}, peak={peak}'
+                + (', ⚠️ SILENCE — no audio signal detected' if silence else '')
+                + (f', ⚠️ CLIPPING ({clip_count} samples)' if clip_count > 0 else '')
+            ),
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'message': f'arecord timed out on device {device}', 'device': device})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e), 'device': device})
 
 
 @app.route('/api/audio/test', methods=['POST'])
@@ -8899,7 +8969,7 @@ def _sentient_listener_loop():
     import numpy as np
     import subprocess
 
-    device = _app_settings.get('sentient_audio_in', AUDIO_DEVICE or 'plughw:0,0')
+    device = _app_settings.get('sentient_audio_in', '').strip() or AUDIO_DEVICE or 'plughw:0,0'
     silence_sec = float(_app_settings.get('sentient_silence_sec', '1.5'))
     energy_threshold = int(_app_settings.get('sentient_energy', '300'))
     mode = _app_settings.get('sentient_mode', 'engage')
@@ -8953,16 +9023,49 @@ def _sentient_listener_loop():
             result = model.transcribe(wav_path, language='en', fp16=False)
             return result.get('text', '').strip()
 
-    # Start arecord
-    cmd = ['arecord', '-D', device, '-f', 'S16_LE', '-r', str(sr), '-c', '1', '-t', 'raw', '-q']
-    _sentient_log_entry('SYSTEM', f'Starting capture: {" ".join(cmd)}')
+    # Pre-flight: test capture device with 1-second recording
+    _sentient_log_entry('SYSTEM', f'Testing capture device: {device}')
     _sentient_health['device'] = device
+    try:
+        test_cmd = ['arecord', '-D', device, '-f', 'S16_LE', '-r', str(sr),
+                    '-c', '1', '-t', 'raw', '-d', '1', '-q']
+        test_result = subprocess.run(test_cmd, capture_output=True, timeout=5)
+        if test_result.returncode != 0:
+            stderr = test_result.stderr.decode('utf-8', errors='replace')[:200]
+            _sentient_log_entry('ERROR', f'Capture device test FAILED: {stderr}')
+            _sentient_log_entry('ERROR', f'Device "{device}" cannot record. Check arecord -l for available capture devices.')
+            _sentient_active = False
+            return
+        test_bytes = len(test_result.stdout)
+        if test_bytes < 100:
+            _sentient_log_entry('ERROR', f'Capture test returned only {test_bytes} bytes — no audio data. '
+                                f'Device "{device}" may not have a capture channel.')
+            _sentient_active = False
+            return
+        test_samples = np.frombuffer(test_result.stdout, dtype=np.int16)
+        test_rms = int(np.sqrt(np.mean(test_samples.astype(np.float32) ** 2)))
+        test_peak = int(np.max(np.abs(test_samples)))
+        _sentient_log_entry('SYSTEM', f'Capture test OK: {test_bytes} bytes, RMS={test_rms}, peak={test_peak}')
+        if test_rms < 5:
+            _sentient_log_entry('SYSTEM', '⚠ Audio level very low — is the radio on and receiving?')
+    except subprocess.TimeoutExpired:
+        _sentient_log_entry('ERROR', f'Capture test timed out on device "{device}"')
+        _sentient_active = False
+        return
+    except Exception as e:
+        _sentient_log_entry('ERROR', f'Capture test error: {e}')
+        _sentient_active = False
+        return
+
+    # Start arecord (continuous capture)
+    cmd = ['arecord', '-D', device, '-f', 'S16_LE', '-r', str(sr), '-c', '1', '-t', 'raw', '-q']
+    _sentient_log_entry('SYSTEM', f'Starting continuous capture: {device}')
     _sentient_health['started_at'] = _now_utc()
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         _sentient_health['capture_ok'] = True
     except Exception as e:
-        _sentient_log_entry('ERROR', f'arecord failed: {e}')
+        _sentient_log_entry('ERROR', f'arecord failed to start: {e}')
         _sentient_health['capture_ok'] = False
         _sentient_active = False
         return
