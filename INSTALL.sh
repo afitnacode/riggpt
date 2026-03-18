@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.12.78 -- Installer
+# RigGPT v2.12.79 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,7 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.12.78"
+VERSION="2.12.79"
 
 # -- Parse flags ------------------------------------------------
 # -y / --yes  : skip upgrade confirmation prompt (for scripted installs)
@@ -229,7 +229,7 @@ chmod 755 "$INSTALL_DIR"
 echo "[5/7] Installing Python dependencies..."
 pip3 install \
     flask flask-cors pyserial requests apscheduler pysstv pillow numpy \
-    psutil edge-tts gtts pyttsx3 gunicorn gevent \
+    psutil edge-tts gtts pyttsx3 gunicorn gevent pydub \
     --break-system-packages -q --root-user-action=ignore 2>&1 | grep -v "^$" || true
 
 echo "  Note: Coqui TTS (optional ~2GB): pip3 install TTS --break-system-packages"

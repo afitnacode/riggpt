@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.78
+RigGPT v2.12.79
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.78'
+VERSION        = 'v2.12.79'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -8518,11 +8518,11 @@ _EVP_PHRASES = [
 ]
 
 def _run_evp():
-    """Transmit a cryptic EVP phrase with heavy FX: reverse audio + deep reverb + pitch shift."""
+    """Transmit a layered EVP audio collage: forward voice + reversed voice + static + drone."""
     import random
     phrase = random.choice(_EVP_PHRASES)
 
-    # Optionally use AI to generate fresh EVP if Ollama is available
+    # Optionally use AI to generate fresh EVP
     try:
         ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
         model = _app_settings.get('default_model', '')
@@ -8541,23 +8541,109 @@ def _run_evp():
                 if ai_phrase and len(ai_phrase) > 5:
                     phrase = ai_phrase
     except Exception:
-        pass  # Fall back to canned phrases
+        pass
 
     engine = _app_settings.get('evp_engine', 'espeak')
     voice  = _app_settings.get('evp_voice', '') or None
+    preset = random.choice(['underwater', 'cave', 'horror'])
+    pitch  = random.randint(-10, -4)
+    speed  = random.randint(50, 75) / 100.0
+
     try:
-        # Heavy EVP processing: deep pitch, reverb, underwater preset
-        preset = random.choice(['underwater', 'cave', 'horror'])
-        orchestrator.execute(
-            phrase, engine=engine, voice=voice,
-            preset=preset,
-            pitch=random.randint(-10, -4),
-            speed=random.randint(50, 75) / 100.0,
-            roger_beep=False,
+        # Step 1: Generate raw TTS
+        text = _clean_tts_text(phrase)
+        if not text.strip():
+            return
+        if engine == 'elevenlabs':
+            raw_wav = orchestrator.eleven_agent.synthesize(text, voice_id=voice)
+        elif engine == 'fastkoko':
+            raw_wav = orchestrator.fastkoko_agent.synthesize(text, voice=voice)
+        elif engine == 'edge':
+            raw_wav = orchestrator.edge_agent.synthesize(text, voice=voice)
+        elif engine == 'piper':
+            raw_wav = orchestrator.piper_agent.synthesize(text, voice=voice)
+        else:
+            raw_wav = orchestrator.espeak_agent.synthesize(text, voice=voice or 'en-us')
+
+        if not raw_wav:
+            logger.error('evp: TTS synthesis returned None')
+            return
+
+        # Step 2: Apply FX preset (pitch, reverb, etc.)
+        fx_wav = orchestrator.effects_agent.apply(
+            raw_wav, preset=preset, pitch=pitch, speed=speed,
+            reverb=1, echo=0, chorus=0, flanger=0, tremolo=0,
+            overdrive=0, bitcrush=0
         )
-        logger.info(f'evp: transmitted: "{phrase}" [{engine}/{voice or "default"} {preset}]')
+
+        # Step 3: pydub layering
+        try:
+            from pydub import AudioSegment
+            from pydub.generators import WhiteNoise
+
+            voice_seg = AudioSegment.from_wav(fx_wav)
+            dur_ms = len(voice_seg)
+
+            # Layer 1: reversed copy of the voice, quieter (-8dB)
+            reversed_seg = voice_seg.reverse() - 8
+
+            # Layer 2: static noise bed (-18dB, spans full duration)
+            static_seg = WhiteNoise().to_audio_segment(duration=dur_ms) - 18
+
+            # Layer 3: low drone tone (random freq 60-120Hz, -20dB)
+            import numpy as np
+            drone_freq = random.uniform(60.0, 120.0)
+            sr = voice_seg.frame_rate
+            t = np.linspace(0, dur_ms / 1000.0, int(sr * dur_ms / 1000), endpoint=False)
+            # Slow amplitude modulation for pulsing effect
+            mod = 0.5 + 0.5 * np.sin(2 * np.pi * 0.3 * t)
+            drone = (np.sin(2 * np.pi * drone_freq * t) * mod * 0.15 * 32767).astype(np.int16)
+            drone_seg = AudioSegment(
+                drone.tobytes(), frame_rate=sr,
+                sample_width=2, channels=1
+            ) - 20
+
+            # Mix all layers
+            collage = voice_seg.overlay(reversed_seg).overlay(static_seg).overlay(drone_seg)
+
+            # Export to temp WAV
+            _fd, collage_path = tempfile.mkstemp(suffix='_evp_collage.wav')
+            os.close(_fd)
+            collage.export(collage_path, format='wav')
+
+            # Step 4: PTT + play the collage
+            ptt_active = False
+            try:
+                if orchestrator._connected:
+                    orchestrator.icom_agent.ptt_on()
+                    ptt_active = True
+                    time_module.sleep(0.15)
+                orchestrator.playback_agent.play(collage_path, normalize=False)
+                time_module.sleep(0.1)
+            finally:
+                if ptt_active:
+                    try: orchestrator.icom_agent.ptt_off()
+                    except Exception: pass
+                try: os.remove(collage_path)
+                except Exception: pass
+
+            logger.info(f'evp: layered collage TX: "{phrase}" [{engine}/{voice or "default"} '
+                        f'{preset} p={pitch} s={speed} drone={drone_freq:.0f}Hz] '
+                        f'{dur_ms}ms, 4 layers')
+            log_transmission(f'[EVP] {phrase}', engine, voice, f'evp-{preset}',
+                             round(dur_ms / 1000, 1), True)
+
+        except ImportError:
+            # pydub not available — fall back to simple execute
+            logger.warning('evp: pydub not available, falling back to simple mode')
+            orchestrator.execute(
+                phrase, engine=engine, voice=voice,
+                preset=preset, pitch=pitch, speed=speed, roger_beep=False,
+            )
+            logger.info(f'evp: simple TX: "{phrase}" [{engine}/{voice or "default"} {preset}]')
+
     except Exception as e:
-        logger.error(f'evp TX error: {e}')
+        logger.error(f'evp TX error: {e}', exc_info=True)
 
 
 @app.route('/api/evp/start', methods=['POST'])
