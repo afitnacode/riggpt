@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.83
+RigGPT v2.12.84
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.83'
+VERSION        = 'v2.12.84'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -9048,6 +9048,27 @@ def _sentient_listener_loop():
         _sentient_log_entry('SYSTEM', f'Capture test OK: {test_bytes} bytes, RMS={test_rms}, peak={test_peak}')
         if test_rms < 5:
             _sentient_log_entry('SYSTEM', '⚠ Audio level very low — is the radio on and receiving?')
+
+        # Auto-calibrate energy threshold based on measured noise floor
+        # Threshold should be well above the ambient noise to avoid
+        # permanent "speech detected" state. 2.5x noise floor is safe.
+        if test_rms > 0:
+            auto_threshold = int(test_rms * 2.5)
+            if energy_threshold < test_rms:
+                _sentient_log_entry('SYSTEM',
+                    f'⚠ Energy threshold ({energy_threshold}) is BELOW noise floor ({test_rms})! '
+                    f'Auto-calibrating to {auto_threshold} (2.5x noise)')
+                energy_threshold = auto_threshold
+            elif energy_threshold < auto_threshold:
+                _sentient_log_entry('SYSTEM',
+                    f'Energy threshold ({energy_threshold}) is close to noise floor ({test_rms}). '
+                    f'Raising to {auto_threshold} for reliable detection.')
+                energy_threshold = auto_threshold
+            else:
+                _sentient_log_entry('SYSTEM',
+                    f'Noise floor={test_rms}, threshold={energy_threshold} — OK (headroom: {energy_threshold - test_rms})')
+            _sentient_health['noise_floor'] = test_rms
+            _sentient_health['calibrated_threshold'] = energy_threshold
     except subprocess.TimeoutExpired:
         _sentient_log_entry('ERROR', f'Capture test timed out on device "{device}"')
         _sentient_active = False
@@ -9319,6 +9340,32 @@ def api_sentient_status():
         'model': _app_settings.get('sentient_whisper_model', 'base'),
         'whisper_engine': _sentient_whisper_engine,
     })
+
+
+@app.route('/api/sentient/calibrate', methods=['POST'])
+def api_sentient_calibrate():
+    """Record 2 seconds and return recommended energy threshold."""
+    import numpy as np
+    device = _app_settings.get('sentient_audio_in', '').strip() or AUDIO_DEVICE or 'plughw:0,0'
+    sr = 16000
+    try:
+        result = subprocess.run(
+            ['arecord', '-D', device, '-f', 'S16_LE', '-r', str(sr),
+             '-c', '1', '-t', 'raw', '-d', '2', '-q'],
+            capture_output=True, timeout=5)
+        if result.returncode != 0 or len(result.stdout) < 100:
+            return jsonify({'success': False, 'message': 'Capture failed'}), 500
+        samples = np.frombuffer(result.stdout, dtype=np.int16).astype(np.float32)
+        rms = int(np.sqrt(np.mean(samples ** 2)))
+        recommended = max(200, int(rms * 2.5))
+        return jsonify({
+            'success': True,
+            'noise_floor': rms,
+            'recommended_threshold': recommended,
+            'message': f'Noise floor: {rms} RMS. Recommended threshold: {recommended}',
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 # ── Ghost-in-the-Machine (CI-V Possession Engine) ───────────────────────────
