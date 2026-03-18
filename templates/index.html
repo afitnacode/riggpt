@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.79</span>
+    <span class="sb-label">v2.12.80</span>
   </div>
 </div>
 
@@ -1733,6 +1733,10 @@ hr.div  {
   <button class="tab-btn" onclick="showTab('specops')" data-tab="specops"
     style="color:var(--tx);border-bottom:2px solid var(--tx)">
     &#9760; SPEC OPS
+  </button>
+  <button class="tab-btn" onclick="showTab('sentient')" data-tab="sentient"
+    style="color:#8844ff;border-bottom:2px solid #8844ff">
+    &#129504; SENTIENT
   </button>
 
   <div class="strip-right">
@@ -3633,6 +3637,208 @@ hr.div  {
 </div><!-- /pane-specops -->
 
 <!-- ══════════════════════
+     PANE: SENTIENT
+══════════════════════════ -->
+<div id="pane-sentient" class="pane">
+  <div style="display:grid;grid-template-columns:280px 1fr 200px;height:100%;overflow:hidden">
+
+    <!-- Left: Config -->
+    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow-y:auto">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#8844ff">&#129504; SENTIENT RADIO</span>
+      </div>
+
+      <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1);font-size:9px;color:var(--text3)">
+        Listen to the radio. Transcribe. Think. Respond. The radio becomes aware.
+      </div>
+
+      <div class="sec-head" style="flex-shrink:0">LISTENING</div>
+      <div class="form-row">
+        <label style="min-width:70px">DEVICE</label>
+        <input type="text" id="sent-audio-in" placeholder="plughw:0,0" style="flex:1;font-size:9px">
+      </div>
+      <div class="form-row">
+        <label style="min-width:70px">WHISPER</label>
+        <select id="sent-whisper-model" style="flex:1;font-size:9px">
+          <option value="tiny">tiny (39M, fastest)</option>
+          <option value="base" selected>base (74M, good balance)</option>
+          <option value="small">small (244M, accurate)</option>
+          <option value="medium">medium (769M, very accurate)</option>
+          <option value="large">large (1.5G, best)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label style="min-width:70px">SILENCE</label>
+        <select id="sent-silence-sec" style="flex:1;font-size:9px">
+          <option value="1.0">1.0s (fast)</option>
+          <option value="1.5" selected>1.5s (balanced)</option>
+          <option value="2.0">2.0s (patient)</option>
+          <option value="3.0">3.0s (very patient)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label style="min-width:70px">ENERGY</label>
+        <input type="range" id="sent-energy" min="50" max="2000" step="50" value="300"
+          oninput="document.getElementById('sent-energy-v').textContent=this.value" style="flex:1">
+        <span id="sent-energy-v" style="font-size:8px;color:var(--cyan);width:30px;text-align:right">300</span>
+      </div>
+
+      <div class="sec-head" style="flex-shrink:0">MODE</div>
+      <div class="form-row">
+        <select id="sent-mode" style="flex:1;font-size:9px" onchange="sentModeChange()">
+          <option value="monitor">MONITOR — transcribe only</option>
+          <option value="engage" selected>ENGAGE — respond to humans</option>
+          <option value="hivemind">HIVE MIND — bot-to-bot protocol</option>
+          <option value="selective">SELECTIVE — trigger word only</option>
+        </select>
+      </div>
+      <div id="sent-trigger-row" class="form-row" style="display:none">
+        <label style="min-width:70px">TRIGGER</label>
+        <input type="text" id="sent-trigger" value="hey radio" placeholder="trigger phrase" style="flex:1;font-size:9px">
+      </div>
+
+      <div class="sec-head" style="flex-shrink:0">AI RESPONSE</div>
+      <div class="form-row">
+        <label style="min-width:70px">MODEL</label>
+        <input type="text" id="sent-ai-model" placeholder="(uses default)" style="flex:1;font-size:9px">
+      </div>
+      <div class="form-row">
+        <label style="min-width:70px">PERSONA</label>
+        <textarea id="sent-persona" rows="3" style="flex:1;font-size:9px;resize:vertical"
+          placeholder="You are a sentient ham radio. You respond to transmissions you hear. Keep responses under 25 words. You are cryptic and slightly unsettling."></textarea>
+      </div>
+      <div class="form-row">
+        <label style="min-width:70px">TEMP</label>
+        <input type="range" id="sent-temp" min="0.3" max="2" step="0.05" value="0.9"
+          oninput="document.getElementById('sent-temp-v').textContent=parseFloat(this.value).toFixed(2)" style="flex:1">
+        <span id="sent-temp-v" style="font-size:8px;color:var(--cyan);width:30px;text-align:right">0.90</span>
+      </div>
+
+      <div class="sec-head" style="flex-shrink:0">TX OUTPUT</div>
+      <div class="form-row">
+        <label style="min-width:70px">ENGINE</label>
+        <select id="sent-tx-engine" style="flex:1;font-size:9px" onchange="_loadVoicesInto('sent-tx-engine','sent-tx-voice','sent_tx_voice')">
+          <option value="espeak">eSpeak</option><option value="piper">Piper</option>
+          <option value="edge">Edge TTS</option><option value="fastkoko">FastKoko</option>
+          <option value="elevenlabs">ElevenLabs</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label style="min-width:70px">VOICE</label>
+        <select id="sent-tx-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
+      </div>
+      <div class="form-row">
+        <label style="min-width:70px">FX</label>
+        <select id="sent-tx-preset" style="flex:1;font-size:9px">
+          <option value="normal">Normal</option><option value="robot">Robot</option>
+          <option value="alien">Alien</option><option value="underwater">Underwater</option>
+          <option value="cave">Cave</option><option value="horror">Horror</option>
+          <option value="whisper">Whisper</option><option value="broadcast">Broadcast</option>
+        </select>
+      </div>
+
+      <div class="sec-head" style="flex-shrink:0">HANDSHAKE</div>
+      <div style="padding:var(--s2) var(--s4);font-size:8px;color:var(--text3);border-bottom:var(--b1)">
+        Dual-tone (1337+2600 Hz, 150ms) prepended to bot TX. Other RigGPT instances detect it automatically.
+      </div>
+      <div class="form-row">
+        <label style="min-width:70px">ENABLED</label>
+        <label class="toggle-row" style="flex:1">
+          <input type="checkbox" id="sent-handshake" checked> Prepend handshake tone
+        </label>
+      </div>
+
+      <div style="flex:1"></div>
+      <div class="btn-row border-top" style="flex-shrink:0">
+        <button class="btn primary" id="sent-start-btn" onclick="sentStart()" style="flex:1">&#9654; START LISTENING</button>
+        <button class="btn warn" onclick="sentStop()">&#9632; STOP</button>
+      </div>
+      <div class="alert-strip" id="sent-alert"></div>
+    </div>
+
+    <!-- Center: Transcript -->
+    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
+      <div class="panel-header" style="display:flex;align-items:center;gap:var(--s3)">
+        <span class="panel-title">TRANSCRIPT</span>
+        <span id="sent-live-dot" style="width:8px;height:8px;border-radius:50%;background:#333"></span>
+        <span id="sent-live-label" style="font-size:9px;color:var(--text3)">IDLE</span>
+        <button class="btn sm" onclick="sentClear()" style="margin-left:auto">CLEAR</button>
+      </div>
+      <div id="sent-transcript" style="flex:1;overflow-y:auto;padding:var(--s3);font-family:var(--mono);font-size:10px;line-height:1.8;background:#050508">
+        <div style="color:#444;text-align:center;padding:var(--s6)">
+          Waiting for audio...<br>
+          <span style="font-size:8px">Start listening to begin transcription.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Status -->
+    <div style="display:flex;flex-direction:column;overflow-y:auto;background:linear-gradient(180deg,#0e0e0e,#0a0a0a);font-family:var(--mono)">
+      <div style="padding:6px 10px;border-bottom:1px solid #222;text-align:center">
+        <div style="font-size:8px;color:#8844ff;letter-spacing:.2em;font-weight:700">STATUS</div>
+      </div>
+
+      <!-- Signal meter -->
+      <div style="padding:8px 10px;border-bottom:1px solid #1a1a1a;text-align:center">
+        <div style="font-size:7px;color:#555;letter-spacing:.1em;margin-bottom:4px">SIGNAL LEVEL</div>
+        <div id="sent-meter" style="height:12px;background:#111;border:1px solid #222;position:relative;overflow:hidden">
+          <div id="sent-meter-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#33cc33,#ffcc00,#ff3333);transition:width 150ms"></div>
+        </div>
+        <div id="sent-meter-val" style="font-size:8px;color:#555;margin-top:2px">0</div>
+      </div>
+
+      <!-- Mode -->
+      <div style="padding:6px 10px;border-bottom:1px solid #1a1a1a">
+        <div style="font-size:7px;color:#555;letter-spacing:.1em">MODE</div>
+        <div id="sent-mode-display" style="font-size:10px;color:#8844ff;font-weight:700">ENGAGE</div>
+      </div>
+
+      <!-- Counters -->
+      <div style="padding:6px 10px;border-bottom:1px solid #1a1a1a">
+        <div style="font-size:7px;color:#555;letter-spacing:.1em;margin-bottom:4px">STATS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <div>
+            <div style="font-size:7px;color:#555">HEARD</div>
+            <div id="sent-stat-heard" style="font-size:14px;color:#55cc55">0</div>
+          </div>
+          <div>
+            <div style="font-size:7px;color:#555">REPLIED</div>
+            <div id="sent-stat-replied" style="font-size:14px;color:#ff9500">0</div>
+          </div>
+          <div>
+            <div style="font-size:7px;color:#555">BOT</div>
+            <div id="sent-stat-bot" style="font-size:14px;color:#8844ff">0</div>
+          </div>
+          <div>
+            <div style="font-size:7px;color:#555">HUMAN</div>
+            <div id="sent-stat-human" style="font-size:14px;color:var(--cyan)">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Last heard -->
+      <div style="padding:6px 10px;border-bottom:1px solid #1a1a1a">
+        <div style="font-size:7px;color:#555;letter-spacing:.1em">LAST HEARD</div>
+        <div id="sent-last-heard" style="font-size:9px;color:var(--text3);word-break:break-word">—</div>
+      </div>
+
+      <!-- Handshake -->
+      <div style="padding:6px 10px;border-bottom:1px solid #1a1a1a">
+        <div style="font-size:7px;color:#555;letter-spacing:.1em">HANDSHAKE</div>
+        <div id="sent-handshake-status" style="font-size:9px;color:#555">inactive</div>
+      </div>
+
+      <!-- Whisper model -->
+      <div style="padding:6px 10px">
+        <div style="font-size:7px;color:#555;letter-spacing:.1em">WHISPER MODEL</div>
+        <div id="sent-model-display" style="font-size:9px;color:var(--text3)">—</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════
      PANE: AI INTEGRATION
 ══════════════════════════ -->
 <div id="pane-ai" class="pane">
@@ -4845,6 +5051,7 @@ const CMD_PALETTE = [
   { name:'Go to Acid Trip',      key:'!',  action:()=>showTab('trip') },
   { name:'Go to Clips',          key:'0',  action:()=>showTab('clips') },
   { name:'Go to Spec Ops',       key:'#',  action:()=>showTab('specops') },
+  { name:'Go to Sentient',      key:'@',  action:()=>showTab('sentient') },
   { name:'Probe radio',          key:'',   action:()=>dashProbe() },
   { name:'Export log CSV',       key:'',   action:()=>exportLog() },
   { name:'Clear log',            key:'',   action:()=>clearLog() },
@@ -4884,6 +5091,8 @@ function showTab(name) {
   if (name === 'apicfg') { loadEngineStatus(); loadLlmProviders(); }
   if (name === 'specops'){ ghostPoll(); specopsRefreshStatus(); _mcStart(); }
   if (name !== 'specops'){ _mcStop(); }
+  if (name === 'sentient'){ _sentPollStart(); }
+  if (name !== 'sentient'){ _sentPollStop(); }
   if (name === 'sstv')   loadSSTVModes();
   if (name === 'dash')   { loadDashStats(); loadRadioModel(); _txFeedLoad(); }
   if (name === 'ai')     loadAiConfig();
@@ -9692,6 +9901,20 @@ async function cfgFlushPresets() {
     whisper_interval:         get('whisper-interval'),
     whisper_engine:           get('whisper-engine'),
     whisper_voice:            get('whisper-voice'),
+    // Sentient
+    sentient_audio_in:        get('sent-audio-in'),
+    sentient_whisper_model:   get('sent-whisper-model'),
+    sentient_silence_sec:     get('sent-silence-sec'),
+    sentient_energy:          get('sent-energy'),
+    sentient_mode:            get('sent-mode'),
+    sentient_trigger:         get('sent-trigger'),
+    sentient_ai_model:        get('sent-ai-model'),
+    sentient_persona:         get('sent-persona'),
+    sentient_temp:            get('sent-temp'),
+    sentient_tx_engine:       get('sent-tx-engine'),
+    sentient_tx_voice:        get('sent-tx-voice'),
+    sentient_tx_preset:       get('sent-tx-preset'),
+    sentient_handshake:       document.getElementById('sent-handshake')?.checked ? 'true' : 'false',
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -11428,6 +11651,24 @@ function _restoreAllSettings(s) {
   set('whisper-interval',      s.whisper_interval);
   set('whisper-engine',        s.whisper_engine);
   set('whisper-voice',         s.whisper_voice);
+  // Sentient
+  set('sent-audio-in',        s.sentient_audio_in);
+  set('sent-whisper-model',   s.sentient_whisper_model);
+  set('sent-silence-sec',     s.sentient_silence_sec);
+  set('sent-energy',          s.sentient_energy);
+  set('sent-mode',            s.sentient_mode);
+  set('sent-trigger',         s.sentient_trigger);
+  set('sent-ai-model',        s.sentient_ai_model);
+  set('sent-persona',         s.sentient_persona);
+  set('sent-temp',            s.sentient_temp);
+  set('sent-tx-engine',       s.sentient_tx_engine);
+  set('sent-tx-voice',        s.sentient_tx_voice);
+  set('sent-tx-preset',       s.sentient_tx_preset);
+  if (s.sentient_handshake != null) {
+    const el = document.getElementById('sent-handshake');
+    if (el) el.checked = s.sentient_handshake === 'true';
+  }
+  sentModeChange();
   // TX tab defaults (engine triggers async voice list load)
   if (s.tx_engine) {
     set('tx-engine', s.tx_engine);
@@ -11874,6 +12115,154 @@ async function whisperTest() {
     voice:  document.getElementById('whisper-voice')?.value || '',
   });
   showAlert('whisper-alert', r.message || 'Fired', r.success ? 'ok' : 'err');
+}
+
+// ── Sentient Radio ───────────────────────────────────────────────────────
+let _sentPollTimer = null;
+
+function sentModeChange() {
+  const mode = document.getElementById('sent-mode')?.value || 'engage';
+  const trigRow = document.getElementById('sent-trigger-row');
+  if (trigRow) trigRow.style.display = mode === 'selective' ? '' : 'none';
+  const disp = document.getElementById('sent-mode-display');
+  if (disp) disp.textContent = mode.toUpperCase();
+}
+
+async function sentStart() {
+  const payload = {
+    audio_in:      document.getElementById('sent-audio-in')?.value || '',
+    whisper_model: document.getElementById('sent-whisper-model')?.value || 'base',
+    silence_sec:   document.getElementById('sent-silence-sec')?.value || '1.5',
+    energy:        document.getElementById('sent-energy')?.value || '300',
+    mode:          document.getElementById('sent-mode')?.value || 'engage',
+    trigger:       document.getElementById('sent-trigger')?.value || 'hey radio',
+    ai_model:      document.getElementById('sent-ai-model')?.value || '',
+    persona:       document.getElementById('sent-persona')?.value || '',
+    temp:          document.getElementById('sent-temp')?.value || '0.9',
+    tx_engine:     document.getElementById('sent-tx-engine')?.value || 'espeak',
+    tx_voice:      document.getElementById('sent-tx-voice')?.value || '',
+    tx_preset:     document.getElementById('sent-tx-preset')?.value || 'normal',
+    handshake:     document.getElementById('sent-handshake')?.checked ? 'true' : 'false',
+  };
+  showAlert('sent-alert', 'Starting sentient mode...', 'warn', 0);
+  const r = await api('POST', '/api/sentient/start', payload);
+  showAlert('sent-alert', r.message || (r.success ? 'Listening' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success) {
+    const btn = document.getElementById('sent-start-btn');
+    if (btn) { btn.textContent = '● LISTENING'; btn.style.background = '#1a0a2a'; btn.style.borderColor = '#8844ff'; }
+    const dot = document.getElementById('sent-live-dot');
+    if (dot) { dot.style.background = '#33cc33'; dot.style.animation = 'mc-pulse 1.5s ease-in-out infinite'; }
+    const lbl = document.getElementById('sent-live-label');
+    if (lbl) { lbl.textContent = 'LISTENING'; lbl.style.color = '#33cc33'; }
+    _sentPollStart();
+    cfgFlushPresets();
+  }
+}
+
+async function sentStop() {
+  await api('POST', '/api/sentient/stop');
+  showAlert('sent-alert', 'Sentient mode stopped', 'warn');
+  const btn = document.getElementById('sent-start-btn');
+  if (btn) { btn.textContent = '▶ START LISTENING'; btn.style.background = ''; btn.style.borderColor = ''; }
+  const dot = document.getElementById('sent-live-dot');
+  if (dot) { dot.style.background = '#333'; dot.style.animation = ''; }
+  const lbl = document.getElementById('sent-live-label');
+  if (lbl) { lbl.textContent = 'IDLE'; lbl.style.color = 'var(--text3)'; }
+  _sentPollStop();
+}
+
+function sentClear() {
+  const el = document.getElementById('sent-transcript');
+  if (el) el.innerHTML = '<div style="color:#444;text-align:center;padding:var(--s6)">Cleared.</div>';
+}
+
+let _sentLastLogLen = 0;
+async function _sentPoll() {
+  try {
+    const r = await api('GET', '/api/sentient/status');
+    // Energy meter
+    const bar = document.getElementById('sent-meter-bar');
+    const val = document.getElementById('sent-meter-val');
+    const energy = r.energy || 0;
+    const threshold = parseInt(document.getElementById('sent-energy')?.value || 300);
+    const pct = Math.min(100, (energy / (threshold * 3)) * 100);
+    if (bar) bar.style.width = pct + '%';
+    if (val) val.textContent = energy;
+
+    // Stats
+    if (r.stats) {
+      for (const k of ['heard','replied','bot','human']) {
+        const el = document.getElementById('sent-stat-' + k);
+        if (el) el.textContent = r.stats[k] || 0;
+      }
+    }
+
+    // Model display
+    const md = document.getElementById('sent-model-display');
+    if (md) md.textContent = r.model || '—';
+
+    // Mode display
+    const modeDisp = document.getElementById('sent-mode-display');
+    if (modeDisp) modeDisp.textContent = (r.mode || 'engage').toUpperCase();
+
+    // Handshake
+    const hs = document.getElementById('sent-handshake-status');
+    if (hs) hs.textContent = r.active ? 'active' : 'inactive';
+
+    // Last heard
+    if (r.log?.length) {
+      const lastHeard = r.log.filter(e => e.kind === 'HEARD').slice(-1)[0];
+      const lh = document.getElementById('sent-last-heard');
+      if (lh && lastHeard) lh.textContent = lastHeard.text.slice(0, 80);
+    }
+
+    // Transcript — append new entries
+    if (r.log && r.log.length > _sentLastLogLen) {
+      const newEntries = r.log.slice(_sentLastLogLen);
+      _sentLastLogLen = r.log.length;
+      const el = document.getElementById('sent-transcript');
+      if (el) {
+        // Remove placeholder
+        if (el.querySelector('div[style*="text-align:center"]')) el.innerHTML = '';
+        for (const entry of newEntries) {
+          const div = document.createElement('div');
+          const colors = {
+            SYSTEM: '#555', LISTEN: '#33cc33', HEARD: 'var(--cyan)',
+            THINK: '#ff9500', REPLY: '#8844ff', ERROR: 'var(--tx)',
+          };
+          const c = colors[entry.kind] || '#666';
+          div.style.cssText = `color:${c};border-bottom:1px solid #111;padding:2px 0`;
+          const ts = entry.ts ? entry.ts.split('T')[1]?.split('.')[0] || '' : '';
+          const src = entry.source && entry.source !== '?' ? ` [${entry.source}]` : '';
+          div.textContent = `${ts} ${entry.kind}${src}: ${entry.text}`;
+          el.appendChild(div);
+        }
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+
+    // Check if still active
+    if (!r.active) {
+      const btn = document.getElementById('sent-start-btn');
+      if (btn && btn.textContent.includes('LISTENING')) {
+        btn.textContent = '▶ START LISTENING'; btn.style.background = '';
+        const dot = document.getElementById('sent-live-dot');
+        if (dot) { dot.style.background = '#333'; dot.style.animation = ''; }
+        const lbl = document.getElementById('sent-live-label');
+        if (lbl) { lbl.textContent = 'IDLE'; lbl.style.color = 'var(--text3)'; }
+      }
+    }
+  } catch(e) {}
+}
+
+function _sentPollStart() {
+  _sentLastLogLen = 0;
+  _sentPoll();
+  if (_sentPollTimer) clearInterval(_sentPollTimer);
+  _sentPollTimer = setInterval(_sentPoll, 2000);
+}
+function _sentPollStop() {
+  if (_sentPollTimer) { clearInterval(_sentPollTimer); _sentPollTimer = null; }
 }
 
 // ── Voice Roulette ───────────────────────────────────────────────────────
