@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.69
+RigGPT v2.12.70
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.69'
+VERSION        = 'v2.12.70'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4321,6 +4321,9 @@ def api_settings_post():
         'trip_gap_min', 'trip_gap_max', 'trip_hesitate',
         'trip_wildcard', 'trip_wildcard_n', 'trip_tx',
         'trip_discord_influence', 'trip_discord_lookback', 'trip_discord_lookback_every',
+        'trip_a_fx_preset', 'trip_a_fx_pitch', 'trip_a_fx_reverb', 'trip_a_fx_echo',
+        'trip_b_fx_preset', 'trip_b_fx_pitch', 'trip_b_fx_reverb', 'trip_b_fx_echo',
+        'trip_topic',
         # Transmit tab defaults
         'tx_engine', 'tx_voice', 'tx_delay', 'tx_repeat',
         # Memory / Qdrant
@@ -4952,7 +4955,22 @@ def _sanitise_trip_reply(text: str) -> str:
     text = _re.sub(r'  +', ' ', text)
     text = _re.sub(r'\n{3,}', '\n\n', text)
 
-    return text.strip()
+    text = text.strip()
+
+    # ── Sentence completion: trim dangling incomplete sentences ────
+    # When LLM hits max_tokens, it often stops mid-sentence.
+    # Find the last sentence-ending punctuation and trim there.
+    if text and text[-1] not in '.!?…"\'':
+        # Find last sentence boundary
+        last_period = -1
+        for i in range(len(text) - 1, -1, -1):
+            if text[i] in '.!?…':
+                last_period = i
+                break
+        if last_period > 10:  # only trim if we'd keep at least 10 chars
+            text = text[:last_period + 1]
+
+    return text
 
 
 def _chat_via_openai(messages, model, temp, maxT, api_key):
@@ -5123,7 +5141,7 @@ def api_ai_chat():
                 'think':    False,   # qwen3/deepseek-r1: suppress <think> block, return only response
                 'options':  {
                     'temperature': temp,
-                    'num_predict': int(maxT),
+                    'num_predict': max(int(maxT), 150),
                     'num_ctx':     4096,
                 },
             }
