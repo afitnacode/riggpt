@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.85
+RigGPT v2.12.86
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.85'
+VERSION        = 'v2.12.86'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -8893,7 +8893,7 @@ _sentient_active   = False
 _sentient_thread   = None
 _sentient_stop     = threading.Event()
 _sentient_stats    = {'heard': 0, 'replied': 0, 'bot': 0, 'human': 0}
-_sentient_log: list = []       # transcript entries (capped at 100)
+_sentient_log: list = []       # transcript entries (capped at 200)
 _sentient_energy   = 0         # current RMS energy level
 _sentient_whisper_engine = ''  # 'faster' or 'openai' (set on start)
 _sentient_health   = {
@@ -8933,32 +8933,47 @@ def _sentient_handshake_wav():
 
 
 def _sentient_detect_handshake(audio_data, sample_rate=16000):
-    """Check if audio starts with the RigGPT dual-tone handshake. Returns True/False."""
+    """Check if audio starts with the RigGPT dual-tone handshake. Returns True/False.
+    Must be very strict to avoid false positives on broadband HF noise."""
     import numpy as np
     # Check first 300ms of audio
     check_samples = min(int(sample_rate * 0.3), len(audio_data))
     if check_samples < int(sample_rate * 0.1):
         return False
     chunk = audio_data[:check_samples].astype(np.float64)
-    # FFT
     fft = np.abs(np.fft.rfft(chunk))
     freqs = np.fft.rfftfreq(len(chunk), 1.0 / sample_rate)
-    # Check for peaks at both handshake frequencies (±15Hz tolerance)
-    def _has_peak(target_hz, tolerance=15):
-        mask = (freqs >= target_hz - tolerance) & (freqs <= target_hz + tolerance)
-        if not mask.any():
-            return False
-        peak_in_band = np.max(fft[mask])
-        median_energy = np.median(fft)
-        return peak_in_band > median_energy * 5  # 5x above median = strong peak
-    return _has_peak(_HANDSHAKE_F1) and _has_peak(_HANDSHAKE_F2)
+
+    def _peak_ratio(target_hz, tolerance=10):
+        """Return ratio of peak energy at target freq vs local neighborhood."""
+        band = (freqs >= target_hz - tolerance) & (freqs <= target_hz + tolerance)
+        if not band.any():
+            return 0
+        peak_in_band = np.max(fft[band])
+        # Compare against wide neighborhood (±200Hz) excluding the target band
+        hood = ((freqs >= target_hz - 200) & (freqs <= target_hz + 200)) & ~band
+        if not hood.any():
+            return 0
+        neighborhood_avg = np.mean(fft[hood])
+        if neighborhood_avg < 1:
+            return 0
+        return peak_in_band / neighborhood_avg
+
+    # Both tones must be sharp peaks — at least 8x above their local neighborhood.
+    # Broadband HF noise has roughly flat spectrum, so peaks won't stand out.
+    r1 = _peak_ratio(_HANDSHAKE_F1)
+    r2 = _peak_ratio(_HANDSHAKE_F2)
+    detected = r1 > 8 and r2 > 8
+    if detected:
+        logger.info(f'sentient: handshake DETECTED (1337Hz ratio={r1:.1f}, 2600Hz ratio={r2:.1f})')
+    return detected
 
 
 def _sentient_log_entry(kind, text, source='?'):
     """Add entry to sentient transcript log."""
     entry = {'ts': _now_utc(), 'kind': kind, 'text': text, 'source': source}
     _sentient_log.append(entry)
-    if len(_sentient_log) > 100:
+    if len(_sentient_log) > 200:
         _sentient_log.pop(0)
     logger.info(f'sentient: [{kind}] ({source}) {text[:80]}')
 
@@ -9013,15 +9028,34 @@ def _sentient_listener_loop():
         _sentient_active = False
         return
 
+    # Common Whisper hallucinations on noise/silence
+    _WHISPER_HALLUCINATIONS = {
+        'thank you for watching', 'thanks for watching', 'subscribe',
+        'please subscribe', 'thank you', 'thanks for listening',
+        'you', 'the', 'i', 'bye', 'hmm', 'uh', 'um', '...', '..',
+        'thanks', 'bye bye', 'goodbye',
+    }
+
     def _transcribe(wav_path):
-        """Transcribe audio file. Returns text string."""
+        """Transcribe audio file. Returns cleaned text string."""
         if _whisper_engine == 'faster':
             segments, info = model.transcribe(wav_path, language='en',
                                               beam_size=1, vad_filter=True)
-            return ' '.join(s.text for s in segments).strip()
+            parts = [s.text.strip() for s in segments if s.text.strip()]
         else:
             result = model.transcribe(wav_path, language='en', fp16=False)
-            return result.get('text', '').strip()
+            text = result.get('text', '').strip()
+            parts = [text] if text else []
+
+        # Join and clean
+        text = ' '.join(parts).strip()
+        # Filter hallucinations
+        if text.lower().strip('., ') in _WHISPER_HALLUCINATIONS:
+            return ''
+        # Filter very short results (likely noise artifacts)
+        if len(text) < 4:
+            return ''
+        return text
 
     # Pre-flight: test capture device with 1-second recording
     _sentient_log_entry('SYSTEM', f'Testing capture device: {device}')
@@ -9094,7 +9128,10 @@ def _sentient_listener_loop():
     speech_buffer = []
     silent_count = 0
     is_speaking = False
-    _noise_samples = []  # rolling window for noise floor estimation
+    _noise_samples = []
+    _energy_history = []
+    _speech_energy_sum = 0
+    _speech_energy_n = 0
 
     try:
         while not _sentient_stop.is_set():
@@ -9110,45 +9147,54 @@ def _sentient_listener_loop():
             chunk = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
             rms = int(np.sqrt(np.mean(chunk ** 2)))
             peak = int(np.max(np.abs(chunk)))
-            clip_count = int(np.sum(np.abs(chunk) > 32000))
 
             _sentient_health['peak'] = peak
-            _sentient_health['clipping'] = clip_count
-            _sentient_health['speaking'] = rms > energy_threshold
+            _sentient_energy = rms
 
-            # Noise floor: rolling average of quiet chunks
-            if rms < energy_threshold:
+            # Rolling energy average (last 20 chunks = 10s)
+            _energy_history.append(rms)
+            if len(_energy_history) > 20:
+                _energy_history.pop(0)
+            rolling_avg = sum(_energy_history) / len(_energy_history) if _energy_history else rms
+
+            # Noise floor: track during non-speech
+            if not is_speaking:
                 _noise_samples.append(rms)
-                if len(_noise_samples) > 20:
+                if len(_noise_samples) > 30:
                     _noise_samples.pop(0)
                 _sentient_health['noise_floor'] = int(sum(_noise_samples) / len(_noise_samples)) if _noise_samples else 0
-            _sentient_energy = rms
+
+            # HF-aware VAD: energy must exceed threshold AND rise 15% above rolling avg
+            speech_detected = rms > energy_threshold and rms > rolling_avg * 1.15
+            _sentient_health['speaking'] = speech_detected
             _process_utterance = False
 
-            if rms > energy_threshold:
-                # Speech detected
+            if speech_detected:
                 if not is_speaking:
                     is_speaking = True
-                    _sentient_log_entry('LISTEN', f'▶ speech detected (RMS={rms} > thresh={energy_threshold})')
+                    _speech_energy_sum = 0
+                    _speech_energy_n = 0
+                    _sentient_log_entry('LISTEN', f'\u25b6 speech (RMS={rms}, avg={int(rolling_avg)}, thresh={energy_threshold})')
                 speech_buffer.append(chunk)
+                _speech_energy_sum += rms
+                _speech_energy_n += 1
                 silent_count = 0
             elif is_speaking:
-                # Silence during speech — might be end of utterance
                 speech_buffer.append(chunk)
                 silent_count += 1
-                if silent_count >= silence_chunks:
-                    # End of utterance — process it
+                # HF pause: energy drops below 70% of speech average
+                speech_avg = _speech_energy_sum / max(_speech_energy_n, 1)
+                is_deep_pause = rms < speech_avg * 0.7
+                needed = silence_chunks if is_deep_pause else silence_chunks + 2
+                if silent_count >= needed:
                     is_speaking = False
                     audio_data = np.concatenate(speech_buffer)
                     speech_buffer = []
                     silent_count = 0
                     _process_utterance = True
-            # Max buffer safety: if buffer has been growing > 12 seconds,
-            # force-process even without clean silence detection.
-            # HF radio noise fluctuates constantly — clean silence may never come.
-            max_buffer_sec = 12
-            if is_speaking and len(speech_buffer) > (max_buffer_sec / 0.5):
-                _sentient_log_entry('LISTEN', f'⏱ buffer max ({max_buffer_sec}s) — force processing')
+
+            # Max buffer: 8s continuous audio -> force process
+            if is_speaking and len(speech_buffer) > 16:
                 is_speaking = False
                 audio_data = np.concatenate(speech_buffer)
                 speech_buffer = []
@@ -9351,7 +9397,7 @@ def api_sentient_status():
         'energy': _sentient_energy,
         'stats': _sentient_stats,
         'health': _sentient_health,
-        'log': _sentient_log[-20:],
+        'log': _sentient_log[-40:],
         'mode': _app_settings.get('sentient_mode', 'engage'),
         'model': _app_settings.get('sentient_whisper_model', 'base'),
         'whisper_engine': _sentient_whisper_engine,
