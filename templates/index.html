@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.77</span>
+    <span class="sb-label">v2.12.78</span>
   </div>
 </div>
 
@@ -3837,30 +3837,22 @@ hr.div  {
       </div>
     </div>
 
-    <!-- ── Col 3: Example Prompts ─────────────────────────── -->
+    <!-- ── Col 3: Configurable Prompts ─────────────────────── -->
     <div style="display:flex;flex-direction:column;overflow:hidden">
       <div class="panel-header">
-        <span class="panel-title">EXAMPLE PROMPTS</span>
-        <button class="btn sm" onclick="aiLoadExamples()">↺</button>
+        <span class="panel-title">PROMPTS</span>
+        <button class="btn sm" onclick="aiLoadExamples()" title="Reload from server">↺</button>
         <button class="btn sm" id="ai-ex-edit-btn" onclick="aiExToggleEdit()" style="margin-left:auto;font-size:8px">✎ EDIT</button>
         <button class="btn sm ok" id="ai-ex-save-btn" onclick="aiExSave()" style="display:none;font-size:8px">SAVE</button>
-        <button class="btn sm warn" id="ai-ex-reset-btn" onclick="aiExReset()" style="display:none;font-size:8px">RESET</button>
+        <button class="btn sm warn" id="ai-ex-reset-btn" onclick="aiExReset()" style="display:none;font-size:8px">DEFAULTS</button>
       </div>
 
       <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1);font-size:var(--fz-xs);color:var(--text3);flex-shrink:0">
-        Click a prompt to load it, or use the action buttons to preview or transmit directly.
-      </div>
-
-      <!-- Category tabs -->
-      <div style="display:flex;border-bottom:var(--b1);flex-shrink:0">
-        <button class="tab-btn active" data-excat="all"       onclick="aiFilterEx('all',this)"       style="flex:1;font-size:8px">ALL</button>
-        <button class="tab-btn"        data-excat="on-air"    onclick="aiFilterEx('on-air',this)"    style="flex:1;font-size:8px">ON-AIR</button>
-        <button class="tab-btn"        data-excat="utility"   onclick="aiFilterEx('utility',this)"   style="flex:1;font-size:8px">UTILITY</button>
-        <button class="tab-btn"        data-excat="experimental" onclick="aiFilterEx('experimental',this)" style="flex:1;font-size:8px">WEIRD</button>
+        Click to load into prompt. ✎ EDIT to customize.
       </div>
 
       <div class="ai-example-grid" id="ai-example-grid">
-        <div style="padding:var(--s6) var(--s4);color:var(--text3);font-size:var(--fz-xs);text-align:center">Loading examples...</div>
+        <div style="padding:var(--s6) var(--s4);color:var(--text3);font-size:var(--fz-xs);text-align:center">Loading...</div>
       </div>
     </div>
 
@@ -8520,7 +8512,6 @@ function memoryRestoreSettings(s) {
 // ─────────────────────────────────────────────────────────────
 let _aiHistory    = [];      // [{role:'user'|'assistant', content, tx_queued?}]
 let _aiExamples   = [];      // fetched from /api/ai/examples
-let _aiExCat      = 'all';   // current example filter
 let _aiDbgTimer   = null;    // setInterval handle for debug log polling
 let _aiDbgVerbose = false;   // mirrors server-side _ai_debug_on
 let _aiPreviewAud = null;    // current preview Audio element
@@ -8569,15 +8560,29 @@ async function aiSaveConfig() {
 }
 
 async function aiTestConnection() {
-  showAlert('ai-alert', 'Testing Ollama...', 'warn', 0);
+  showAlert('ai-alert', 'Testing Ollama connection + generation...', 'warn', 0);
   _aiConnDot('pending');
+  // Step 1: check connectivity by listing models
   const mr = await api('GET', '/api/ai/models');
-  if (mr.success && mr.models?.length) {
-    showAlert('ai-alert', `Connected ✓  ${mr.models.length} model(s)`, 'ok');
-    _renderModelList(mr.models);
-    _aiConnDot('ok');
-  } else {
+  if (!mr.success || !mr.models?.length) {
     showAlert('ai-alert', mr.message || 'Cannot reach Ollama — check URL and that Ollama is running', 'err');
+    _aiConnDot('err');
+    return;
+  }
+  _renderModelList(mr.models);
+  // Step 2: test actual generation
+  const model = document.getElementById('ai-ollama-model')?.value?.trim() || mr.models[0]?.name || mr.models[0];
+  try {
+    const tr = await api('POST', '/api/ai/test', { model, message: 'Say exactly: TEST OK' });
+    if (tr.success && tr.content) {
+      showAlert('ai-alert', `✓ Connected (${mr.models.length} models). Generation OK: "${tr.content.slice(0,60)}" [${tr.reply_tokens} tokens]`, 'ok');
+      _aiConnDot('ok');
+    } else {
+      showAlert('ai-alert', `Connected (${mr.models.length} models) but generation failed: ${tr.message || 'no content returned'}`, 'err');
+      _aiConnDot('err');
+    }
+  } catch(e) {
+    showAlert('ai-alert', `Connected but generation test failed: ${e.message}`, 'err');
     _aiConnDot('err');
   }
   aiPollDebug();
@@ -8826,49 +8831,37 @@ async function aiLoadExamples() {
   }
 }
 
-function aiFilterEx(cat, btn) {
-  _aiExCat = cat;
-  document.querySelectorAll('[data-excat]').forEach(b => b.classList.toggle('active', b === btn));
-  _renderExamples();
-}
-
-// _aiExFiltered holds the currently displayed subset so data-idx can look up by position
+// _aiExFiltered holds the currently displayed list
 let _aiExFiltered = [];
 
 function _renderExamples() {
   if (_aiExEditMode) { _renderExamplesEdit(); return; }
   const grid = document.getElementById('ai-example-grid');
   if (!grid) return;
-  _aiExFiltered = _aiExCat === 'all' ? _aiExamples : _aiExamples.filter(e => e.category === _aiExCat);
+  _aiExFiltered = _aiExamples;
   if (!_aiExFiltered.length) {
-    grid.innerHTML = '<div style="padding:var(--s6) var(--s4);color:var(--text3);font-size:var(--fz-xs);text-align:center">No examples in this category.</div>';
+    grid.innerHTML = '<div style="padding:var(--s6) var(--s4);color:var(--text3);font-size:var(--fz-xs);text-align:center">No prompts configured. Click ✎ EDIT to add some.</div>';
     return;
   }
-  // Use data-idx (index into _aiExFiltered) on every interactive element.
-  // This avoids any JSON / apostrophe / quote escaping inside onclick attributes.
   grid.innerHTML = _aiExFiltered.map((ex, idx) => `
     <div class="ai-example">
       <div class="ai-example-body" data-idx="${idx}" title="Click to load into prompt">
-        <div class="ai-example-cat">${escHtml(ex.category)}</div>
         <div class="ai-example-lbl">${escHtml(ex.label)}</div>
         <div class="ai-example-prompt">${escHtml(ex.prompt.length > 80 ? ex.prompt.slice(0,77)+'\u2026' : ex.prompt)}</div>
       </div>
       <div class="ai-example-acts">
-        <button data-idx="${idx}" data-action="play"  title="Generate + play locally (no PTT)">🔊 PLAY</button>
-        <button data-idx="${idx}" data-action="tx"    title="Generate + transmit over air">⬛ TX</button>
+        <button data-idx="${idx}" data-action="play"  title="Generate + play locally (no PTT)">🔊</button>
+        <button data-idx="${idx}" data-action="tx"    title="Generate + transmit over air">⬛</button>
       </div>
     </div>`).join('');
 
-  // Single delegated listener on the grid — replaces any previous one
   grid.onclick = function(e) {
-    // Body click → load into prompt
     const body = e.target.closest('.ai-example-body');
     if (body) {
       const idx = parseInt(body.dataset.idx, 10);
       if (!isNaN(idx) && _aiExFiltered[idx]) aiLoadExample(_aiExFiltered[idx].prompt);
       return;
     }
-    // Button click → play or tx
     const btn = e.target.closest('button[data-action]');
     if (btn) {
       const idx    = parseInt(btn.dataset.idx, 10);
@@ -8904,15 +8897,11 @@ function aiExToggleEdit() {
 function _renderExamplesEdit() {
   const grid = document.getElementById('ai-example-grid');
   if (!grid) return;
-  const cats = ['on-air','utility','experimental'];
   let html = _aiExamples.map((ex, i) => `
     <div style="padding:4px 8px;border-bottom:var(--b1);background:var(--bg1)">
       <div style="display:flex;gap:4px;margin-bottom:2px;align-items:center">
         <input type="text" value="${escHtml(ex.label)}" data-ex-idx="${i}" data-ex-field="label"
                style="flex:1;font-size:9px;font-weight:700" placeholder="Title">
-        <select data-ex-idx="${i}" data-ex-field="category" style="font-size:8px;width:90px">
-          ${cats.map(c => `<option value="${c}"${ex.category===c?' selected':''}>${c}</option>`).join('')}
-        </select>
         <button class="btn sm err" onclick="aiExRemove(${i})" style="font-size:8px;padding:1px 4px" title="Delete">✕</button>
       </div>
       <textarea data-ex-idx="${i}" data-ex-field="prompt" rows="2"
