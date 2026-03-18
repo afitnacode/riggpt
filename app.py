@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.70
+RigGPT v2.12.71
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.70'
+VERSION        = 'v2.12.71'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4347,6 +4347,7 @@ def api_settings_post():
         'bcn_interval', 'bcn_repeat', 'bcn_engine', 'bcn_voice',
         # Special Ops
         'numbers_station_interval', 'numbers_station_engine', 'numbers_station_voice',
+        'numbers_station_cadence',
         'solar_autotx_enabled', 'solar_kindex_threshold', 'solar_engine', 'solar_voice',
         'mystery_window_start', 'mystery_window_end', 'mystery_engine', 'mystery_voice',
         'autoid_callsign', 'autoid_interval', 'autoid_engine', 'autoid_voice',
@@ -7994,58 +7995,57 @@ def _auto_connect():
 def _run_numbers_station():
     """Transmit a Cold War-style numbers group over the air.
     
-    Cadence spec (authentic shortwave numbers station style):
-      - Digits spoken as words, ~1 digit per second
-      - Commas between digits within a 5-digit group (~300-600ms pause)
-      - Period + ellipsis between groups (~800-1500ms pause)
-      - Flat, emotionless, metronomic delivery
-      - Speed ~0.75x, low pitch variation
-      - Groups repeated once after 'REPEAT' for copyability
+    Cadence: digits as words, heavy pauses between digits and groups.
+    Speed configurable via numbers_station_cadence setting.
     """
     import random
 
-    # Digit word map — 'niner' is traditional numbers station phonetic for 9
     _DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four',
                     'five', 'six', 'seven', 'eight', 'niner']
 
-    # Generate 5 groups of 5 random digits
+    # Cadence presets: (speed, digit_sep, group_sep)
+    # digit_sep = punctuation between digits within a group
+    # group_sep = punctuation between groups
+    _CADENCES = {
+        'slow':   (0.55, '.  ',  '.  ...  ...  '),  # ~30 digits/min - very deliberate
+        'medium': (0.65, '.  ',  '.  ...  '),         # ~45 digits/min - classic Cold War
+        'fast':   (0.80, ', ',   '.  ...  '),          # ~65 digits/min - brisk
+    }
+    cadence = _app_settings.get('numbers_station_cadence', 'medium')
+    spd, dsep, gsep = _CADENCES.get(cadence, _CADENCES['medium'])
+
     num_groups = random.randint(4, 6)
     raw_groups = []
     for _ in range(num_groups):
         raw_groups.append([random.randint(0, 9) for _ in range(5)])
 
-    # Format groups: commas between digits (short pause), period between groups (long pause)
     def _fmt_groups(groups):
         formatted = []
         for grp in groups:
-            # Commas create ~300-500ms inter-digit pauses in TTS
-            formatted.append(', '.join(_DIGIT_WORDS[d] for d in grp))
-        # Period + space between groups creates ~800-1200ms pause
-        return '.  '.join(formatted)
+            formatted.append(dsep.join(_DIGIT_WORDS[d] for d in grp))
+        return gsep.join(formatted)
 
     body = _fmt_groups(raw_groups)
 
-    # Classic numbers station structure: intro, body, repeat, body, outro
     intro = random.choice([
-        'Attention. Attention.',
-        'Message. Message.',
-        'Group count, {n}. Ready. Ready.'.format(n=_DIGIT_WORDS[num_groups]),
+        'Attention. ... Attention. ...',
+        'Message. ... Message. ...',
+        'Group count, {n}. ... Ready. ... Ready. ...'.format(n=_DIGIT_WORDS[num_groups]),
     ])
-    msg = f'{intro}  ...  {body}.  ...  Repeat.  ...  {body}.  ...  End of message. End of transmission.'
+    msg = f'{intro}  {body}.  ...  ...  Repeat.  ...  ...  {body}.  ...  End of message. End of transmission.'
 
     engine = _app_settings.get('numbers_station_engine', 'espeak')
     voice  = _app_settings.get('numbers_station_voice', '') or None
     try:
-        # Slow, flat, metronomic delivery — the hallmark of numbers stations
         orchestrator.execute(
             msg, engine=engine, voice=voice,
-            preset='broadcast',   # slight radio filter for authenticity
-            pitch=-4,             # lower pitch = flatter, more emotionless
-            speed=0.75,           # slow deliberate pace (~60 digits/min)
+            preset='broadcast',
+            pitch=-4,
+            speed=spd,
             roger_beep=False,
         )
         digit_count = num_groups * 5
-        logger.info(f'numbers_station: transmitted {num_groups} groups ({digit_count} digits)')
+        logger.info(f'numbers_station: transmitted {num_groups} groups ({digit_count} digits) cadence={cadence}')
     except Exception as e:
         logger.error(f'numbers_station TX error: {e}')
 
@@ -8060,9 +8060,11 @@ def api_numbers_station_start():
                           int(_app_settings.get('numbers_station_interval', 5)))))
     engine   = data.get('engine', _app_settings.get('numbers_station_engine', 'espeak'))
     voice    = data.get('voice', _app_settings.get('numbers_station_voice', ''))
+    cadence  = data.get('cadence', _app_settings.get('numbers_station_cadence', 'medium'))
     _app_settings['numbers_station_interval'] = str(interval)
     _app_settings['numbers_station_engine']   = engine
     _app_settings['numbers_station_voice']    = voice
+    _app_settings['numbers_station_cadence']  = cadence
     _save_app_settings(_app_settings)
     try:
         if _numbers_station_job:
@@ -8104,13 +8106,40 @@ def _solar_fetch_kindex():
     """Fetch current planetary K-index from NOAA SWPC. Returns float or None."""
     import urllib.request
     try:
-        url = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json'
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            rows = json.loads(resp.read())
-        if rows:
-            return float(rows[-1][1])
+        url = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'
+        req = urllib.request.Request(url, headers={'User-Agent': 'RigGPT/1.0'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        if not data or len(data) < 2:
+            return None
+        # Format: first row is header, subsequent rows are data arrays
+        # e.g. [["time_tag","Kp","Kp_fraction",...], ["2025-03-18 00:00:00","3","3.00",...]]
+        last_row = data[-1]
+        if isinstance(last_row, list) and len(last_row) >= 2:
+            return float(last_row[1])
+        elif isinstance(last_row, dict):
+            # Object format: try common key names
+            for key in ('Kp', 'kp_index', 'estimated_kp', 'kp'):
+                if key in last_row:
+                    return float(last_row[key])
     except Exception as e:
         logger.warning(f'solar: K-index fetch error: {e}')
+    # Fallback: try the 1-minute endpoint
+    try:
+        url2 = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json'
+        req2 = urllib.request.Request(url2, headers={'User-Agent': 'RigGPT/1.0'})
+        with urllib.request.urlopen(req2, timeout=15) as resp:
+            rows = json.loads(resp.read())
+        if rows:
+            last = rows[-1]
+            if isinstance(last, list):
+                return float(last[1])
+            elif isinstance(last, dict):
+                for key in ('estimated_kp', 'kp_index', 'Kp', 'kp'):
+                    if key in last:
+                        return float(last[key])
+    except Exception as e:
+        logger.warning(f'solar: K-index fallback fetch error: {e}')
     return None
 
 

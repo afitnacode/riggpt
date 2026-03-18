@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.70</span>
+    <span class="sb-label">v2.12.71</span>
   </div>
 </div>
 
@@ -3119,6 +3119,13 @@ hr.div  {
         </div>
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
           <select id="ns-voice" style="flex:1;font-size:9px"><option value="">default</option></select>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <select id="ns-cadence" style="flex:1;font-size:9px" title="Digit cadence">
+            <option value="slow">Slow (~30 digits/min)</option>
+            <option value="medium" selected>Medium (~45 digits/min)</option>
+            <option value="fast">Fast (~65 digits/min)</option>
+          </select>
         </div>
         <div style="display:flex;gap:var(--s2)">
           <button class="btn sm primary" id="ns-start-btn" onclick="nsStart()">&#9632; START</button>
@@ -9509,6 +9516,7 @@ async function cfgFlushPresets() {
     numbers_station_interval: get('ns-interval'),
     numbers_station_engine:   get('ns-engine'),
     numbers_station_voice:    get('ns-voice'),
+    numbers_station_cadence:  get('ns-cadence'),
     solar_kindex_threshold:   get('solar-threshold'),
     solar_autotx_enabled:     checked('solar-autotx') ? 'true' : 'false',
     solar_engine:             get('solar-engine'),
@@ -11236,6 +11244,7 @@ function _restoreAllSettings(s) {
   set('ns-interval',      s.numbers_station_interval);
   set('ns-engine',        s.numbers_station_engine);
   set('ns-voice',         s.numbers_station_voice);
+  set('ns-cadence',       s.numbers_station_cadence);
   set('solar-threshold',  s.solar_kindex_threshold);
   chk('solar-autotx',     s.solar_autotx_enabled);
   set('solar-engine',     s.solar_engine);
@@ -11507,7 +11516,8 @@ async function nsStart() {
   const interval = parseInt(document.getElementById('ns-interval')?.value) || 5;
   const engine   = document.getElementById('ns-engine')?.value || 'espeak';
   const voice    = document.getElementById('ns-voice')?.value || '';
-  const r = await api('POST', '/api/numbers_station/start', { interval_minutes: interval, engine, voice });
+  const cadence  = document.getElementById('ns-cadence')?.value || 'medium';
+  const r = await api('POST', '/api/numbers_station/start', { interval_minutes: interval, engine, voice, cadence });
   showAlert('ns-alert', r.message || (r.success ? 'Active' : 'Failed'), r.success ? 'ok' : 'err');
   if (r.success) {
     const btn = document.getElementById('ns-start-btn');
