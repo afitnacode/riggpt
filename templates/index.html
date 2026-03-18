@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.72</span>
+    <span class="sb-label">v2.12.73</span>
   </div>
 </div>
 
@@ -2508,6 +2508,8 @@ hr.div  {
         <button class="btn sm" onclick="bcnQuickTemplate('cq')" title="CQ beacon every 30min">📢 CQ</button>
         <button class="btn sm" onclick="bcnQuickTemplate('wx')" title="Weather announcement every 60min">🌡 WX</button>
         <button class="btn sm" onclick="bcnQuickTemplate('test')" title="Quick 1-min test beacon">🧪 TEST</button>
+        <button class="btn sm" onclick="schedQuick420()" title="Create daily 4:20pm schedule instantly"
+                style="background:#1a2a0a;border-color:#55cc55;color:#55cc55;margin-left:auto">🌿 4:20</button>
       </div>
 
       <!-- New beacon form -->
@@ -2610,6 +2612,7 @@ hr.div  {
             <option value="0 12 * * *">Daily at noon</option>
             <option value="0 18 * * *">Daily at 18:00</option>
             <option value="0 20 * * *">Daily at 20:00</option>
+            <option value="20 16 * * *">🌿 Daily at 4:20pm</option>
             <option value="0 8 * * 1">Every Monday at 08:00</option>
             <option value="0 8 * * 1-5">Weekdays at 08:00</option>
             <option value="0 9 * * 6,0">Weekends at 09:00</option>
@@ -3003,7 +3006,7 @@ hr.div  {
      API keys, integrations, engine status
 ══════════════════════════ -->
 <div id="pane-apicfg" class="pane">
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;height:100%;overflow:hidden">
+  <div style="display:grid;grid-template-columns:1fr 1fr;height:100%;overflow:hidden">
 
     <!-- API Keys -->
     <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
@@ -3058,7 +3061,7 @@ hr.div  {
     </div>
 
     <!-- API Integrations -->
-    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow:hidden">
+    <div style="display:flex;flex-direction:column;overflow:hidden">
       <div class="panel-header">
         <span class="panel-title">API INTEGRATIONS</span>
         <button class="btn sm" onclick="loadLlmProviders()">&#8634;</button>
@@ -3067,23 +3070,6 @@ hr.div  {
         <div style="padding:var(--s4);color:var(--text3);font-size:var(--fz-xs)">Loading&hellip;</div>
       </div>
       <div class="alert-strip" id="cfg-llm-alert"></div>
-    </div>
-
-    <!-- Info / help -->
-    <div style="display:flex;flex-direction:column;overflow:hidden">
-      <div class="panel-header"><span class="panel-title">INFO</span></div>
-      <div style="padding:var(--s4);font-size:var(--fz-xs);color:var(--text3);line-height:2;overflow-y:auto;flex:1">
-        <b style="color:var(--cyan)">API KEYS</b><br>
-        ElevenLabs, Speechify, OpenAI TTS keys go in the left column. S3 credentials are for the Clips tab cloud source.<br><br>
-        <b style="color:var(--cyan)">API INTEGRATIONS</b><br>
-        Ollama, Gemini, Groq, Mistral, Discord bot token, Discord channel IDs, FastKoko URL &mdash; all configured here via the dynamic provider cards.<br><br>
-        <b style="color:var(--cyan)">ENGINE STATUS</b><br>
-        Shows which TTS engines are installed and reachable. Click &#8634; ENGINE STATUS to refresh.<br><br>
-        <b style="color:var(--cyan)">STORAGE</b><br>
-        <code style="color:var(--text2)">/home/riggpt/app_settings.json</code><br>
-        <code style="color:var(--text2)">/home/riggpt/api_keys.json</code><br>
-        Never commit these files. chmod 600 recommended.
-      </div>
     </div>
 
   </div>
@@ -6316,6 +6302,17 @@ async function deleteSchedule(id) {
   if (!confirm('Delete schedule?')) return;
   await api('DELETE', `/api/schedule/${id}`);
   loadSchedule();
+}
+
+async function schedQuick420() {
+  const r = await api('POST', '/api/schedule', {
+    cron: '20 16 * * *',
+    text: 'It is 4:20. You know what time it is.',
+    engine: 'espeak',
+  });
+  showAlert('sched-alert', r.success ? '🌿 4:20pm daily schedule created!' : (r.message || 'Failed'),
+            r.success ? 'ok' : 'err');
+  if (r.success) loadSchedule();
 }
 
 // ── Cron helper ──────────────────────────────────────────────
