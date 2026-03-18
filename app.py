@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.73
+RigGPT v2.12.74
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.73'
+VERSION        = 'v2.12.74'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -5341,40 +5341,75 @@ def api_ai_test():
         return jsonify({'success': False, 'message': str(e), 'model': model}), 503
 
 # -- Example prompts catalogue --------------------------------
+_AI_DEFAULT_EXAMPLES = [
+    {'id': 'cq_call',    'label': 'CQ CALL',    'category': 'on-air',
+     'prompt': 'Write a short CQ call for 20 meter SSB. Include the callsign W1AW. Keep it under 20 words.'},
+    {'id': 'signal_rpt', 'label': 'SIG REPORT', 'category': 'on-air',
+     'prompt': 'Give a friendly signal report. Signal is 59. Mention good copy and light QSB. Under 25 words.'},
+    {'id': 'contest_ex', 'label': 'CONTEST',    'category': 'on-air',
+     'prompt': 'Generate a concise contest exchange: RST 59, serial number 042, state Maine. Ham radio style.'},
+    {'id': 'weather',    'label': 'WEATHER RPT', 'category': 'on-air',
+     'prompt': 'Give a brief weather report for the ham shack: clear skies, temperature 68F, low humidity. Casual radio style, under 20 words.'},
+    {'id': 'sign_off',   'label': 'SIGN OFF',   'category': 'on-air',
+     'prompt': 'Write a friendly ham radio sign-off. Use 73 and include W1AW. Under 15 words.'},
+    {'id': 'weird',      'label': 'WEIRD TX',   'category': 'experimental',
+     'prompt': 'Generate a surreal, abstract radio transmission. Strange imagery, cryptic, poetic. Max 2 sentences.'},
+    {'id': 'numbers',    'label': 'NUMBERS STN', 'category': 'experimental',
+     'prompt': 'Generate a numbers-station-style message. Use random groups of 5 digits, phonetic letters, and eerie phrasing. 3 groups.'},
+    {'id': 'poem',       'label': 'RF POEM',    'category': 'experimental',
+     'prompt': 'Write a very short poem about radio waves, static, and the ionosphere. 2-3 lines.'},
+    {'id': 'propaganda', 'label': 'PROPAGANDA', 'category': 'experimental',
+     'prompt': 'Write a retro-style Cold War propaganda broadcast in the style of shortwave radio. Dramatic, ominous, cryptic. 2 sentences.'},
+    {'id': 'technobabel','label': 'TECHNOBABEL', 'category': 'experimental',
+     'prompt': 'Invent fake technical jargon as if explaining a nonexistent radio protocol. Sound confident and deeply technical. 2 sentences.'},
+    {'id': 'sstv_ann',   'label': 'SSTV ANNOUNCE','category': 'utility',
+     'prompt': 'Announce an upcoming SSTV transmission on 14.230 MHz. Mode is Robot36. Casual, informative, under 20 words.'},
+    {'id': 'beacon_id',  'label': 'BEACON ID',  'category': 'utility',
+     'prompt': 'Write a beacon station identification. Callsign W1AW/B, 10 meters, continuous operation. Formal, brief.'},
+    {'id': 'net_open',   'label': 'NET OPEN',   'category': 'utility',
+     'prompt': 'Open a ham radio net on 7.250 MHz LSB. Friendly, organized, request check-ins. Under 30 words.'},
+    {'id': 'aprs_voice', 'label': 'APRS VOICE', 'category': 'utility',
+     'prompt': 'Announce a position report: grid square FN42, heading north at 35 MPH, altitude 450 feet. Radio style.'},
+]
+
+
 @app.route('/api/ai/examples', methods=['GET'])
 def api_ai_examples():
-    """Return pre-canned example prompts for the AI tab."""
-    examples = [
-        {'id': 'cq_call',    'label': 'CQ CALL',    'category': 'on-air',
-         'prompt': 'Write a short CQ call for 20 meter SSB. Include the callsign W1AW. Keep it under 20 words.'},
-        {'id': 'signal_rpt', 'label': 'SIG REPORT', 'category': 'on-air',
-         'prompt': 'Give a friendly signal report. Signal is 59. Mention good copy and light QSB. Under 25 words.'},
-        {'id': 'contest_ex', 'label': 'CONTEST',    'category': 'on-air',
-         'prompt': 'Generate a concise contest exchange: RST 59, serial number 042, state Maine. Ham radio style.'},
-        {'id': 'weather',    'label': 'WEATHER RPT', 'category': 'on-air',
-         'prompt': 'Give a brief weather report for the ham shack: clear skies, temperature 68F, low humidity. Casual radio style, under 20 words.'},
-        {'id': 'sign_off',   'label': 'SIGN OFF',   'category': 'on-air',
-         'prompt': 'Write a friendly ham radio sign-off. Use 73 and include W1AW. Under 15 words.'},
-        {'id': 'weird',      'label': 'WEIRD TX',   'category': 'experimental',
-         'prompt': 'Generate a surreal, abstract radio transmission. Strange imagery, cryptic, poetic. Max 2 sentences.'},
-        {'id': 'numbers',    'label': 'NUMBERS STN', 'category': 'experimental',
-         'prompt': 'Generate a numbers-station-style message. Use random groups of 5 digits, phonetic letters, and eerie phrasing. 3 groups.'},
-        {'id': 'poem',       'label': 'RF POEM',    'category': 'experimental',
-         'prompt': 'Write a very short poem about radio waves, static, and the ionosphere. 2-3 lines.'},
-        {'id': 'propaganda', 'label': 'PROPAGANDA', 'category': 'experimental',
-         'prompt': 'Write a retro-style Cold War propaganda broadcast in the style of shortwave radio. Dramatic, ominous, cryptic. 2 sentences.'},
-        {'id': 'technobabel','label': 'TECHNOBABEL', 'category': 'experimental',
-         'prompt': 'Invent fake technical jargon as if explaining a nonexistent radio protocol. Sound confident and deeply technical. 2 sentences.'},
-        {'id': 'sstv_ann',   'label': 'SSTV ANNOUNCE','category': 'utility',
-         'prompt': 'Announce an upcoming SSTV transmission on 14.230 MHz. Mode is Robot36. Casual, informative, under 20 words.'},
-        {'id': 'beacon_id',  'label': 'BEACON ID',  'category': 'utility',
-         'prompt': 'Write a beacon station identification. Callsign W1AW/B, 10 meters, continuous operation. Formal, brief.'},
-        {'id': 'net_open',   'label': 'NET OPEN',   'category': 'utility',
-         'prompt': 'Open a ham radio net on 7.250 MHz LSB. Friendly, organized, request check-ins. Under 30 words.'},
-        {'id': 'aprs_voice', 'label': 'APRS VOICE', 'category': 'utility',
-         'prompt': 'Announce a position report: grid square FN42, heading north at 35 MPH, altitude 450 feet. Radio style.'},
-    ]
-    return jsonify({'success': True, 'examples': examples})
+    """Return example prompts — custom overrides from settings, fallback to defaults."""
+    custom = _app_settings.get('ai_example_prompts')
+    if custom:
+        try:
+            examples = json.loads(custom) if isinstance(custom, str) else custom
+            if isinstance(examples, list) and len(examples) > 0:
+                return jsonify({'success': True, 'examples': examples, 'custom': True})
+        except Exception:
+            pass
+    return jsonify({'success': True, 'examples': _AI_DEFAULT_EXAMPLES, 'custom': False})
+
+
+@app.route('/api/ai/examples', methods=['PUT'])
+def api_ai_examples_save():
+    """Save custom example prompts to app_settings."""
+    data = request.json or {}
+    examples = data.get('examples', [])
+    if not isinstance(examples, list):
+        return jsonify({'success': False, 'message': 'examples must be a list'}), 400
+    # Validate structure
+    for ex in examples:
+        if not isinstance(ex, dict) or 'label' not in ex or 'prompt' not in ex:
+            return jsonify({'success': False, 'message': 'Each example needs label + prompt'}), 400
+    _app_settings['ai_example_prompts'] = json.dumps(examples)
+    _save_app_settings(_app_settings)
+    return jsonify({'success': True, 'message': f'Saved {len(examples)} example prompts'})
+
+
+@app.route('/api/ai/examples/reset', methods=['POST'])
+def api_ai_examples_reset():
+    """Reset example prompts to defaults."""
+    if 'ai_example_prompts' in _app_settings:
+        del _app_settings['ai_example_prompts']
+        _save_app_settings(_app_settings)
+    return jsonify({'success': True, 'message': 'Reset to default examples'})
 
 
 # -------------------------------------------------------------

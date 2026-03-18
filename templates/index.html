@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.73</span>
+    <span class="sb-label">v2.12.74</span>
   </div>
 </div>
 
@@ -3768,6 +3768,9 @@ hr.div  {
       <div class="panel-header">
         <span class="panel-title">EXAMPLE PROMPTS</span>
         <button class="btn sm" onclick="aiLoadExamples()">↺</button>
+        <button class="btn sm" id="ai-ex-edit-btn" onclick="aiExToggleEdit()" style="margin-left:auto;font-size:8px">✎ EDIT</button>
+        <button class="btn sm ok" id="ai-ex-save-btn" onclick="aiExSave()" style="display:none;font-size:8px">SAVE</button>
+        <button class="btn sm warn" id="ai-ex-reset-btn" onclick="aiExReset()" style="display:none;font-size:8px">RESET</button>
       </div>
 
       <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1);font-size:var(--fz-xs);color:var(--text3);flex-shrink:0">
@@ -8760,6 +8763,7 @@ function aiFilterEx(cat, btn) {
 let _aiExFiltered = [];
 
 function _renderExamples() {
+  if (_aiExEditMode) { _renderExamplesEdit(); return; }
   const grid = document.getElementById('ai-example-grid');
   if (!grid) return;
   _aiExFiltered = _aiExCat === 'all' ? _aiExamples : _aiExamples.filter(e => e.category === _aiExCat);
@@ -8808,6 +8812,96 @@ function _renderExamples() {
 function aiLoadExample(prompt) {
   const ta = document.getElementById('ai-prompt');
   if (ta) { ta.value = prompt; ta.focus(); }
+}
+
+// ── Example Prompt Editing ────────────────────────────────────
+let _aiExEditMode = false;
+
+function aiExToggleEdit() {
+  _aiExEditMode = !_aiExEditMode;
+  const editBtn  = document.getElementById('ai-ex-edit-btn');
+  const saveBtn  = document.getElementById('ai-ex-save-btn');
+  const resetBtn = document.getElementById('ai-ex-reset-btn');
+  if (editBtn)  editBtn.textContent  = _aiExEditMode ? '✕ CANCEL' : '✎ EDIT';
+  if (saveBtn)  saveBtn.style.display  = _aiExEditMode ? '' : 'none';
+  if (resetBtn) resetBtn.style.display = _aiExEditMode ? '' : 'none';
+  _renderExamples();
+}
+
+function _renderExamplesEdit() {
+  const grid = document.getElementById('ai-example-grid');
+  if (!grid) return;
+  const cats = ['on-air','utility','experimental'];
+  let html = _aiExamples.map((ex, i) => `
+    <div style="padding:4px 8px;border-bottom:var(--b1);background:var(--bg1)">
+      <div style="display:flex;gap:4px;margin-bottom:2px;align-items:center">
+        <input type="text" value="${escHtml(ex.label)}" data-ex-idx="${i}" data-ex-field="label"
+               style="flex:1;font-size:9px;font-weight:700" placeholder="Title">
+        <select data-ex-idx="${i}" data-ex-field="category" style="font-size:8px;width:90px">
+          ${cats.map(c => `<option value="${c}"${ex.category===c?' selected':''}>${c}</option>`).join('')}
+        </select>
+        <button class="btn sm err" onclick="aiExRemove(${i})" style="font-size:8px;padding:1px 4px" title="Delete">✕</button>
+      </div>
+      <textarea data-ex-idx="${i}" data-ex-field="prompt" rows="2"
+                style="width:100%;font-size:9px;resize:vertical">${escHtml(ex.prompt)}</textarea>
+    </div>`).join('');
+  html += `<div style="padding:6px 8px;border-bottom:var(--b1)">
+    <button class="btn sm ok" onclick="aiExAdd()" style="width:100%;font-size:9px">+ ADD PROMPT</button>
+  </div>`;
+  grid.innerHTML = html;
+}
+
+function aiExRemove(idx) {
+  _aiExamples.splice(idx, 1);
+  _renderExamplesEdit();
+}
+
+function aiExAdd() {
+  _aiExamples.push({id: 'custom_' + Date.now(), label: 'NEW PROMPT', category: 'utility', prompt: ''});
+  _renderExamplesEdit();
+  // Scroll to bottom
+  const grid = document.getElementById('ai-example-grid');
+  if (grid) grid.scrollTop = grid.scrollHeight;
+}
+
+function _aiExCollectEdits() {
+  document.querySelectorAll('[data-ex-idx][data-ex-field]').forEach(el => {
+    const idx = parseInt(el.dataset.exIdx);
+    const field = el.dataset.exField;
+    if (_aiExamples[idx]) _aiExamples[idx][field] = el.value;
+  });
+}
+
+async function aiExSave() {
+  _aiExCollectEdits();
+  const r = await api('PUT', '/api/ai/examples', { examples: _aiExamples });
+  if (r.success) {
+    _aiExEditMode = false;
+    const editBtn  = document.getElementById('ai-ex-edit-btn');
+    const saveBtn  = document.getElementById('ai-ex-save-btn');
+    const resetBtn = document.getElementById('ai-ex-reset-btn');
+    if (editBtn)  editBtn.textContent = '✎ EDIT';
+    if (saveBtn)  saveBtn.style.display = 'none';
+    if (resetBtn) resetBtn.style.display = 'none';
+    _renderExamples();
+  }
+  showAlert('ai-alert', r.message || 'Saved', r.success ? 'ok' : 'err');
+}
+
+async function aiExReset() {
+  if (!confirm('Reset all example prompts to defaults?')) return;
+  const r = await api('POST', '/api/ai/examples/reset');
+  if (r.success) {
+    _aiExEditMode = false;
+    const editBtn  = document.getElementById('ai-ex-edit-btn');
+    const saveBtn  = document.getElementById('ai-ex-save-btn');
+    const resetBtn = document.getElementById('ai-ex-reset-btn');
+    if (editBtn)  editBtn.textContent = '✎ EDIT';
+    if (saveBtn)  saveBtn.style.display = 'none';
+    if (resetBtn) resetBtn.style.display = 'none';
+    aiLoadExamples();
+  }
+  showAlert('ai-alert', r.message || 'Reset', r.success ? 'ok' : 'err');
 }
 
 // ── Chat rendering ────────────────────────────────────────────
