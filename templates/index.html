@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.71</span>
+    <span class="sb-label">v2.12.72</span>
   </div>
 </div>
 
@@ -2808,6 +2808,20 @@ hr.div  {
       <div style="padding:var(--s4);font-size:var(--fz-xs);color:var(--text3);line-height:1.8">
         <b style="color:var(--text2)">SYSTEM tab</b> &rarr; Audio device, health, diagnostics, gong.<br>
         <b style="color:var(--text2)">API CFG tab</b> &rarr; API keys, LLM integrations, engine status.
+      </div>
+      <!-- Acid Trip Agent Emoji -->
+      <div style="border-top:var(--b1);padding:var(--s3) var(--s4)">
+        <div style="font-size:8px;color:var(--text3);letter-spacing:.1em;margin-bottom:var(--s2)">ACID TRIP AGENT EMOJI</div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:9px;color:var(--blue)">AGENT A</label>
+          <input type="text" id="cfg-trip-a-emoji" value="👽" maxlength="4" style="width:50px;text-align:center"
+            oninput="const h=document.getElementById('trip-a-emoji');if(h)h.value=this.value">
+        </div>
+        <div class="form-row">
+          <label style="font-size:9px;color:#ff64c8">AGENT B</label>
+          <input type="text" id="cfg-trip-b-emoji" value="🌵" maxlength="4" style="width:50px;text-align:center"
+            oninput="const h=document.getElementById('trip-b-emoji');if(h)h.value=this.value">
+        </div>
       </div>
     </div>
 
@@ -4251,10 +4265,7 @@ hr.div  {
         <span class="panel-title" style="color:var(--blue)">● AGENT A</span>
       </div>
       <div class="trip-persona-card">
-        <div class="form-row" style="margin-bottom:var(--s2)">
-          <label>EMOJI</label>
-          <input type="text" id="trip-a-emoji" value="👽" style="flex:1;max-width:60px">
-        </div>
+        <input type="hidden" id="trip-a-emoji" value="👽">
         <div class="form-row" style="margin-bottom:var(--s2)">
           <label>ENGINE</label>
           <select id="trip-a-engine" style="flex:1" onchange="tripLoadAgentVoices('a')">
@@ -4564,10 +4575,7 @@ hr.div  {
         <span class="panel-title" style="color:#ff64c8">● AGENT B</span>
       </div>
       <div class="trip-persona-card">
-        <div class="form-row" style="margin-bottom:var(--s2)">
-          <label>EMOJI</label>
-          <input type="text" id="trip-b-emoji" value="🌵" style="flex:1;max-width:60px">
-        </div>
+          <input type="text" id="trip-b-emoji" value="🌵" style="display:none">
         <div class="form-row" style="margin-bottom:var(--s2)">
           <label>ENGINE</label>
           <select id="trip-b-engine" style="flex:1" onchange="tripLoadAgentVoices('b')">
@@ -4659,18 +4667,6 @@ hr.div  {
       <span id="trip-b-fx-echo-v" style="font-size:9px;color:var(--cyan);width:30px">0ms</span>
       </div>
     </div>
-
-        <!-- Presets -->
-        <div style="font-size:var(--fz-xs);color:var(--text3);margin-top:var(--s4);margin-bottom:var(--s2);text-transform:uppercase;letter-spacing:.06em">PERSONA PRESETS</div>
-        <div style="display:flex;flex-direction:column;gap:2px">
-          <button class="btn sm ok" onclick="tripPersonaPreset('alex','art')" style="text-align:left">👽🌵 Alex &amp; Art (default)</button>
-          <button class="btn sm" onclick="tripPersonaPreset('hal','clippy')" style="text-align:left">🤖📎 HAL vs Clippy</button>
-          <button class="btn sm" onclick="tripPersonaPreset('shakespeare','yoda')" style="text-align:left">📜🌌 Shakespeare vs Yoda</button>
-          <button class="btn sm" onclick="tripPersonaPreset('pirate','knight')" style="text-align:left">🏴‍☠️⚔️ Pirate vs Knight</button>
-          <button class="btn sm" onclick="tripPersonaPreset('conspiracist','scientist')" style="text-align:left">🛸🔬 Conspiracist vs Scientist</button>
-          <button class="btn sm" onclick="tripPersonaPreset('boomer','zoomer')" style="text-align:left">📺📱 Boomer vs Zoomer</button>
-          <button class="btn sm" onclick="tripPersonaPreset('philosopher','toddler')" style="text-align:left">🧠👶 Philosopher vs Toddler</button>
-        </div>
 
         <!-- SCENARIO MANAGER -->
         <div style="font-size:var(--fz-xs);color:var(--cyan,#4fc3f7);margin-top:var(--s4);margin-bottom:var(--s2);text-transform:uppercase;letter-spacing:.06em;border-top:var(--b1);padding-top:var(--s3)">SCENARIO MANAGER</div>
@@ -11190,6 +11186,7 @@ function _restoreAllSettings(s) {
   set('trip-topic',     s.trip_topic);
   // Trip agents
   set('trip-a-emoji',   s.trip_a_emoji);
+  set('cfg-trip-a-emoji', s.trip_a_emoji);
   set('trip-a-engine',  s.trip_a_engine);
   set('trip-a-voice',   s.trip_a_voice);
   set('trip-a-provider', s.trip_a_provider);
@@ -11202,6 +11199,7 @@ function _restoreAllSettings(s) {
   set('trip-a-fx-reverb', s.trip_a_fx_reverb);
   set('trip-a-fx-echo',   s.trip_a_fx_echo);
   set('trip-b-emoji',   s.trip_b_emoji);
+  set('cfg-trip-b-emoji', s.trip_b_emoji);
   set('trip-b-engine',  s.trip_b_engine);
   set('trip-b-voice',   s.trip_b_voice);
   set('trip-b-provider', s.trip_b_provider);
