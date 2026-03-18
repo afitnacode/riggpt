@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.81
+RigGPT v2.12.82
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.81'
+VERSION        = 'v2.12.82'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -8826,6 +8826,15 @@ _sentient_stats    = {'heard': 0, 'replied': 0, 'bot': 0, 'human': 0}
 _sentient_log: list = []       # transcript entries (capped at 100)
 _sentient_energy   = 0         # current RMS energy level
 _sentient_whisper_engine = ''  # 'faster' or 'openai' (set on start)
+_sentient_health   = {
+    'capture_ok': False,       # arecord is running
+    'peak': 0,                 # peak amplitude (0-32768)
+    'noise_floor': 0,          # average energy when no speech
+    'clipping': 0,             # count of near-max samples
+    'speaking': False,         # currently detecting speech
+    'started_at': '',          # ISO timestamp when listener started
+    'device': '',              # ALSA device in use
+}
 
 # Handshake: dual-tone 1337Hz + 2600Hz, 150ms
 _HANDSHAKE_F1 = 1337
@@ -8947,16 +8956,21 @@ def _sentient_listener_loop():
     # Start arecord
     cmd = ['arecord', '-D', device, '-f', 'S16_LE', '-r', str(sr), '-c', '1', '-t', 'raw', '-q']
     _sentient_log_entry('SYSTEM', f'Starting capture: {" ".join(cmd)}')
+    _sentient_health['device'] = device
+    _sentient_health['started_at'] = _now_utc()
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        _sentient_health['capture_ok'] = True
     except Exception as e:
         _sentient_log_entry('ERROR', f'arecord failed: {e}')
+        _sentient_health['capture_ok'] = False
         _sentient_active = False
         return
 
     speech_buffer = []
     silent_count = 0
     is_speaking = False
+    _noise_samples = []  # rolling window for noise floor estimation
 
     try:
         while not _sentient_stop.is_set():
@@ -8964,11 +8978,26 @@ def _sentient_listener_loop():
             if not raw or len(raw) < bytes_per_chunk:
                 if _sentient_stop.is_set():
                     break
+                _sentient_health['capture_ok'] = False
                 time_module.sleep(0.1)
                 continue
+            _sentient_health['capture_ok'] = True
 
             chunk = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
             rms = int(np.sqrt(np.mean(chunk ** 2)))
+            peak = int(np.max(np.abs(chunk)))
+            clip_count = int(np.sum(np.abs(chunk) > 32000))
+
+            _sentient_health['peak'] = peak
+            _sentient_health['clipping'] = clip_count
+            _sentient_health['speaking'] = rms > energy_threshold
+
+            # Noise floor: rolling average of quiet chunks
+            if rms < energy_threshold:
+                _noise_samples.append(rms)
+                if len(_noise_samples) > 20:
+                    _noise_samples.pop(0)
+                _sentient_health['noise_floor'] = int(sum(_noise_samples) / len(_noise_samples)) if _noise_samples else 0
             _sentient_energy = rms
 
             if rms > energy_threshold:
@@ -9181,6 +9210,7 @@ def api_sentient_status():
         'active': _sentient_active,
         'energy': _sentient_energy,
         'stats': _sentient_stats,
+        'health': _sentient_health,
         'log': _sentient_log[-20:],
         'mode': _app_settings.get('sentient_mode', 'engage'),
         'model': _app_settings.get('sentient_whisper_model', 'base'),
