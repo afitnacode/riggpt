@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.92</span>
+    <span class="sb-label">v2.12.93</span>
   </div>
 </div>
 
@@ -8914,7 +8914,12 @@ async function loadAiConfig() {
       set2('alexa-trigger',  s.alexa_trigger);
       set2('alexa-model',    s.alexa_model);
       set2('alexa-engine',   s.alexa_engine);
-      set2('alexa-voice',    s.alexa_voice);
+      // Voice dropdown is dynamic — load voices then restore
+      if (s.alexa_engine) {
+        _loadVoicesInto('alexa-engine', 'alexa-voice', 'alexa_voice')
+          .then(() => { if (s.alexa_voice) set2('alexa-voice', s.alexa_voice); })
+          .catch(() => {});
+      }
       set2('alexa-max-tok',  s.alexa_max_tok);
     }
   } catch(e) {}
@@ -11938,7 +11943,14 @@ function _restoreAllSettings(s) {
   set('whisper-engine',        s.whisper_engine);
   set('whisper-voice',         s.whisper_voice);
   // Sentient
-  set('sent-audio-in',        s.sentient_audio_in);
+  // sent-audio-in is a dynamic <select> populated by sentDetectDevices().
+  // set() will fail silently here because the select only has a placeholder.
+  // Stash the saved value so sentDetectDevices() can restore it later.
+  const _sentDevSel = document.getElementById('sent-audio-in');
+  if (_sentDevSel && s.sentient_audio_in) {
+    _sentDevSel.dataset.savedValue = s.sentient_audio_in;
+    _sentDevSel.value = s.sentient_audio_in; // may work if already populated
+  }
   set('sent-whisper-model',   s.sentient_whisper_model);
   set('sent-silence-sec',     s.sentient_silence_sec);
   set('sent-energy',          s.sentient_energy);
@@ -11948,8 +11960,16 @@ function _restoreAllSettings(s) {
   set('sent-persona',         s.sentient_persona);
   set('sent-temp',            s.sentient_temp);
   set('sent-tx-engine',       s.sentient_tx_engine);
-  set('sent-tx-voice',        s.sentient_tx_voice);
+  // Voice dropdown is populated async when engine changes - load then restore
+  if (s.sentient_tx_engine) {
+    _loadVoicesInto('sent-tx-engine', 'sent-tx-voice', 'sent_tx_voice')
+      .then(() => { if (s.sentient_tx_voice) set('sent-tx-voice', s.sentient_tx_voice); })
+      .catch(() => {});
+  }
   set('sent-tx-preset',       s.sentient_tx_preset);
+  // Update range display spans
+  const _sentTempEl = document.getElementById('sent-temp');
+  if (_sentTempEl) document.getElementById('sent-temp-v').textContent = parseFloat(_sentTempEl.value).toFixed(2);
   if (s.sentient_handshake != null) {
     const el = document.getElementById('sent-handshake');
     if (el) el.checked = s.sentient_handshake === 'true';
@@ -12416,7 +12436,7 @@ async function sentDetectDevices() {
     const r = await api('GET', '/api/audio/devices');
     const devices = r.capture_devices || [];
     const current = r.current_device || 'default';
-    const saved = sel.value || '';
+    const saved = sel.value || sel.dataset.savedValue || '';
     sel.innerHTML = '';
     // Always add the auto-detected device first
     if (current) {
