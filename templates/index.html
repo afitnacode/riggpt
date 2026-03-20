@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.91</span>
+    <span class="sb-label">v2.12.92</span>
   </div>
 </div>
 
@@ -8806,66 +8806,6 @@ async function saveGongPath() {
 // ─────────────────────────────────────────────────────────────
 // COMMUNITY MEMORY (Qdrant)
 // ─────────────────────────────────────────────────────────────
-async function memoryStatus() {
-  const txt = document.getElementById('memory-status-txt');
-  const det = document.getElementById('memory-status-detail');
-  if (txt) txt.textContent = 'checking...';
-  try {
-    const r = await api('GET', '/api/memory/status');
-    if (r.available) {
-      const msgs     = r.discord_messages ?? '?';
-      const profiles = r.user_profiles    ?? '?';
-      if (txt) txt.textContent =
-        `OK — ${msgs} messages · ${profiles} profiles`;
-      if (txt) txt.style.color = 'var(--green)';
-      if (det) {
-        det.style.display = 'block';
-        const topics = (r.primary_topics || []).join(', ') || '(none yet)';
-        det.textContent = [
-          `Messages:  ${msgs}`,
-          `Profiles:  ${profiles}`,
-          `Themes:    ${r.channel_themes ?? '?'} docs`,
-          `Topics:    ${topics}`,
-          r.themes_generated_at ? `Last built: ${r.themes_generated_at.slice(0,19)}` : '',
-        ].filter(Boolean).join('\n');
-      }
-    } else {
-      if (txt) { txt.textContent = 'OFFLINE'; txt.style.color = 'var(--red)'; }
-      if (det) { det.style.display = 'block'; det.textContent = JSON.stringify(r, null, 2); }
-    }
-  } catch(e) {
-    if (txt) { txt.textContent = `ERROR: ${e.message}`; txt.style.color = 'var(--red)'; }
-  }
-}
-
-async function memoryQuery() {
-  const query = prompt('Test query (enter any topic or phrase):');
-  if (!query) return;
-  const det = document.getElementById('memory-status-detail');
-  const txt = document.getElementById('memory-status-txt');
-  if (txt) txt.textContent = 'querying...';
-  try {
-    const r = await api('POST', '/api/memory/query', {
-      query, collection: 'discord_messages', limit: 5
-    });
-    if (det) {
-      det.style.display = 'block';
-      if (r.success) {
-        det.textContent = `Results for: "${query}"\n\n` +
-          (r.results || []).map((m, i) =>
-            `[${i+1}] ${m.content || JSON.stringify(m).slice(0,120)}`
-          ).join('\n\n');
-        if (txt) { txt.textContent = `${r.count} results`; txt.style.color = 'var(--cyan)'; }
-      } else {
-        det.textContent = r.message || 'Query failed';
-        if (txt) { txt.textContent = 'failed'; txt.style.color = 'var(--red)'; }
-      }
-    }
-  } catch(e) {
-    if (txt) { txt.textContent = `ERROR: ${e.message}`; txt.style.color = 'var(--red)'; }
-  }
-}
-
 function memoryRestoreSettings(s) {
   // Restore memory config panel from saved settings
   const enabled = document.getElementById('memory-enabled');
@@ -9361,7 +9301,7 @@ function aiExRemove(idx) {
 }
 
 function aiExAdd() {
-  _aiExamples.push({id: 'custom_' + Date.now(), label: 'NEW PROMPT', category: 'utility', prompt: ''});
+  _aiExamples.push({id: 'custom_' + Date.now(), label: 'NEW PROMPT', prompt: ''});
   _renderExamplesEdit();
   // Scroll to bottom
   const grid = document.getElementById('ai-example-grid');
@@ -9393,7 +9333,7 @@ async function aiExSave() {
 }
 
 async function aiExReset() {
-  if (!confirm('Reset all example prompts to defaults?')) return;
+  if (!confirm('Reset all prompts to defaults?')) return;
   const r = await api('POST', '/api/ai/examples/reset');
   if (r.success) {
     _aiExEditMode = false;
@@ -10222,6 +10162,10 @@ async function cfgFlushPresets() {
     sentient_tx_voice:        get('sent-tx-voice'),
     sentient_tx_preset:       get('sent-tx-preset'),
     sentient_handshake:       document.getElementById('sent-handshake')?.checked ? 'true' : 'false',
+    // Memory / Qdrant
+    memory_enabled:           document.getElementById('memory-enabled')?.checked ? 'true' : 'false',
+    memory_qdrant_host:       document.getElementById('memory-qdrant-host')?.value || '',
+    memory_embed_model:       document.getElementById('memory-embed-model')?.value || '',
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -12053,6 +11997,8 @@ async function specopsStopAll() {
     ['pirate-start-btn',       '\uD83D\uDD34 ON AIR', ''],
     ['autoid-start-btn',       'START', ''],
     ['timeannounce-start-btn', 'START', ''],
+    ['evp-start-btn',          '\u25a0 START', ''],
+    ['whisper-start-btn',      '\u25a0 START', ''],
   ];
   for (const [id, text, bg] of resets) {
     const el = document.getElementById(id);
