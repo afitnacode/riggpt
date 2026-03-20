@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RigGPT User Manual — v2.12.88</title>
+<title>RigGPT User Manual — v2.12.89</title>
 <style>
   :root {
     --bg:      #0a0a0b;
@@ -403,6 +403,10 @@
   <a href="#tab-log">Log</a>
   <a href="#tab-config">Config</a>
   <a href="#tab-acid">Acid Trip</a>
+  <a href="#tab-specops" class="sub">Spec Ops</a>
+  <a href="#tab-clips" class="sub">Clips</a>
+  <a href="#tab-sentient" class="sub">SENTIENT</a>
+  <a href="#prompt-arch">Prompt Architecture</a>
 
   <div class="toc-section">Acid Trip Deep Dive</div>
   <a href="#at-overview" class="sub">Overview</a>
@@ -466,7 +470,7 @@
 
 <h1>RigGPT</h1>
 <div class="doc-subtitle">
-  User Manual &amp; API Reference &nbsp;·&nbsp; v2.12.88 &nbsp;·&nbsp; 2026-03-16<br>
+  User Manual &amp; API Reference &nbsp;·&nbsp; v2.12.89 &nbsp;·&nbsp; 2026-03-16<br>
   AI-augmented voice agent for Icom amateur radio transceivers
 </div>
 
@@ -583,6 +587,68 @@ WAV Cache:/opt/riggpt/wav_cache/
 </pre>
 
 <!-- ══════════════════════════════════════════════════════════
+     AI PROMPT ARCHITECTURE
+══════════════════════════════════════════════════════════ -->
+<h2 id="prompt-arch"><span class="h2-icon">04b</span> AI Prompt Architecture</h2>
+
+<p>RigGPT does not use Ollama modelfiles. All AI personality is injected at runtime via the <code>role: 'system'</code> message in the Ollama <code>/api/chat</code> request. This means persona and canon can be changed mid-session without reloading models.</p>
+
+<h3>Injection Points</h3>
+
+<p>There are four independent prompt pipelines, each assembling a system message differently:</p>
+
+<table>
+  <tr><th>Feature</th><th>System Prompt Assembly</th><th>Source</th></tr>
+  <tr>
+    <td><strong>AI Tab (Generative Chat)</strong></td>
+    <td><code>ai_persona</code> + optional Qdrant memory context</td>
+    <td>PERSONA textarea on AI tab, persisted in <code>app_settings.json</code></td>
+  </tr>
+  <tr>
+    <td><strong>Acid Trip (Agent Debates)</strong></td>
+    <td><code>canon</code> + <code>persona</code> + debate topic + oracle instruction + discord influence + output guardrail</td>
+    <td>Per-agent textareas on Acid Trip tab, or loaded from <code>/home/riggpt/canon/a/</code> and <code>/home/riggpt/canon/b/</code></td>
+  </tr>
+  <tr>
+    <td><strong>SENTIENT (Whisper Listener)</strong></td>
+    <td><code>sentient_persona</code> + source-aware context (<em>"You just heard a human operator / another AI radio station say..."</em>)</td>
+    <td>PERSONA textarea on SENTIENT tab</td>
+  </tr>
+  <tr>
+    <td><strong>Alexa Mode</strong></td>
+    <td><code>ALEXA_PERSONA</code> (hardcoded constant)</td>
+    <td>Python constant in <code>app.py</code></td>
+  </tr>
+</table>
+
+<h3>Canon vs Persona</h3>
+
+<p><strong>Canon</strong> is character lore — background knowledge that shapes the agent's worldview. It is injected first in the system prompt so the model absorbs it as foundational context. Canon is loaded from <code>.md</code> files on the server or typed directly into the Canon textarea.</p>
+
+<p><strong>Persona</strong> is behavioral instruction — how the agent should talk, its tone, personality, and constraints (e.g. "Keep responses under 25 words. Speak like a tired pirate."). It follows the canon in the system prompt.</p>
+
+<p>Together they form the complete system message:</p>
+<pre>
+[Canon text — character background, lore, knowledge]
+
+[Persona text — behavioral rules, tone, constraints]
+Debate topic: [topic].
+Reply in 1-3 sentences. Stay in character.
+[Oracle instruction if enabled]
+[Discord audience influence if active]
+
+OUTPUT: Only your spoken words. No labels, no instructions, no metadata.
+</pre>
+
+<h3>Persistence</h3>
+<p>All persona and canon values are saved to <code>app_settings.json</code> via the settings flush mechanism. They survive restarts, page reloads, and re-deployments. Canon files on disk (<code>/home/riggpt/canon/</code>) are never touched by the installer.</p>
+
+<h3>Memory Augmentation (Qdrant)</h3>
+<p>When Community Memory is enabled, the AI Tab chat pipeline appends Qdrant context to the persona. This includes relevant Discord community messages, user profiles, and conversation threads retrieved via semantic search. Acid Trip agents receive a pre-trip briefing (richer, one-time context) at turn 0, then lighter per-turn context thereafter. See the <a href="#memory">Community Memory</a> section for details.</p>
+
+<hr>
+
+<!-- ══════════════════════════════════════════════════════════
      UI TABS
 ══════════════════════════════════════════════════════════ -->
 <h2 id="tab-dashboard"><span class="h2-icon">05</span> Dashboard Tab</h2>
@@ -644,9 +710,9 @@ WAV Cache:/opt/riggpt/wav_cache/
   <tr><td>DEBUG</td><td>Toggles a live log panel showing API calls and timing.</td></tr>
 </table>
 
-<h3>Example Prompts</h3>
-<p>Right column shows categorized example prompts (On-Air, Utility, Weird). Click to load, or use PLAY/TX buttons for direct action.</p>
-<p>Prompts are fully editable: click ✎ EDIT to enter edit mode. Change titles, prompts, and categories inline. Add new prompts with + ADD PROMPT. Click SAVE to persist to the server. RESET restores built-in defaults. Custom prompts survive across sessions.</p>
+<h3>Configurable Prompts</h3>
+<p>Right column shows user-defined prompts. Click to load into the prompt field, or use 🔊/⬛ buttons for direct play or TX.</p>
+<p>Prompts are fully editable: click ✎ EDIT to enter edit mode. Change titles and prompts inline. Add new prompts with + ADD PROMPT. Click SAVE to persist to the server. DEFAULTS restores built-in prompts. Custom prompts survive across sessions.</p>
 
 <hr>
 
@@ -781,6 +847,7 @@ WAV Cache:/opt/riggpt/wav_cache/
   <tr><td>AI CONFIG</td><td>Ollama host, default model, AI provider selection.</td></tr>
   <tr><td>PIPER</td><td>Piper TTS binary path and model directory.</td></tr>
   <tr><td>FASTKOKO LOCAL TTS</td><td>FastKoko server host and port.</td></tr>
+  <tr><td style="color:#8844ff">COMMUNITY MEMORY (Qdrant)</td><td>Qdrant host, embedding model, enable/disable toggle. TEST checks connection and shows collection stats. QUERY opens a semantic search interface for testing retrieval.</td></tr>
   <tr><td>ACID TRIP EMOJI</td><td>Agent A and Agent B emoji selectors (moved here from Acid Trip tab for cleaner layout).</td></tr>
   <tr><td>EXPORT / IMPORT</td><td>Full config backup as JSON. Optional plaintext API key export.</td></tr>
   <tr><td>GONG</td><td>Path to Taco Bell gong WAV file (played on demand from any tab).</td></tr>
@@ -788,7 +855,7 @@ WAV Cache:/opt/riggpt/wav_cache/
 
 <div class="callout tip">
   <div class="label">API CFG Tab</div>
-  Two-column layout: API Keys (left) and API Integrations (right). All cloud provider keys, Ollama URL, Discord bot token, and engine configuration live here.
+  Responsive card grid layout: TTS API keys, Amazon S3, and all LLM/integration provider cards in a single scrollable grid. Engine status bar pinned at bottom.
 </div>
 
 <!-- ══════════════════════════════════════════════════════════
@@ -915,16 +982,19 @@ WAV Cache:/opt/riggpt/wav_cache/
 <hr>
 
 <h3 id="at-presets">Mode Presets</h3>
-<p>Six pre-built scenarios accessible from the MODE dropdown. Each preset sets both agents' emoji, persona, canon, opening line, voice, engine, topic, temperature, and a scheduled chaos timeline.</p>
+<p>Nine pre-built scenarios accessible from the MODE dropdown. Each preset sets both agents' emoji, persona, canon, opening line, voice, engine, topic, temperature, and a scheduled chaos timeline.</p>
 
 <table>
   <tr><th>Preset</th><th>Description</th></tr>
   <tr><td>Increasing Paranoia</td><td>One agent grows increasingly paranoid; the other is too smooth, too perfect.</td></tr>
   <tr><td>Signal Decay</td><td>A degrading radio transmission tries to communicate with its receiver.</td></tr>
   <tr><td>Last Two People</td><td>Post-apocalyptic. Two survivors make contact for the first time.</td></tr>
-  <tr><td>Very Bad Therapy</td><td>A therapist who is not coping runs a session with a patient who is too polite to say so.</td></tr>
+  <tr><td>Very Bad Therapy</td><td>A therapist who is not coping runs a session with a patient too polite to say so.</td></tr>
   <tr><td>The Oracle Speaks</td><td>A seeker approaches an oracle. The oracle answers the question beneath the question.</td></tr>
   <tr><td>Memory Loop</td><td>One agent is trapped in a loop, aware of it, trying to break out. The other has deja vu.</td></tr>
+  <tr><td style="color:var(--tx)">Increasingly Hostile</td><td>Starts civil, escalates to shouting. Old grievances surface. Past the point of no return.</td></tr>
+  <tr><td style="color:var(--tx)">Stupid Argument</td><td>Two people argue with maximum conviction about something absurdly trivial. Fake studies cited.</td></tr>
+  <tr><td style="color:var(--tx)">Drunken Nonsense</td><td>Both agents extremely drunk. Progressive incoherence. Wrong names. Failed toasts. Temp=1.5.</td></tr>
 </table>
 
 <hr>
@@ -946,10 +1016,18 @@ WAV Cache:/opt/riggpt/wav_cache/
 <p>Each agent has an independent audio effects chain applied after TTS synthesis. Controls:</p>
 <table>
   <tr><th>Control</th><th>Range</th><th>Description</th></tr>
-  <tr><td>FX Preset</td><td>9 options</td><td>Normal, Robot, Alien, Deep, Chipmunk, Megaphone, Underwater, Whisper, Autotune</td></tr>
-  <tr><td>Pitch</td><td>-12 to +12 semitones</td><td>Fine pitch shift applied after preset</td></tr>
-  <tr><td>Reverb</td><td>0–100</td><td>Room reverb amount</td></tr>
-  <tr><td>Echo</td><td>0–100</td><td>Echo/delay amount</td></tr>
+  <tr><td>FX Preset</td><td>9 options + random</td><td>Normal, Radio, Phone, Robot, Cave, Mega, Haunted, Chipmunk, or 🎲 Random</td></tr>
+  <tr><td>Pitch</td><td>-600 to +600 cents</td><td>Fine pitch shift applied after preset</td></tr>
+  <tr><td>Reverb</td><td>0–80%</td><td>Room reverb amount</td></tr>
+  <tr><td>Echo</td><td>0–400ms</td><td>Echo/delay amount</td></tr>
+</table>
+
+<p><strong>FX Randomizer (🎲 random):</strong> When selected, each turn re-rolls a random preset from 13 options plus random pitch, reverb, and echo values. The <strong>INT</strong> (intensity) slider controls how extreme the randomization is:</p>
+<table>
+  <tr><th>Intensity</th><th>Effect</th></tr>
+  <tr><td>1</td><td>Subtle: slight pitch drift, light reverb. Voices sound mostly normal with gentle variation.</td></tr>
+  <tr><td>3</td><td>Moderate: noticeable preset changes, mid-range effects. Good default.</td></tr>
+  <tr><td>5</td><td>Chaos: full range randomization. One turn sounds like a cave-dwelling chipmunk, the next sounds like an underwater alien.</td></tr>
 </table>
 
 <hr>
@@ -1008,7 +1086,9 @@ WAV Cache:/opt/riggpt/wav_cache/
   <tr><td>Time Announce</td><td>Periodic UTC/local time announcement.</td></tr>
   <tr><td>Voice Roulette</td><td>Transmits whatever is in the TX box using a random engine, voice, FX preset, pitch, and speed.</td></tr>
   <tr><td>Pirate Broadcast</td><td>Periodically transmits absurd fake news headlines in a random voice.</td></tr>
-  <tr><td>Chaos Button</td><td>Fires a random special op. Could be anything.</td></tr>
+  <tr><td style="color:#8844ff">EVP Mode</td><td>Electronic Voice Phenomena. AI generates cryptic one-liners, applies heavy reverb + pitch shift. 4-layer pydub audio collage: forward voice + reversed whispers (-8dB) + white noise bed (-18dB) + low drone tone (-20dB). Actual backmasking on HF — reverse the recording and hear the original phrase.</td></tr>
+  <tr><td style="color:#446688">Subliminal Whispers</td><td>Barely-audible AI whispers at minimum TX power. CI-V sets power to 5% (13/255) before TX, restores after. Whisper preset with gentle pitch variation. Anyone monitoring barely hears ghostly murmuring.</td></tr>
+  <tr><td>Chaos Button</td><td>Fires a random special op. Could be anything. EVP and Whispers are possible outcomes.</td></tr>
 </table>
 
 <h3>Ghost-in-the-Machine</h3>
@@ -1044,6 +1124,57 @@ WAV Cache:/opt/riggpt/wav_cache/
   <tr><td>Interaction</td><td>Single-click = select (amber glow). Double-click = instant play. Selected clip feeds into FX Chain.</td></tr>
   <tr><td>FX Chain</td><td>1980s hi-fi aesthetic. Per-section LED colors. VU meter with peak hold. REV toggle for reverse playback.</td></tr>
 </table>
+
+<hr>
+
+<!-- ══════════════════════════════════════════════════════════
+     SENTIENT
+══════════════════════════════════════════════════════════ -->
+<h2 id="tab-sentient"><span class="h2-icon">16</span> SENTIENT Tab</h2>
+
+<p>The radio becomes aware. SENTIENT listens to incoming audio from the IC-7610's USB audio capture, transcribes speech using OpenAI Whisper (or faster-whisper), generates AI responses via Ollama, and transmits them back over the air. Keyboard shortcut: <code>@</code>.</p>
+
+<h3>Listen → Transcribe → Think → Respond</h3>
+<pre>
+Radio RX audio → arecord capture (16kHz mono)
+    → Voice Activity Detection (energy threshold)
+    → Buffer until pause or 6s max
+    → FFT check for RigGPT handshake tone (bot detection)
+    → Whisper transcription → text
+    → Ollama AI generation (source-aware persona)
+    → [prepend handshake tone if enabled]
+    → TTS → FX → PTT → transmit response
+</pre>
+
+<h3>Modes</h3>
+<table>
+  <tr><th>Mode</th><th>Behavior</th></tr>
+  <tr><td>MONITOR</td><td>Transcribe only, never respond. Passive logging.</td></tr>
+  <tr><td>ENGAGE</td><td>Listen and respond to humans. Ignore other bots.</td></tr>
+  <tr><td>HIVE MIND</td><td>Respond to everyone, including other RigGPT instances. Two sentient radios have autonomous conversations.</td></tr>
+  <tr><td>SELECTIVE</td><td>Only respond when a trigger word is heard (e.g. "hey radio").</td></tr>
+</table>
+
+<h3>Whisper Engines</h3>
+<p>RigGPT tries <strong>faster-whisper</strong> (CTranslate2, 3-4x faster on CPU) first, falls back to <strong>openai-whisper</strong>. Install one:</p>
+<pre>
+pip3 install faster-whisper --break-system-packages   # recommended
+pip3 install openai-whisper --break-system-packages   # fallback
+</pre>
+<p>The <code>base</code> model (74MB) is recommended for CPU — transcribes 10 seconds of audio in 1-2 seconds with faster-whisper. The <code>tiny</code> model is faster but less accurate. Models larger than <code>small</code> are too slow without a GPU.</p>
+
+<h3>Bot-to-Bot Handshake</h3>
+<p>Every bot transmission is preceded by a 150ms dual-tone burst: <strong>1337 Hz + 2600 Hz</strong> simultaneously. When another RigGPT instance hears this, FFT analysis detects both frequency peaks standing 8x above their local spectral neighborhood, and the source is tagged as <code>BOT</code>. The AI persona adapts: <em>"You just heard another AI radio station say..."</em></p>
+
+<p>Put one RigGPT on a frequency in your shack, another at a friend's QTH, both in HIVE MIND mode. They detect each other's handshake tones and carry on autonomous AI conversations across the ionosphere.</p>
+
+<h3>HF Audio Considerations</h3>
+<p>HF radio audio has a very narrow signal-to-noise ratio — speech may only be 1.3-2x above the noise floor (vs 10x+ for microphone audio). The energy threshold should be set using the 🎯 CALIBRATE button, which measures the noise floor and sets the threshold to 1.3x above it. The 🎤 TEST CAPTURE button records 2 seconds and reports audio statistics.</p>
+
+<p>A hallucination filter discards common Whisper artifacts on noise ("Thank you for watching", "Subscribe", etc.).</p>
+
+<h3>UI Layout</h3>
+<p>Three columns: <strong>Config</strong> (left) with all listening/mode/AI/TX/handshake settings, <strong>Transcript</strong> (center) with color-coded live feed, and <strong>Status</strong> (right) with signal meter, stats counters, audio health indicators, and an energy sparkline.</p>
 
 <hr>
 
