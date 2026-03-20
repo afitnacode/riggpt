@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.90</span>
+    <span class="sb-label">v2.12.91</span>
   </div>
 </div>
 
@@ -8178,6 +8178,69 @@ async function _discordInteractRunTrip(discordMessages) {
 }
 
 
+// ── Alexa Mode ───────────────────────────────────────────────────────
+async function alexaToggle() {
+  const r = await api('POST', '/api/alexa/toggle');
+  const btn = document.getElementById('alexa-toggle-btn');
+  const dot = document.getElementById('alexa-status-dot');
+  if (r.enabled) {
+    if (btn) { btn.innerHTML = '&#9889; DISABLE'; btn.style.borderColor = 'var(--tx)'; }
+    if (dot) dot.style.background = '#33cc33';
+  } else {
+    if (btn) { btn.innerHTML = '&#9889; ENABLE'; btn.style.borderColor = ''; }
+    if (dot) dot.style.background = 'var(--text3)';
+  }
+}
+
+async function alexaSave() {
+  const payload = {
+    alexa_trigger:  document.getElementById('alexa-trigger')?.value || 'AI Radio',
+    alexa_model:    document.getElementById('alexa-model')?.value || '',
+    alexa_engine:   document.getElementById('alexa-engine')?.value || 'espeak',
+    alexa_voice:    document.getElementById('alexa-voice')?.value || '',
+    alexa_max_tok:  document.getElementById('alexa-max-tok')?.value || '60',
+  };
+  const r = await api('POST', '/api/settings', payload);
+  showAlert('ai-alert', r.success ? 'Alexa config saved' : (r.message || 'Save failed'), r.success ? 'ok' : 'err');
+}
+
+async function alexaTest() {
+  showAlert('ai-alert', 'Firing Alexa test...', 'warn', 0);
+  const r = await api('POST', '/api/alexa/test', { content: 'Hey radio, what is your purpose in life?', author: 'TestUser' });
+  showAlert('ai-alert', r.message || (r.success ? 'Test queued' : 'Test failed'), r.success ? 'ok' : 'err');
+  setTimeout(alexaPoll, 3000);
+}
+
+async function alexaPoll() {
+  try {
+    const r = await api('GET', '/api/alexa/log');
+    const el = document.getElementById('alexa-log');
+    if (el && r.log?.length) {
+      el.innerHTML = r.log.slice(-8).map(e =>
+        `<div style="color:${e.includes('ERROR') ? 'var(--tx)' : 'var(--text2)'}">${e}</div>`
+      ).join('');
+      el.scrollTop = el.scrollHeight;
+    }
+    // Update status dot
+    const status = await api('GET', '/api/alexa/status');
+    const dot = document.getElementById('alexa-status-dot');
+    const btn = document.getElementById('alexa-toggle-btn');
+    if (status.enabled) {
+      if (dot) dot.style.background = '#33cc33';
+      if (btn) { btn.innerHTML = '&#9889; DISABLE'; btn.style.borderColor = 'var(--tx)'; }
+    } else {
+      if (dot) dot.style.background = 'var(--text3)';
+      if (btn) { btn.innerHTML = '&#9889; ENABLE'; btn.style.borderColor = ''; }
+    }
+  } catch(e) {}
+}
+
+async function alexaLogClear() {
+  await api('POST', '/api/alexa/log/clear');
+  const el = document.getElementById('alexa-log');
+  if (el) el.innerHTML = '<span style="color:var(--text3)">-- cleared --</span>';
+}
+
 // ── Trip Scenario Manager ──────────────────────────────────────
 
 function _tripCollectPayload() {
@@ -8903,6 +8966,19 @@ async function loadAiConfig() {
   aiLoadExamples();
   aiPollDebug();
   aiCheckModel(); // auto-check if configured model exists
+  // Restore Alexa fields from settings and poll status
+  try {
+    const s = await api('GET', '/api/settings');
+    if (s) {
+      const set2 = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = v; };
+      set2('alexa-trigger',  s.alexa_trigger);
+      set2('alexa-model',    s.alexa_model);
+      set2('alexa-engine',   s.alexa_engine);
+      set2('alexa-voice',    s.alexa_voice);
+      set2('alexa-max-tok',  s.alexa_max_tok);
+    }
+  } catch(e) {}
+  alexaPoll();
 }
 
 async function aiSaveConfig() {
