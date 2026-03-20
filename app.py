@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.94
+RigGPT v2.12.95
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.94'
+VERSION        = 'v2.12.95'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -8984,11 +8984,20 @@ def _sentient_listener_loop():
 
     device = _app_settings.get('sentient_audio_in', '').strip() or AUDIO_DEVICE or 'plughw:0,0'
     silence_sec = float(_app_settings.get('sentient_silence_sec', '1.5'))
-    energy_threshold = int(_app_settings.get('sentient_energy', '300'))
-    mode = _app_settings.get('sentient_mode', 'engage')
     whisper_model = _app_settings.get('sentient_whisper_model', 'base')
-    trigger_word = _app_settings.get('sentient_trigger', 'hey radio').lower()
-    handshake_enabled = _app_settings.get('sentient_handshake', 'true') == 'true'
+
+    # These are read live from _app_settings each loop iteration so
+    # changes on the UI take effect without restarting the listener.
+    def _live_threshold():
+        return int(_app_settings.get('sentient_energy', '300'))
+    def _live_mode():
+        return _app_settings.get('sentient_mode', 'engage')
+    def _live_trigger():
+        return _app_settings.get('sentient_trigger', 'hey radio').lower()
+    def _live_handshake():
+        return _app_settings.get('sentient_handshake', 'true') == 'true'
+
+    energy_threshold = _live_threshold()
 
     sr = 16000  # Whisper wants 16kHz
     chunk_size = int(sr * 0.5)  # 500ms chunks
@@ -9129,6 +9138,7 @@ def _sentient_listener_loop():
     _noise_samples = []
     _speech_energy_sum = 0
     _speech_energy_n = 0
+    _chunk_counter = 0
 
     try:
         while not _sentient_stop.is_set():
@@ -9157,8 +9167,10 @@ def _sentient_listener_loop():
                 _sentient_health['noise_floor'] = noise_floor
 
             # HF VAD: just use calibrated threshold.
-            # The threshold is set to 1.3x noise by calibration — that's the right level.
-            # No rolling average (it drifts up during speech and adapts out the signal).
+            # Refresh threshold from settings every 10 chunks (~5s)
+            _chunk_counter += 1
+            if _chunk_counter % 10 == 0:
+                energy_threshold = _live_threshold()
             speech_detected = rms > energy_threshold
             _sentient_health['speaking'] = speech_detected
             _process_utterance = False
@@ -9232,7 +9244,9 @@ def _sentient_listener_loop():
 
             _sentient_log_entry('HEARD', text, source)
 
-            # Decide whether to respond
+            # Decide whether to respond (live-read mode so UI changes take effect)
+            mode = _live_mode()
+            trigger_word = _live_trigger()
             should_respond = False
             if mode == 'monitor':
                 pass  # never respond
@@ -9286,41 +9300,44 @@ def _sentient_listener_loop():
                 voice = _app_settings.get('sentient_tx_voice', '') or None
                 preset = _app_settings.get('sentient_tx_preset', 'normal')
 
-                # Prepend handshake tone if enabled
-                if handshake_enabled:
+                # Prepend handshake tone if enabled (live-read setting)
+                handshake_enabled = _live_handshake()
+                if handshake_enabled and orchestrator._connected:
                     hs_path = _sentient_handshake_wav()
+                    ptt_active = False
                     try:
-                        ptt_active = False
                         orchestrator.icom_agent.ptt_on()
                         ptt_active = True
                         time_module.sleep(0.15)
                         orchestrator.playback_agent.play(hs_path, normalize=False)
-                    finally:
                         try: os.remove(hs_path)
                         except Exception: pass
-                        # Don't PTT off yet — voice follows immediately
 
-                    # Now transmit the voice (PTT already on)
-                    text_clean = _clean_tts_text(reply)
-                    if engine == 'espeak':
-                        raw_wav = orchestrator.espeak_agent.synthesize(text_clean, voice=voice or 'en-us')
-                    elif engine == 'fastkoko':
-                        raw_wav = orchestrator.fastkoko_agent.synthesize(text_clean, voice=voice)
-                    elif engine == 'edge':
-                        raw_wav = orchestrator.edge_agent.synthesize(text_clean, voice=voice)
-                    elif engine == 'piper':
-                        raw_wav = orchestrator.piper_agent.synthesize(text_clean, voice=voice)
-                    elif engine == 'elevenlabs':
-                        raw_wav = orchestrator.eleven_agent.synthesize(text_clean, voice_id=voice)
-                    else:
-                        raw_wav = orchestrator.espeak_agent.synthesize(text_clean, voice=voice or 'en-us')
+                        # Now transmit the voice (PTT already on)
+                        text_clean = _clean_tts_text(reply)
+                        if engine == 'espeak':
+                            raw_wav = orchestrator.espeak_agent.synthesize(text_clean, voice=voice or 'en-us')
+                        elif engine == 'fastkoko':
+                            raw_wav = orchestrator.fastkoko_agent.synthesize(text_clean, voice=voice)
+                        elif engine == 'edge':
+                            raw_wav = orchestrator.edge_agent.synthesize(text_clean, voice=voice)
+                        elif engine == 'piper':
+                            raw_wav = orchestrator.piper_agent.synthesize(text_clean, voice=voice)
+                        elif engine == 'elevenlabs':
+                            raw_wav = orchestrator.eleven_agent.synthesize(text_clean, voice_id=voice)
+                        else:
+                            raw_wav = orchestrator.espeak_agent.synthesize(text_clean, voice=voice or 'en-us')
 
-                    if raw_wav:
-                        fx_wav = orchestrator.effects_agent.apply(raw_wav, preset=preset)
-                        orchestrator.playback_agent.play(fx_wav, normalize=False)
-                    time_module.sleep(0.2)
-                    if ptt_active:
-                        orchestrator.icom_agent.ptt_off()
+                        if raw_wav:
+                            fx_wav = orchestrator.effects_agent.apply(raw_wav, preset=preset)
+                            orchestrator.playback_agent.play(fx_wav, normalize=False)
+                        else:
+                            _sentient_log_entry('ERROR', 'TTS synthesis returned None')
+                        time_module.sleep(0.2)
+                    finally:
+                        if ptt_active:
+                            try: orchestrator.icom_agent.ptt_off()
+                            except Exception: pass
                 else:
                     orchestrator.execute(reply, engine=engine, voice=voice,
                                          preset=preset, roger_beep=False)

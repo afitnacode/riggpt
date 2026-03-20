@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.94</span>
+    <span class="sb-label">v2.12.95</span>
   </div>
 </div>
 
@@ -3717,7 +3717,8 @@ hr.div  {
       </div>
       <div class="form-row">
         <label style="min-width:70px">ENERGY</label>
-        <input type="number" id="sent-energy" value="300" min="50" max="5000" style="width:60px;font-size:9px">
+        <input type="number" id="sent-energy" value="300" min="50" max="5000" style="width:60px;font-size:9px"
+          onchange="api('POST','/api/settings',{sentient_energy:this.value}).catch(()=>{})">
         <button class="btn sm" onclick="sentCalibrate()" title="Measure noise floor and auto-set threshold" style="flex:1;font-size:8px">🎯 CALIBRATE</button>
       </div>
       <div id="sent-cal-info" style="padding:0 var(--s4) var(--s2);font-size:8px;color:var(--text3);font-family:var(--mono);min-height:14px"></div>
@@ -3733,7 +3734,8 @@ hr.div  {
       </div>
       <div id="sent-trigger-row" class="form-row" style="display:none">
         <label style="min-width:70px">TRIGGER</label>
-        <input type="text" id="sent-trigger" value="hey radio" placeholder="trigger phrase" style="flex:1;font-size:9px">
+        <input type="text" id="sent-trigger" value="hey radio" placeholder="trigger phrase" style="flex:1;font-size:9px"
+          onchange="api('POST','/api/settings',{sentient_trigger:this.value}).catch(()=>{})">
       </div>
 
       <div class="sec-head" style="flex-shrink:0">AI RESPONSE</div>
@@ -3783,7 +3785,8 @@ hr.div  {
       <div class="form-row">
         <label style="min-width:70px">ENABLED</label>
         <label class="toggle-row" style="flex:1">
-          <input type="checkbox" id="sent-handshake" checked> Prepend handshake tone
+          <input type="checkbox" id="sent-handshake" checked
+            onchange="api('POST','/api/settings',{sentient_handshake:this.checked?'true':'false'}).catch(()=>{})"> Prepend handshake tone
         </label>
       </div>
 
@@ -12523,6 +12526,8 @@ function sentModeChange() {
   if (trigRow) trigRow.style.display = mode === 'selective' ? '' : 'none';
   const disp = document.getElementById('sent-mode-display');
   if (disp) disp.textContent = mode.toUpperCase();
+  // Live-save so running listener picks up the change immediately
+  api('POST', '/api/settings', { sentient_mode: mode }).catch(() => {});
 }
 
 async function sentStart() {
