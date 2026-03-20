@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.89
+RigGPT v2.12.90
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.89'
+VERSION        = 'v2.12.90'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -8501,13 +8501,11 @@ def api_autoid_status():
 
 # ── Time Announce ─────────────────────────────────────────────────────────────
 def _run_time_announce():
-    """Transmit current UTC and local time on the air."""
+    """Transmit current UTC time on the air."""
     import datetime
     now_utc   = datetime.datetime.utcnow()
-    now_local = datetime.datetime.now()
     utc_str   = now_utc.strftime('%H %M')
-    local_str = now_local.strftime('%H %M')
-    msg = f'The time is {utc_str} UTC.  Local time, {local_str}.'
+    msg = f'The time is {utc_str} UTC.'
     engine = _app_settings.get('timeannounce_engine', 'espeak')
     voice  = _app_settings.get('timeannounce_voice', '') or None
     logger.info(f'time_announce: {msg!r} engine={engine}')

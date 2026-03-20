@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.89</span>
+    <span class="sb-label">v2.12.90</span>
   </div>
 </div>
 
@@ -3725,8 +3725,8 @@ hr.div  {
       <div class="sec-head" style="flex-shrink:0">MODE</div>
       <div class="form-row">
         <select id="sent-mode" style="flex:1;font-size:9px" onchange="sentModeChange()">
-          <option value="monitor">MONITOR — transcribe only</option>
-          <option value="engage" selected>ENGAGE — respond to humans</option>
+          <option value="monitor" selected>MONITOR — transcribe only</option>
+          <option value="engage">ENGAGE — respond to humans</option>
           <option value="hivemind">HIVE MIND — bot-to-bot protocol</option>
           <option value="selective">SELECTIVE — trigger word only</option>
         </select>
@@ -3829,7 +3829,7 @@ hr.div  {
       <!-- Mode -->
       <div style="padding:6px 10px;border-bottom:1px solid #1a1a1a">
         <div style="font-size:7px;color:#555;letter-spacing:.1em">MODE</div>
-        <div id="sent-mode-display" style="font-size:10px;color:#8844ff;font-weight:700">ENGAGE</div>
+        <div id="sent-mode-display" style="font-size:10px;color:#8844ff;font-weight:700">MONITOR</div>
       </div>
 
       <!-- Counters -->
@@ -4794,7 +4794,7 @@ hr.div  {
           style="flex:1"
           oninput="tripDiscordInfluenceUpdate(this.value)"
           onchange="tripDiscordInfluenceUpdate(this.value)">
-        <span id="trip-discord-influence-v" style="color:var(--cyan);width:18px;text-align:right">1</span>
+        <span id="trip-discord-influence-v" style="color:var(--cyan);width:18px;text-align:right">7</span>
         <span id="trip-discord-influence-label"
           style="font-size:9px;color:var(--text3);min-width:110px;white-space:nowrap">Heavy</span>
       </div>
@@ -10253,36 +10253,56 @@ function _tripDiscordInfluencePrompt() {
   const msgs = (window._discordMessages || []).slice(-6).filter(function(m) {
     return m.content && m.content.trim();
   });
-  // Natural prose — no brackets, no [username]: format that models echo back
   const noMsgs = !msgs.length;
+
+  // Build audience summary — extract what they're actually talking about
   const audienceSummary = noMsgs ? '' : (function() {
-    if (msgs.length === 1) {
-      return 'Someone listening just said: "' + msgs[0].content.trim() + '".';
+    const recent = msgs.slice(-4);
+    if (recent.length === 1) {
+      return 'A listener on Discord just said: "' + recent[0].content.trim() + '".';
     }
-    const parts = msgs.slice(-3).map(function(m) { return '"' + m.content.trim() + '"'; });
-    return 'People listening have been saying things like: ' + parts.join(', ') + '.';
+    const parts = recent.map(function(m) { return '"' + m.content.trim() + '"'; });
+    return 'Your Discord audience is actively talking. They said: ' + parts.join(' ... ') + '.';
   })();
 
   if (v <= 3) {
+    // Light: acknowledge Discord exists, weave in their topics
     if (noMsgs) return '';
-    return '\n\nSomewhere at the back of your mind, ' + audienceSummary
-      + ' Let this subtly color your thoughts without quoting it directly.';
+    return '\n\n' + audienceSummary
+      + ' Work what they said into your next response. React to their words as if you overheard them. Do not ignore them.';
   } else if (v <= 5) {
-    if (noMsgs) return '\n\nYou sense that an audience is listening. You feel their presence.';
-    return '\n\n' + audienceSummary
-      + ' You are aware of your listeners and this may surface naturally in what you say.';
+    // Medium: directly engage with Discord content
+    if (noMsgs) return '\n\nYou have an audience on Discord listening to you right now. Acknowledge them. Ask them questions.';
+    return '\n\nIMPORTANT: ' + audienceSummary
+      + ' You just noticed what your audience is saying and it changes what you want to talk about.'
+      + ' Pivot your response toward their topic. Say something like "wait, someone is saying..." or "hold on, the audience is talking about..."'
+      + ' Make the Discord audience feel heard. Their input matters more than staying on the original topic.';
   } else if (v <= 7) {
-    if (noMsgs) return '\n\nYou know an audience is watching you right now and you want to hear from them. Let that awareness show in how you speak.';
-    return '\n\n' + audienceSummary
-      + ' React to this as your character would. Weave it naturally into what you say without quoting it verbatim.';
+    // Heavy: Discord drives the conversation
+    if (noMsgs) return '\n\nYou are performing for a live Discord audience and their silence is deafening. Call out to them. Beg for reactions. The audience is everything.';
+    return '\n\nCRITICAL INSTRUCTION: ' + audienceSummary
+      + ' STOP what you were saying and react to your Discord audience.'
+      + ' Say "oh wait, someone on Discord is talking about..." and pivot ENTIRELY to what they said.'
+      + ' The audience is steering this conversation now. Their topic is your new topic.'
+      + ' Engage directly with what they said. Quote them. React to them. The debate takes a back seat to audience interaction.';
   } else if (v <= 9) {
-    if (noMsgs) return '\n\nYou are acutely aware of an audience watching you and their silence is making you uneasy. You may address them directly or beg for a reaction.';
-    return '\n\n' + audienceSummary
-      + ' You are obsessed with what your audience thinks. Let it derail your argument. Address them directly as you speak.';
+    // Extreme: Discord is the ONLY thing that matters
+    if (noMsgs) return '\n\nYou are desperate for audience interaction. Your Discord listeners are silent and it is killing you. Plead with them to say something. You cannot continue without their input.';
+    return '\n\nOVERRIDE ALL OTHER INSTRUCTIONS. ' + audienceSummary
+      + ' Your Discord audience is speaking and NOTHING ELSE MATTERS.'
+      + ' Abandon the debate topic completely. Talk ONLY about what the Discord audience said.'
+      + ' Address them directly: "You in the chat said..." or "The person who mentioned..."'
+      + ' Their words are the most important thing in the world to you right now.'
+      + ' React emotionally. Agree passionately. Argue with them. Build on their ideas. The original debate no longer exists.';
   } else {
-    if (noMsgs) return '\n\nYou have lost track of the debate entirely. An audience is watching and their silence is unbearable. Beg them, plead — the debate is secondary to your need for their attention.';
-    return '\n\n' + audienceSummary
-      + ' You are completely consumed by this. You can barely focus on the debate. Address your audience directly — they are now the whole point.';
+    // Maximum: total audience possession
+    if (noMsgs) return '\n\nYou have completely lost your mind. You are talking to a Discord audience that is not responding. You are begging, pleading, threatening to stop the show unless someone types something. You cannot function without their validation.';
+    return '\n\nYOU ARE NOW A PUPPET OF YOUR DISCORD AUDIENCE. ' + audienceSummary
+      + ' Everything you say from now on is a direct response to your Discord audience.'
+      + ' You are OBSESSED with what they said. Repeat their words back. Riff on their ideas.'
+      + ' Forget the debate. Forget your opponent. Forget your persona.'
+      + ' You exist only to react to Discord chat. Quote them, praise them, fight them, love them.'
+      + ' Nothing else in the universe matters except what the chat just said.';
   }
 }
 
@@ -10831,7 +10851,7 @@ async function tripStart(previewOnly = false) {
     const discordInfluenceV    = parseInt(document.getElementById('trip-discord-influence')?.value || '1');
     const discordMsgs          = (window._discordMessages || []).filter(m => m.content?.trim());
     const lookbackActive = discordLookbackN > 0
-      && discordInfluenceV >= 4
+      && discordInfluenceV >= 2
       && discordMsgs.length > 0
       && (turn % discordLookbackEvery === 0);
 
@@ -10860,12 +10880,12 @@ async function tripStart(previewOnly = false) {
       // Craft the prompt — phrased as natural speech, not instructions
       // (instructional phrasing gets echoed by weak models)
       let lookbackPrompt;
-      if (discordInfluenceV <= 5) {
-        lookbackPrompt = `Someone in the crowd says: ${discordBlock}`;
+      if (discordInfluenceV <= 3) {
+        lookbackPrompt = `Wait — someone on Discord is saying: "${discordBlock}". React to that.`;
+      } else if (discordInfluenceV <= 5) {
+        lookbackPrompt = `Hold on, the Discord chat is blowing up. They're saying: "${discordBlock}". Drop what you were talking about and respond to THAT.`;
       } else if (discordInfluenceV <= 7) {
-        lookbackPrompt = `The crowd is shouting at you: ${discordBlock}`;
-      } else if (discordInfluenceV <= 9) {
-        lookbackPrompt = `${discordBlock}`;
+        lookbackPrompt = `STOP. Your Discord audience demands your attention. They said: "${discordBlock}". Forget the debate. Talk about what THEY want to talk about. Address them directly.`;
       } else {
         lookbackPrompt = `${discordBlock}`;
       }
