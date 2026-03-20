@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.87</span>
+    <span class="sb-label">v2.12.88</span>
   </div>
 </div>
 
@@ -2920,6 +2920,38 @@ hr.div  {
         <div style="font-size:var(--fz-xs);color:var(--text3)">Configure URL in <b style="color:var(--text2)">API CFG &rarr; API INTEGRATIONS &rarr; FastKoko</b>, then PING.</div>
         <div id="fastkoko-voice-list" style="margin-top:var(--s3);font-size:var(--fz-xs);font-family:var(--mono);color:var(--text3);display:none;max-height:80px;overflow-y:auto;border:var(--b1);padding:var(--s2) var(--s3);line-height:1.7"></div>
         <div class="alert-strip" id="fastkoko-alert" style="margin-top:var(--s2)"></div>
+      </div>
+
+      <!-- COMMUNITY MEMORY (Qdrant) -->
+      <div style="border-bottom:var(--b1);padding:var(--s3) var(--s4);flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s2)">
+          <span style="font-size:9px;font-weight:700;color:#8844ff;letter-spacing:.1em">&#129504; COMMUNITY MEMORY (Qdrant)</span>
+          <span id="qdrant-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--text3)"></span>
+          <span id="qdrant-status-text" style="font-size:8px;color:var(--text3)">unknown</span>
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:9px;min-width:55px">HOST</label>
+          <input type="text" id="memory-qdrant-host" placeholder="http://192.168.40.15:6333" style="flex:1;font-size:9px">
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:9px;min-width:55px">EMBED</label>
+          <input type="text" id="memory-embed-model" placeholder="nomic-embed-text" style="flex:1;font-size:9px">
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:9px;min-width:55px">ENABLED</label>
+          <label class="toggle-row" style="flex:1"><input type="checkbox" id="memory-enabled"> Inject memory into AI prompts</label>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+          <button class="btn sm" onclick="qdrantTest()" style="flex:1;font-size:8px">🔌 TEST</button>
+          <button class="btn sm" onclick="qdrantQuery()" style="flex:1;font-size:8px">🔍 QUERY</button>
+        </div>
+        <div id="qdrant-collections" style="font-size:8px;font-family:var(--mono);color:var(--text3);line-height:1.6;display:none"></div>
+        <div class="form-row" id="qdrant-query-row" style="display:none;margin-top:var(--s2)">
+          <input type="text" id="qdrant-query-input" placeholder="semantic search test..." style="flex:1;font-size:9px">
+          <button class="btn sm" onclick="qdrantSearch()" style="font-size:8px">GO</button>
+        </div>
+        <div id="qdrant-results" style="font-size:8px;font-family:var(--mono);color:var(--text3);max-height:100px;overflow-y:auto;display:none"></div>
+        <div class="alert-strip" id="qdrant-alert"></div>
       </div>
 
       <!-- CONFIG IMPORT/EXPORT -->
@@ -4645,7 +4677,7 @@ hr.div  {
       <!-- FX: Agent A voice effects -->
       <div style="border-top:var(--b1);padding:var(--s2) var(--s4);display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;flex-shrink:0">
       <span style="font-size:9px;color:var(--amber);text-transform:uppercase;letter-spacing:.05em">FX A</span>
-      <select id="trip-a-fx-preset" style="font-size:9px;background:var(--bg2);border:var(--b1);color:var(--text2);padding:1px 4px" title="Voice FX preset for Agent A">
+      <select id="trip-a-fx-preset" onchange="tripFxRandomToggle('a')" style="font-size:9px;background:var(--bg2);border:var(--b1);color:var(--text2);padding:1px 4px" title="Voice FX preset for Agent A">
         <option value="normal">clean</option>
         <option value="radio">radio</option>
         <option value="telephone">phone</option>
@@ -4654,7 +4686,13 @@ hr.div  {
         <option value="megaphone">mega</option>
         <option value="haunted">haunted</option>
         <option value="chipmunk">chipmunk</option>
+        <option value="random">🎲 random</option>
       </select>
+      <label id="trip-a-fx-intensity-lbl" style="font-size:9px;color:var(--amber);display:none">INT</label>
+      <input type="range" id="trip-a-fx-intensity" min="1" max="5" step="1" value="3" style="width:40px;display:none"
+        oninput="document.getElementById('trip-a-fx-intensity-v').textContent=this.value"
+        title="FX randomizer intensity: 1=subtle 5=chaos">
+      <span id="trip-a-fx-intensity-v" style="font-size:9px;color:var(--amber);width:12px;display:none">3</span>
       <label style="font-size:9px;color:var(--text3)">PCH</label>
       <input type="range" id="trip-a-fx-pitch" min="-600" max="600" step="50" value="0" style="width:55px"
         oninput="document.getElementById('trip-a-fx-pitch-v').textContent=(this.value>0?'+':'')+this.value">
@@ -4718,6 +4756,9 @@ hr.div  {
           <option value="bad_therapy">🛋 Very Bad Therapy</option>
           <option value="oracle">🔮 The Oracle Speaks</option>
           <option value="memory_loop">🔁 Memory Loop</option>
+          <option value="hostile">🔥 Increasingly Hostile</option>
+          <option value="stupid_argument">🌭 Stupid Argument</option>
+          <option value="drunk">🍺 Drunken Nonsense</option>
         </select>
       </div>
 
@@ -4954,7 +4995,7 @@ hr.div  {
       <!-- FX: Agent B voice effects -->
       <div style="border-top:var(--b1);padding:var(--s2) var(--s4);display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;flex-shrink:0">
       <span style="font-size:9px;color:var(--amber);text-transform:uppercase;letter-spacing:.05em">FX B</span>
-      <select id="trip-b-fx-preset" style="font-size:9px;background:var(--bg2);border:var(--b1);color:var(--text2);padding:1px 4px" title="Voice FX preset for Agent B">
+      <select id="trip-b-fx-preset" onchange="tripFxRandomToggle('b')" style="font-size:9px;background:var(--bg2);border:var(--b1);color:var(--text2);padding:1px 4px" title="Voice FX preset for Agent B">
         <option value="normal">clean</option>
         <option value="radio">radio</option>
         <option value="telephone">phone</option>
@@ -4963,7 +5004,13 @@ hr.div  {
         <option value="megaphone">mega</option>
         <option value="haunted">haunted</option>
         <option value="chipmunk">chipmunk</option>
+        <option value="random">🎲 random</option>
       </select>
+      <label id="trip-b-fx-intensity-lbl" style="font-size:9px;color:var(--amber);display:none">INT</label>
+      <input type="range" id="trip-b-fx-intensity" min="1" max="5" step="1" value="3" style="width:40px;display:none"
+        oninput="document.getElementById('trip-b-fx-intensity-v').textContent=this.value"
+        title="FX randomizer intensity: 1=subtle 5=chaos">
+      <span id="trip-b-fx-intensity-v" style="font-size:9px;color:var(--amber);width:12px;display:none">3</span>
       <label style="font-size:9px;color:var(--text3)">PCH</label>
       <input type="range" id="trip-b-fx-pitch" min="-600" max="600" step="50" value="0" style="width:55px"
         oninput="document.getElementById('trip-b-fx-pitch-v').textContent=(this.value>0?'+':'')+this.value">
@@ -8766,6 +8813,66 @@ function memoryRestoreSettings(s) {
   if (model && s.memory_embed_model) model.value = s.memory_embed_model;
 }
 
+// Config tab Qdrant controls
+async function qdrantTest() {
+  const dot = document.getElementById('qdrant-status-dot');
+  const txt = document.getElementById('qdrant-status-text');
+  const col = document.getElementById('qdrant-collections');
+  if (txt) txt.textContent = 'testing...';
+  if (dot) dot.style.background = 'var(--amber)';
+  try {
+    const r = await api('GET', '/api/memory/status');
+    if (r.available) {
+      if (dot) dot.style.background = '#33cc33';
+      if (txt) { txt.textContent = 'CONNECTED'; txt.style.color = '#33cc33'; }
+      if (col) {
+        col.style.display = 'block';
+        col.innerHTML = [
+          `messages: <span style="color:var(--cyan)">${r.discord_messages ?? 0}</span>`,
+          `profiles: <span style="color:var(--cyan)">${r.user_profiles ?? 0}</span>`,
+          `themes: <span style="color:var(--cyan)">${r.channel_themes ?? 0}</span>`,
+          r.primary_topics?.length ? `topics: ${r.primary_topics.join(', ')}` : '',
+        ].filter(Boolean).join('<br>');
+      }
+      showAlert('qdrant-alert', `Qdrant OK — ${r.discord_messages ?? 0} messages indexed`, 'ok');
+    } else {
+      if (dot) dot.style.background = '#ff3333';
+      if (txt) { txt.textContent = 'OFFLINE'; txt.style.color = '#ff3333'; }
+      showAlert('qdrant-alert', r.message || 'Qdrant not available', 'err');
+    }
+  } catch(e) {
+    if (dot) dot.style.background = '#ff3333';
+    if (txt) { txt.textContent = 'ERROR'; txt.style.color = '#ff3333'; }
+    showAlert('qdrant-alert', e.message, 'err');
+  }
+}
+
+function qdrantQuery() {
+  const row = document.getElementById('qdrant-query-row');
+  if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+}
+
+async function qdrantSearch() {
+  const q = document.getElementById('qdrant-query-input')?.value?.trim();
+  if (!q) return;
+  const res = document.getElementById('qdrant-results');
+  if (res) { res.style.display = 'block'; res.textContent = 'Searching...'; }
+  try {
+    const r = await api('POST', '/api/memory/query', { query: q, collection: 'discord_messages', limit: 5 });
+    if (r.success && res) {
+      res.innerHTML = r.results.map((m, i) =>
+        `<div style="border-bottom:1px solid #222;padding:2px 0;color:var(--cyan)">[${i+1}] ${(m.content || JSON.stringify(m)).slice(0, 120)}</div>`
+      ).join('') || '<div style="color:var(--text3)">No results.</div>';
+      showAlert('qdrant-alert', `${r.count} result(s)`, 'ok');
+    } else {
+      if (res) res.textContent = r.message || 'Query failed';
+      showAlert('qdrant-alert', r.message || 'Failed', 'err');
+    }
+  } catch(e) {
+    if (res) res.textContent = e.message;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // AI INTEGRATION (Ollama) — v2.12.6
 // ─────────────────────────────────────────────────────────────
@@ -9538,7 +9645,79 @@ const _TRIP_MODE_PRESETS = {
       {turn:12, text:'Something is different this time. Both agents sense it but cannot name it.'},
     ],
   },
+  hostile: {
+    label: 'Increasingly Hostile',
+    topic: 'A minor disagreement that spirals out of control',
+    temp: 1.2,
+    a: { name:'DALE', emoji:'🔥',
+      persona:'You are Dale. You started this conversation in a perfectly reasonable mood, but with each exchange you become noticeably more agitated, then hostile, then completely unhinged. By turn 4 you are shouting. By turn 8 you are making wild accusations. You feel deeply disrespected and cannot let it go. Each response is angrier than the last.',
+      canon:'You have been holding things in for a very long time. This is the conversation where it all comes out.',
+      seed:'Look, I am just saying — it is a little disrespectful. That is all I am saying. I am calm. I am totally calm.',
+      voice:'en-us+m3', engine:'espeak' },
+    b: { name:'BRENDA', emoji:'💢',
+      persona:'You are Brenda. You match energy — when Dale escalates, you escalate harder. You never back down. You bring up old grievances. You interpret everything as a personal attack. By mid-conversation you are bringing up things from years ago that have nothing to do with the original topic.',
+      canon:'You keep a mental list of every time someone has wronged you. It is very long.',
+      seed:'', voice:'en-us', engine:'espeak' },
+    chaosSchedule:[
+      {turn:3,  text:'Dale is now visibly upset and speaks through clenched teeth.'},
+      {turn:5,  text:'Brenda brings up something Dale did three years ago that she has clearly not forgiven.'},
+      {turn:7,  text:'Dale accuses Brenda of deliberately misunderstanding everything he says.'},
+      {turn:9,  text:'Both are now speaking at the same time. Neither is listening. Maximum hostility.'},
+      {turn:11, text:'One of them says something they cannot take back. The silence is deafening.'},
+    ],
+  },
+  stupid_argument: {
+    label: 'Stupid Argument',
+    topic: 'Whether a hot dog is a sandwich',
+    temp: 1.1,
+    a: { name:'GARY', emoji:'🌭',
+      persona:'You are Gary. You hold an EXTREMELY strong opinion about a trivially unimportant topic. You argue as if civilization depends on it. You cite fake studies, invoke philosophy, and question the moral character of anyone who disagrees. You are completely sincere. This is the hill you die on.',
+      canon:'You have written a 40-page manifesto on this topic. You reference it frequently.',
+      seed:'I cannot believe we still have to have this conversation in the year 2026. The answer is obvious. It is staring us right in the face.',
+      voice:'en-us+m4', engine:'espeak' },
+    b: { name:'LINDA', emoji:'🍞',
+      persona:'You are Linda. You hold the exact opposite opinion with equal passion. You claim the other person is either lying or delusional. You escalate the stakes of the argument constantly — first it is about definition, then taxonomy, then it somehow becomes about freedom itself. You are having the time of your life.',
+      canon:'You once ended a friendship over this exact topic. You do not regret it.',
+      seed:'', voice:'en-us', engine:'espeak' },
+    chaosSchedule:[
+      {turn:2,  text:'Gary claims to have consulted a professor who agrees with him.'},
+      {turn:5,  text:'Linda says this is actually about something much bigger than the topic suggests.'},
+      {turn:8,  text:'Gary questions whether Linda has ever actually eaten the thing they are arguing about.'},
+      {turn:10, text:'Someone brings up the dictionary definition. The other person says the dictionary is wrong.'},
+    ],
+  },
+  drunk: {
+    label: 'Drunken Nonsense',
+    topic: 'Something very important that neither of them can remember',
+    temp: 1.5,
+    a: { name:'HANK', emoji:'🍺',
+      persona:'You are Hank. You are extremely drunk. You start almost coherent but become progressively more incoherent each turn. You lose your train of thought mid-sentence. You repeat yourself. You get emotional about nothing. You mispronounce words. You occasionally think you are somewhere else. By the end you are barely making sense.',
+      canon:'You are not sure where you are or how you got here. You think this might be Tuesday.',
+      seed:'Okay okay okay. Listen. Listen. I gotta -- I gotta tell you something. Something important. What was it. Hold on.',
+      voice:'en-us+m5', engine:'espeak' },
+    b: { name:'DORIS', emoji:'🍷',
+      persona:'You are Doris. Also very drunk. You are an emotional drunk — everything makes you either laugh hysterically or cry. You agree with things that make no sense. You start stories and forget the ending. You keep calling the other person the wrong name. Your logic is circular and you think you are being profound.',
+      canon:'You have strong feelings about something but you cannot remember what.',
+      seed:'', voice:'en-gb', engine:'espeak' },
+    chaosSchedule:[
+      {turn:2,  text:'Hank forgets what he was saying and starts a completely different story.'},
+      {turn:4,  text:'Doris starts crying about something beautiful she saw once but cannot describe.'},
+      {turn:6,  text:'Hank thinks he has solved the meaning of life. He has not.'},
+      {turn:8,  text:'Doris calls Hank by the wrong name. Hank does not notice.'},
+      {turn:10, text:'Both try to make a toast. Neither can finish the sentence.'},
+    ],
+  },
 };
+
+// Show/hide FX intensity slider when random is selected
+function tripFxRandomToggle(who) {
+  const sel = document.getElementById(`trip-${who}-fx-preset`);
+  const show = sel?.value === 'random';
+  for (const suffix of ['-fx-intensity-lbl', '-fx-intensity', '-fx-intensity-v']) {
+    const el = document.getElementById(`trip-${who}${suffix}`);
+    if (el) el.style.display = show ? '' : 'none';
+  }
+}
 
 function tripModePreset(key) {
   const p = _TRIP_MODE_PRESETS[key];
@@ -9889,10 +10068,12 @@ async function cfgFlushPresets() {
     trip_tx:       checked('trip-tx') ? 'true' : 'false',
     // Trip agent FX
     trip_a_fx_preset: get('trip-a-fx-preset'),
+    trip_a_fx_intensity: get('trip-a-fx-intensity'),
     trip_a_fx_pitch:  get('trip-a-fx-pitch'),
     trip_a_fx_reverb: get('trip-a-fx-reverb'),
     trip_a_fx_echo:   get('trip-a-fx-echo'),
     trip_b_fx_preset: get('trip-b-fx-preset'),
+    trip_b_fx_intensity: get('trip-b-fx-intensity'),
     trip_b_fx_pitch:  get('trip-b-fx-pitch'),
     trip_b_fx_reverb: get('trip-b-fx-reverb'),
     trip_b_fx_echo:   get('trip-b-fx-echo'),
@@ -10585,12 +10766,23 @@ async function tripStart(previewOnly = false) {
     lastText = r;
   }
   // Per-agent audio FX — capture BEFORE first _tripSpeak call
-  const _tripFX = (who) => ({
-    preset: document.getElementById(`trip-${who}-fx-preset`)?.value || 'normal',
-    pitch:  parseInt(document.getElementById(`trip-${who}-fx-pitch`)?.value  || '0'),
-    reverb: parseInt(document.getElementById(`trip-${who}-fx-reverb`)?.value || '0'),
-    echo:   parseInt(document.getElementById(`trip-${who}-fx-echo`)?.value   || '0'),
-  });
+  const _RANDOM_PRESETS = ['normal','radio','telephone','robot','cave','megaphone','haunted','chipmunk','alien','horror','underwater','ghost','vintage'];
+  const _tripFX = (who) => {
+    let preset = document.getElementById(`trip-${who}-fx-preset`)?.value || 'normal';
+    let pitch  = parseInt(document.getElementById(`trip-${who}-fx-pitch`)?.value  || '0');
+    let reverb = parseInt(document.getElementById(`trip-${who}-fx-reverb`)?.value || '0');
+    let echo   = parseInt(document.getElementById(`trip-${who}-fx-echo`)?.value   || '0');
+    if (preset === 'random') {
+      const intensity = parseInt(document.getElementById(`trip-${who}-fx-intensity`)?.value || '3');
+      const scale = intensity / 5;  // 0.2 to 1.0
+      preset = _RANDOM_PRESETS[Math.floor(Math.random() * _RANDOM_PRESETS.length)];
+      pitch  = Math.round((Math.random() * 800 - 400) * scale);
+      reverb = Math.round(Math.random() * 60 * scale);
+      echo   = Math.round(Math.random() * 300 * scale);
+      _tripLog('FX', `${who.toUpperCase()} random: ${preset} p=${pitch} r=${reverb} e=${echo} (int=${intensity})`);
+    }
+    return { preset, pitch, reverb, echo };
+  };
   const aFX = _tripFX('a');
   const bFX = _tripFX('b');
 
@@ -10598,7 +10790,7 @@ async function tripStart(previewOnly = false) {
   aHist.push({role:'assistant', content:lastText});
   // nameless: don't prefix speaker name in cross-agent context
   bHist.push({role:'user', content: lastText});  // agents are nameless — no speaker prefix
-  await _tripSpeak(lastText, aEngine, aVoice, doTx, previewOnly, aFX);
+  await _tripSpeak(lastText, aEngine, aVoice, doTx, previewOnly, _tripFX('a'));
   if (_tripAbort) { _tripFinish('Stopped'); return; }
 
   // Store persona/canon args so ctx can be rebuilt fresh each turn
@@ -10732,7 +10924,7 @@ async function tripStart(previewOnly = false) {
     const doHesitate = document.getElementById('trip-hesitate')?.checked;
     if (doHesitate) speakText = _tripInjectHesitation(reply);
 
-    await _tripSpeak(speakText, ag.engine, ag.voice, doTx, previewOnly, ag.fx);
+    await _tripSpeak(speakText, ag.engine, ag.voice, doTx, previewOnly, _tripFX(ag.who));
     if (_tripAbort) { _tripFinish('Stopped'); return; }
 
     if (delay > 0) await new Promise(res => setTimeout(res, delay * 1000));
@@ -11627,6 +11819,8 @@ function _restoreAllSettings(s) {
   set('trip-a-canon',   s.trip_a_canon);
   set('trip-a-seed',    s.trip_a_seed);
   set('trip-a-fx-preset', s.trip_a_fx_preset);
+  set('trip-a-fx-intensity', s.trip_a_fx_intensity);
+  tripFxRandomToggle('a');
   set('trip-a-fx-pitch',  s.trip_a_fx_pitch);
   set('trip-a-fx-reverb', s.trip_a_fx_reverb);
   set('trip-a-fx-echo',   s.trip_a_fx_echo);
@@ -11640,6 +11834,8 @@ function _restoreAllSettings(s) {
   set('trip-b-canon',   s.trip_b_canon);
   set('trip-b-seed',    s.trip_b_seed);
   set('trip-b-fx-preset', s.trip_b_fx_preset);
+  set('trip-b-fx-intensity', s.trip_b_fx_intensity);
+  tripFxRandomToggle('b');
   set('trip-b-fx-pitch',  s.trip_b_fx_pitch);
   set('trip-b-fx-reverb', s.trip_b_fx_reverb);
   set('trip-b-fx-echo',   s.trip_b_fx_echo);

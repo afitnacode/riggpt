@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.87
+RigGPT v2.12.88
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.87'
+VERSION        = 'v2.12.88'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4391,8 +4391,8 @@ def api_settings_post():
         'trip_gap_min', 'trip_gap_max', 'trip_hesitate',
         'trip_wildcard', 'trip_wildcard_n', 'trip_tx',
         'trip_discord_influence', 'trip_discord_lookback', 'trip_discord_lookback_every',
-        'trip_a_fx_preset', 'trip_a_fx_pitch', 'trip_a_fx_reverb', 'trip_a_fx_echo',
-        'trip_b_fx_preset', 'trip_b_fx_pitch', 'trip_b_fx_reverb', 'trip_b_fx_echo',
+        'trip_a_fx_preset', 'trip_a_fx_pitch', 'trip_a_fx_reverb', 'trip_a_fx_echo', 'trip_a_fx_intensity',
+        'trip_b_fx_preset', 'trip_b_fx_pitch', 'trip_b_fx_reverb', 'trip_b_fx_echo', 'trip_b_fx_intensity',
         'trip_topic',
         # Transmit tab defaults
         'tx_engine', 'tx_voice', 'tx_delay', 'tx_repeat',
