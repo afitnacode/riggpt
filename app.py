@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.95
+RigGPT v2.12.96
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.95'
+VERSION        = 'v2.12.96'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -2554,10 +2554,12 @@ def _run_beacon(bid):
         else:
             full = text
         try:
-            orchestrator.execute(
+            _bcn_result = orchestrator.execute(
                 full, engine=cfg.get('engine','piper'), voice=cfg.get('voice'),
                 preset=cfg.get('preset','normal'), roger_beep=cfg.get('roger_beep',True),
             )
+            if not _bcn_result or not _bcn_result.get('success'):
+                logger.error(f'Beacon {bid}: TX failed — {_bcn_result.get("message","unknown") if _bcn_result else "no result"}')
         except Exception as e:
             logger.error(f"Beacon {bid} error: {e}")
     with _beacon_lock:
@@ -8150,7 +8152,7 @@ def _run_numbers_station():
     engine = _app_settings.get('numbers_station_engine', 'espeak')
     voice  = _app_settings.get('numbers_station_voice', '') or None
     try:
-        orchestrator.execute(
+        result = orchestrator.execute(
             msg, engine=engine, voice=voice,
             preset='broadcast',
             pitch=-4,
@@ -8158,7 +8160,10 @@ def _run_numbers_station():
             roger_beep=False,
         )
         digit_count = num_groups * 5
-        logger.info(f'numbers_station: transmitted {num_groups} groups ({digit_count} digits) cadence={cadence}')
+        if result and result.get('success'):
+            logger.info(f'numbers_station: transmitted {num_groups} groups ({digit_count} digits) cadence={cadence}')
+        else:
+            logger.error(f'numbers_station: TX failed — {result.get("message", "unknown error")}')
     except Exception as e:
         logger.error(f'numbers_station TX error: {e}')
 
@@ -8292,8 +8297,11 @@ def _solar_poll_and_announce(force=False):
     engine = _app_settings.get('solar_engine', 'espeak')
     voice  = _app_settings.get('solar_voice', '') or None
     try:
-        orchestrator.execute(msg, engine=engine, voice=voice, preset='normal', roger_beep=False)
-        logger.info(f'solar: K={k} alert transmitted (condition={cond})')
+        result = orchestrator.execute(msg, engine=engine, voice=voice, preset='normal', roger_beep=False)
+        if result and result.get('success'):
+            logger.info(f'solar: K={k} alert transmitted (condition={cond})')
+        else:
+            logger.error(f'solar: TX failed — {result.get("message", "unknown") if result else "no result"}')
     except Exception as e:
         logger.error(f'solar: TX error: {e}')
 
@@ -8361,7 +8369,9 @@ def _run_mystery_tx():
         voice  = _app_settings.get('mystery_voice', '') or None
         logger.info(f'mystery: transmitting line: {msg!r}')
         try:
-            orchestrator.execute(msg, engine=engine, voice=voice, preset='cave', roger_beep=False)
+            result = orchestrator.execute(msg, engine=engine, voice=voice, preset='cave', roger_beep=False)
+            if not result or not result.get('success'):
+                logger.error(f'mystery: TX failed — {result.get("message","unknown") if result else "no result"}')
         except Exception as e:
             logger.error(f'mystery TX error: {e}')
 
@@ -8440,7 +8450,9 @@ def _run_autoid():
         voice = _app_settings.get('autoid_voice', '') or None
         msg = f'This is {callsign}.'
         try:
-            orchestrator.execute(msg, engine=engine, voice=voice, preset='normal', roger_beep=False)
+            result = orchestrator.execute(msg, engine=engine, voice=voice, preset='normal', roger_beep=False)
+            if not result or not result.get('success'):
+                logger.error(f'auto-id: TX failed — {result.get("message","unknown") if result else "no result"}')
         except Exception as e:
             logger.error(f'auto-id TX error: {e}')
 
@@ -8510,8 +8522,10 @@ def _run_time_announce():
     voice  = _app_settings.get('timeannounce_voice', '') or None
     logger.info(f'time_announce: {msg!r} engine={engine}')
     try:
-        orchestrator.execute(msg, engine=engine, voice=voice, preset='broadcast',
+        result = orchestrator.execute(msg, engine=engine, voice=voice, preset='broadcast',
                              pitch=-2, speed=0.9, roger_beep=False)
+        if not result or not result.get('success'):
+            logger.error(f'time_announce: TX failed — {result.get("message","unknown") if result else "no result"}')
     except Exception as e:
         logger.error(f'time_announce TX error: {e}')
 
@@ -8710,11 +8724,14 @@ def _run_evp():
         except ImportError:
             # pydub not available — fall back to simple execute
             logger.warning('evp: pydub not available, falling back to simple mode')
-            orchestrator.execute(
+            result = orchestrator.execute(
                 phrase, engine=engine, voice=voice,
                 preset=preset, pitch=pitch, speed=speed, roger_beep=False,
             )
-            logger.info(f'evp: simple TX: "{phrase}" [{engine}/{voice or "default"} {preset}]')
+            if result and result.get('success'):
+                logger.info(f'evp: simple TX: "{phrase}" [{engine}/{voice or "default"} {preset}]')
+            else:
+                logger.error(f'evp: TX failed — {result.get("message","unknown") if result else "no result"}')
 
     except Exception as e:
         logger.error(f'evp TX error: {e}', exc_info=True)
@@ -8825,14 +8842,17 @@ def _run_whisper():
         logger.warning(f'whisper: could not set low power: {e}')
 
     try:
-        orchestrator.execute(
+        result = orchestrator.execute(
             phrase, engine=engine, voice=voice,
             preset='whisper',
             pitch=random.randint(-3, 3),
             speed=random.randint(60, 80) / 100.0,
             roger_beep=False,
         )
-        logger.info(f'whisper: transmitted at low power: "{phrase}"')
+        if result and result.get('success'):
+            logger.info(f'whisper: transmitted at low power: "{phrase}"')
+        else:
+            logger.error(f'whisper: TX failed — {result.get("message","unknown") if result else "no result"}')
     except Exception as e:
         logger.error(f'whisper TX error: {e}')
     finally:
@@ -9339,8 +9359,11 @@ def _sentient_listener_loop():
                             try: orchestrator.icom_agent.ptt_off()
                             except Exception: pass
                 else:
-                    orchestrator.execute(reply, engine=engine, voice=voice,
+                    _sent_result = orchestrator.execute(reply, engine=engine, voice=voice,
                                          preset=preset, roger_beep=False)
+                    if not _sent_result or not _sent_result.get('success'):
+                        _sentient_log_entry('ERROR', f'TX failed: {_sent_result.get("message","unknown") if _sent_result else "no result"}')
+                        continue
 
                 _sentient_stats['replied'] += 1
                 log_transmission(f'[SENTIENT→{source}] {reply}', engine, voice,
@@ -9535,8 +9558,10 @@ def _ghost_whisper(ghost_name: str, stop: threading.Event):
     voice   = _app_settings.get('ghost_voice', '') or None
     _ghost_log_event(f'{ghost_name}: TX "{text}" [{engine}/{voice or "default"} {preset} p={pitch} s={speed}]')
     try:
-        orchestrator.execute(text, engine=engine, voice=voice,
+        result = orchestrator.execute(text, engine=engine, voice=voice,
                              preset=preset, pitch=pitch, speed=speed, roger_beep=False)
+        if not result or not result.get('success'):
+            _ghost_log_event(f'{ghost_name}: TX failed — {result.get("message","unknown") if result else "no result"}')
     except Exception as e:
         _ghost_log_event(f'{ghost_name}: whisper error: {e}')
 
@@ -9831,11 +9856,13 @@ def _ghost_run_exorcist(stop: threading.Event, duration: int = 60):
         scream = random.choice(_EXORCIST_SCREAMS)
         _ghost_log_event(f'EXORCIST: transmitting: {scream!r}')
         try:
-            orchestrator.execute(
+            _exo_r = orchestrator.execute(
                 scream, engine=_exo_engine, voice=_exo_voice,
                 preset='horror', pitch=random.randint(-8, 8),
                 speed=random.randint(60, 140) / 100.0, roger_beep=False
             )
+            if not _exo_r or not _exo_r.get('success'):
+                _ghost_log_event(f'EXORCIST: scream TX failed — {_exo_r.get("message","unknown") if _exo_r else "no result"}')
         except Exception as e:
             _ghost_log_event(f'EXORCIST scream error: {e}')
         # Continue possession for remaining duration
@@ -9847,12 +9874,14 @@ def _ghost_run_exorcist(stop: threading.Event, duration: int = 60):
                 new_scream = random.choice(_EXORCIST_SCREAMS)
                 _ghost_log_event(f'EXORCIST: second transmission: {new_scream!r}')
                 try:
-                    orchestrator.execute(
+                    _exo_r2 = orchestrator.execute(
                         new_scream, engine=_exo_engine, voice=_exo_voice,
                         preset=random.choice(['alien', 'demon', 'cave', 'underwater', 'robot']),
                         pitch=random.randint(-12, 12),
                         speed=random.randint(50, 180) / 100.0, roger_beep=False
                     )
+                    if not _exo_r2 or not _exo_r2.get('success'):
+                        _ghost_log_event(f'EXORCIST: TX failed — {_exo_r2.get("message","unknown") if _exo_r2 else "no result"}')
                 except Exception:
                     pass
     finally:
@@ -9976,7 +10005,9 @@ def _run_pirate_broadcast():
     msg = f'{intro}  {headline}'
     logger.info(f'pirate: broadcasting: {msg!r}')
     try:
-        orchestrator.execute(msg, engine=engine, voice=voice, preset=preset, roger_beep=False)
+        result = orchestrator.execute(msg, engine=engine, voice=voice, preset=preset, roger_beep=False)
+        if not result or not result.get('success'):
+            logger.error(f'pirate: TX failed — {result.get("message","unknown") if result else "no result"}')
     except Exception as e:
         logger.error(f'pirate broadcast TX error: {e}')
 
