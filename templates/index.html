@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.96</span>
+    <span class="sb-label">v2.12.97</span>
   </div>
 </div>
 
@@ -3018,6 +3018,17 @@ hr.div  {
         <button class="btn warn sm" onclick="dashPttTest()">&#127897; PTT TEST</button>
         <button class="btn sm" onclick="civScan()" title="Scan CI-V addresses">&#128270; CI-V SCAN</button>
         <button class="btn sm" onclick="toggleDebugLog()" id="btn-debug-log" title="Toggle DEBUG logging">DBG LOG</button>
+      </div>
+      <!-- Dead-Man Switch -->
+      <div style="padding:var(--s2) var(--s4);border-bottom:var(--b1);display:flex;align-items:center;gap:var(--s3);flex-shrink:0">
+        <label class="toggle-row" style="flex:1;font-size:9px">
+          <input type="checkbox" id="heartbeat-enabled"
+            onchange="heartbeatToggle(this.checked)"> DEAD-MAN SWITCH
+        </label>
+        <span id="heartbeat-status" style="font-size:8px;color:var(--text3)">off</span>
+      </div>
+      <div style="padding:0 var(--s4) var(--s2);font-size:8px;color:var(--text3);flex-shrink:0">
+        When enabled, all transmissions stop if the browser tab closes or loses connection (15s timeout).
       </div>
       <div class="alert-strip" id="set-radio-alert"></div>
       <pre class="probe-out" id="set-probe-out" style="flex:1"></pre>
@@ -10174,6 +10185,7 @@ async function cfgFlushPresets() {
     memory_enabled:           document.getElementById('memory-enabled')?.checked ? 'true' : 'false',
     memory_qdrant_host:       document.getElementById('memory-qdrant-host')?.value || '',
     memory_embed_model:       document.getElementById('memory-embed-model')?.value || '',
+    heartbeat_enabled:        document.getElementById('heartbeat-enabled')?.checked ? 'true' : 'false',
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -12735,6 +12747,71 @@ function _sentPollStart() {
 function _sentPollStop() {
   if (_sentPollTimer) { clearInterval(_sentPollTimer); _sentPollTimer = null; }
 }
+
+// ── Dead-Man Switch (Browser Heartbeat) ──────────────────────────────────
+let _heartbeatTimer = null;
+
+function heartbeatToggle(enabled) {
+  api('POST', '/api/settings', { heartbeat_enabled: enabled ? 'true' : 'false' }).catch(() => {});
+  const status = document.getElementById('heartbeat-status');
+  if (enabled) {
+    _heartbeatStart();
+    if (status) { status.textContent = 'armed'; status.style.color = '#33cc33'; }
+  } else {
+    _heartbeatStop();
+    if (status) { status.textContent = 'off'; status.style.color = 'var(--text3)'; }
+  }
+}
+
+function _heartbeatStart() {
+  if (_heartbeatTimer) clearInterval(_heartbeatTimer);
+  // Send heartbeat every 5 seconds
+  const ping = () => api('POST', '/api/heartbeat').catch(() => {});
+  ping();
+  _heartbeatTimer = setInterval(ping, 5000);
+  // Best-effort disconnect on tab close
+  window.addEventListener('beforeunload', _heartbeatDisconnect);
+}
+
+function _heartbeatStop() {
+  if (_heartbeatTimer) { clearInterval(_heartbeatTimer); _heartbeatTimer = null; }
+  window.removeEventListener('beforeunload', _heartbeatDisconnect);
+}
+
+function _heartbeatDisconnect() {
+  // Use sendBeacon for reliable delivery during page unload
+  try {
+    navigator.sendBeacon('/api/heartbeat/disconnect', '{}');
+  } catch(e) {
+    // Fallback: sync XHR (blocking but guaranteed)
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/heartbeat/disconnect', false);
+      xhr.send();
+    } catch(e2) {}
+  }
+}
+
+// Restore heartbeat state on page load
+(function() {
+  const _restoreHB = async () => {
+    try {
+      const s = await api('GET', '/api/settings');
+      if (s && s.heartbeat_enabled === 'true') {
+        const el = document.getElementById('heartbeat-enabled');
+        if (el) el.checked = true;
+        _heartbeatStart();
+        const status = document.getElementById('heartbeat-status');
+        if (status) { status.textContent = 'armed'; status.style.color = '#33cc33'; }
+      }
+    } catch(e) {}
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _restoreHB);
+  } else {
+    _restoreHB();
+  }
+})();
 
 // ── Voice Roulette ───────────────────────────────────────────────────────
 async function voiceRoulette() {

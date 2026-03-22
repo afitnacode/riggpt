@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.96
+RigGPT v2.12.97
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.96'
+VERSION        = 'v2.12.97'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4261,6 +4261,95 @@ def api_tx_terminate():
                     'message': 'Transmission terminated' if killed else 'No active TX to terminate'})
 
 
+# ── Browser Heartbeat / Dead-Man Switch ──────────────────────────────────────
+_heartbeat_last     = 0.0       # time.time() of last heartbeat
+_heartbeat_watchdog = None      # watchdog thread
+_heartbeat_active   = False     # watchdog is running
+
+def _heartbeat_kill_all():
+    """Emergency stop: terminate TX, PTT off, stop all scheduled ops."""
+    logger.warning('heartbeat: TIMEOUT — browser disconnected. Killing all ops.')
+    # Terminate active TX
+    global _active_tx_proc
+    if _active_tx_proc is not None:
+        try:
+            _active_tx_proc.terminate()
+            logger.info('heartbeat: killed active aplay')
+        except Exception:
+            pass
+    # PTT off
+    try:
+        if orchestrator._connected:
+            orchestrator.icom_agent.ptt_off()
+            logger.info('heartbeat: PTT forced off')
+    except Exception:
+        pass
+    # Stop all scheduled ops
+    for job_name in ['numbers_station', 'pirate_broadcast', 'mystery_tx', 'autoid',
+                     'time_announce', 'evp_mode', 'whisper_mode']:
+        try:
+            scheduler.remove_job(job_name)
+        except Exception:
+            pass
+    # Stop sentient listener
+    global _sentient_active
+    _sentient_stop.set()
+    _sentient_active = False
+    # Stop ghost possession
+    _ghost_stop_event.set()
+    # Clear global job refs
+    global _numbers_station_job, _pirate_job, _mystery_job
+    global _autoid_job, _timeannounce_job, _evp_job, _whisper_job
+    for attr in ['_numbers_station_job', '_pirate_job', '_mystery_job',
+                 '_autoid_job', '_timeannounce_job', '_evp_job', '_whisper_job']:
+        try:
+            globals()[attr] = None
+        except Exception:
+            pass
+    logger.warning('heartbeat: all ops killed')
+
+
+def _heartbeat_watchdog_loop():
+    """Background thread: check heartbeat every 10s, kill all if stale > 15s."""
+    global _heartbeat_active
+    _heartbeat_active = True
+    while _heartbeat_active:
+        time_module.sleep(10)
+        if not _heartbeat_active:
+            break
+        if _heartbeat_last == 0:
+            continue  # no heartbeat received yet — don't trigger
+        elapsed = time_module.time() - _heartbeat_last
+        if elapsed > 15:
+            _heartbeat_kill_all()
+            _heartbeat_active = False  # stop checking — everything's dead
+            break
+
+
+@app.route('/api/heartbeat', methods=['POST'])
+def api_heartbeat():
+    global _heartbeat_last, _heartbeat_watchdog, _heartbeat_active
+    _heartbeat_last = time_module.time()
+    # Start watchdog on first heartbeat if not already running
+    if not _heartbeat_active and _app_settings.get('heartbeat_enabled', 'false') == 'true':
+        _heartbeat_active = True
+        _heartbeat_watchdog = threading.Thread(
+            target=_heartbeat_watchdog_loop, daemon=True, name='heartbeat-watchdog')
+        _heartbeat_watchdog.start()
+        logger.info('heartbeat: watchdog started (15s timeout)')
+    return jsonify({'ok': True})
+
+
+@app.route('/api/heartbeat/disconnect', methods=['POST'])
+def api_heartbeat_disconnect():
+    """Clean disconnect — browser sends this on beforeunload."""
+    if _app_settings.get('heartbeat_enabled', 'false') == 'true':
+        _heartbeat_kill_all()
+    global _heartbeat_active
+    _heartbeat_active = False
+    return jsonify({'ok': True})
+
+
 # -------------------------------------------------------------
 # WAV Cache and Log Replay Routes
 # -------------------------------------------------------------
@@ -4375,7 +4464,7 @@ def api_settings_post():
     patch = request.json or {}
     # Allowed setting keys (whitelist to avoid arbitrary writes)
     allowed = {
-        'gong_path', 'ollama_url', 'ollama_model', 'ollama_enabled',
+        'gong_path', 'heartbeat_enabled', 'ollama_url', 'ollama_model', 'ollama_enabled',
         'ai_persona', 'ai_temp', 'ai_max_tokens', 'ai_mode',
         'serial_port', 'baud_rate', 'ci_v_address',
         'radio_model',
