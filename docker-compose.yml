@@ -1,0 +1,118 @@
+# ─────────────────────────────────────────────────────────────
+# RigGPT — Docker Compose
+#
+# HARDWARE REQUIREMENTS:
+#   - Icom IC-7610 (or CI-V compatible) connected via USB
+#   - USB serial port (typically /dev/ttyUSB0 or /dev/ttyIC7610)
+#   - USB audio device (ALSA, typically plughw:0,0 or plughw:1,0)
+#
+# QUICK START:
+#   docker compose up -d
+#   open http://localhost:5000
+#
+# FIRST RUN:
+#   1. Check serial port:  ls /dev/ttyUSB*
+#   2. Check audio device: aplay -l
+#   3. Update 'devices' below to match your hardware
+#   4. docker compose up -d
+#   5. Connect to radio in the UI
+#
+# PERSISTENT DATA:
+#   ./data/config/   → app_settings.json, api_keys.json, canon/
+#   ./data/sounds/   → clip WAV/MP3 files
+#   ./data/wav_cache/ → transmission log WAV cache
+# ─────────────────────────────────────────────────────────────
+
+services:
+  riggpt:
+    build: .
+    image: riggpt:latest
+    container_name: riggpt
+    restart: unless-stopped
+
+    ports:
+      - "5000:5000"
+
+    # ── Hardware passthrough ───────────────────────────────────
+    devices:
+      # Serial port — CI-V control
+      # Change to match your radio's USB serial device.
+      # Run 'ls /dev/ttyUSB*' on the host to find it.
+      # If you have a udev rule creating /dev/ttyIC7610, use that.
+      - /dev/ttyUSB0:/dev/ttyUSB0
+
+      # ALSA sound devices — required for audio playback/capture
+      - /dev/snd:/dev/snd
+
+    # ── Volumes ────────────────────────────────────────────────
+    volumes:
+      # Persistent config (settings, API keys, canon files)
+      - ./data/config:/home/riggpt
+
+      # Sound clips directory
+      - ./data/sounds:/sounds
+
+      # WAV cache (transmission log audio)
+      - ./data/wav_cache:/opt/riggpt/wav_cache
+
+      # Piper TTS voices (optional — mount host directory if installed)
+      # - /usr/share/piper-voices:/usr/share/piper-voices:ro
+
+      # Gong file (optional — or place in ./data/sounds/)
+      # - /opt/taco_bell_gong.wav:/opt/taco_bell_gong.wav:ro
+
+    # ── Environment ────────────────────────────────────────────
+    environment:
+      # Override auto-detected audio device if needed
+      # RIGGPT_AUDIO_DEVICE: "plughw:1,0"
+
+      # Ollama host (if running on the host or another container)
+      # RIGGPT_OLLAMA_HOST: "http://host.docker.internal:11434"
+      TZ: ${TZ:-America/New_York}
+
+    # ── Networking ─────────────────────────────────────────────
+    # host network gives direct access to serial ports and avoids
+    # NAT issues with Ollama/Qdrant on localhost. Use bridge mode
+    # if you prefer isolation (but update Ollama host to use
+    # host.docker.internal or the host's IP).
+    network_mode: host
+    # If using bridge mode instead, comment out network_mode above
+    # and uncomment the ports section.
+
+
+  # ── Optional: Ollama (local LLM) ────────────────────────────
+  # Uncomment to run Ollama alongside RigGPT.
+  # Pull a model after starting: docker exec ollama ollama pull llama3
+  #
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   # For GPU passthrough (NVIDIA):
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - capabilities: [gpu]
+
+
+  # ── Optional: Qdrant (vector database for community memory) ──
+  # Uncomment to run Qdrant for Discord community memory.
+  #
+  # qdrant:
+  #   image: qdrant/qdrant:latest
+  #   container_name: qdrant
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6333:6333"
+  #   volumes:
+  #     - qdrant_data:/qdrant/storage
+
+
+# volumes:
+#   ollama_data:
+#   qdrant_data:

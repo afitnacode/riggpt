@@ -1,0 +1,9 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+data/
+wav_cache/
+*.wav
+*.mp3
+*.ogg
