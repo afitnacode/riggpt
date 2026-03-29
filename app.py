@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.97
+RigGPT v2.12.98
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.97'
+VERSION        = 'v2.12.98'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4390,6 +4390,7 @@ def api_log_wav_delete(tx_id):
 def api_audio_play_file():
     data  = request.json or {}
     fname = data.get('file', '').strip()
+    do_ptt = data.get('ptt', False)
     if not fname:
         return jsonify({'success': False, 'message': 'No file specified'}), 400
 
@@ -4412,7 +4413,17 @@ def api_audio_play_file():
         return jsonify({'success': True, 'message': 'Already playing'}), 200
 
     def _play():
+        ptt_active = False
         try:
+            # PTT on if requested and radio connected
+            if do_ptt and orchestrator._connected:
+                try:
+                    orchestrator.icom_agent.ptt_on()
+                    ptt_active = True
+                    time_module.sleep(0.15)
+                except Exception as ptt_e:
+                    logger.warning(f'play_file: PTT on failed: {ptt_e}')
+
             # Mirror the transmit path: try configured device -> 'default' -> bare aplay.
             devices_to_try = []
             if AUDIO_DEVICE and AUDIO_DEVICE != 'default':
@@ -4443,6 +4454,10 @@ def api_audio_play_file():
 
             logger.error(f'play_file: all aplay attempts failed for {fpath!r}')
         finally:
+            if ptt_active:
+                time_module.sleep(0.15)
+                try: orchestrator.icom_agent.ptt_off()
+                except Exception: pass
             _play_file_lock.release()
 
     threading.Thread(target=_play, daemon=True, name='gong-play').start()
@@ -7181,7 +7196,49 @@ def api_clips_stop():
     return jsonify({'success': True})
 
 
-@app.route('/api/clips/status', methods=['GET'])
+@app.route('/api/clips/rename', methods=['POST'])
+def api_clips_rename():
+    """Rename a clip file on disk. Updates the clips file list."""
+    global _clips_files
+    data = request.json or {}
+    old_name = data.get('old_name', '').strip()
+    new_name = data.get('new_name', '').strip()
+    if not old_name or not new_name:
+        return jsonify({'success': False, 'message': 'old_name and new_name required'}), 400
+
+    # Preserve extension if user didn't provide one
+    old_ext = os.path.splitext(old_name)[1]
+    new_ext = os.path.splitext(new_name)[1]
+    if not new_ext and old_ext:
+        new_name = new_name + old_ext
+
+    # Sanitize — prevent path traversal
+    new_name = os.path.basename(new_name)
+    old_name = os.path.basename(old_name)
+
+    clips_dir = _clips_cfg().get('dir', CLIPS_DEFAULT_DIR)
+    old_path = os.path.join(clips_dir, old_name)
+    new_path = os.path.join(clips_dir, new_name)
+
+    if not os.path.exists(old_path):
+        return jsonify({'success': False, 'message': f'File not found: {old_name}'}), 404
+    if os.path.exists(new_path) and old_path != new_path:
+        return jsonify({'success': False, 'message': f'File already exists: {new_name}'}), 409
+
+    try:
+        os.rename(old_path, new_path)
+        logger.info(f'clips: renamed {old_name!r} → {new_name!r}')
+        # Update in-memory file list
+        with _clips_lock:
+            for f in _clips_files:
+                if f['name'] == old_name:
+                    f['name'] = new_name
+                    f['path'] = new_path
+                    f['cached_path'] = new_path
+                    break
+        return jsonify({'success': True, 'message': f'Renamed to {new_name}', 'new_name': new_name})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 def api_clips_status():
     with _clips_lock:
         return jsonify({
