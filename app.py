@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.98
+RigGPT v2.12.99
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.98'
+VERSION        = 'v2.12.99'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4414,48 +4414,47 @@ def api_audio_play_file():
 
     def _play():
         ptt_active = False
+        proc = None
         try:
-            # PTT on if requested and radio connected
+            # Build aplay command with low-latency buffer
+            dev = AUDIO_DEVICE if (AUDIO_DEVICE and AUDIO_DEVICE != 'default') else None
+            cmd = ['aplay', '--buffer-time=50000', '--period-time=10000']
+            if dev:
+                cmd += ['-D', dev]
+            cmd.append(fpath)
+
             if do_ptt and orchestrator._connected:
+                # LOW-LATENCY STRATEGY: start aplay first (it initializes ALSA
+                # and buffers audio), then key PTT. By the time PTT settles,
+                # aplay is ready to output immediately.
+                proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                time_module.sleep(0.02)  # 20ms: let aplay open ALSA device
                 try:
                     orchestrator.icom_agent.ptt_on()
                     ptt_active = True
-                    time_module.sleep(0.15)
                 except Exception as ptt_e:
                     logger.warning(f'play_file: PTT on failed: {ptt_e}')
+                logger.info(f'play_file: PTT+aplay device={dev or "system-default"} file={fpath!r}')
+                proc.wait(timeout=30)
+            else:
+                # No PTT — simple blocking play with fallback
+                logger.info(f'play_file: aplay device={dev or "system-default"} file={fpath!r}')
+                result = subprocess.run(cmd, capture_output=True, timeout=30)
+                if result.returncode != 0:
+                    cmd2 = ['aplay', '--buffer-time=50000', '--period-time=10000', fpath]
+                    subprocess.run(cmd2, capture_output=True, timeout=30)
 
-            # Mirror the transmit path: try configured device -> 'default' -> bare aplay.
-            devices_to_try = []
-            if AUDIO_DEVICE and AUDIO_DEVICE != 'default':
-                devices_to_try.append(AUDIO_DEVICE)
-            devices_to_try.append('default')
-            devices_to_try.append(None)   # bare aplay with no -D flag
-
-            for dev in devices_to_try:
-                try:
-                    cmd = ['aplay']
-                    if dev:
-                        cmd += ['-D', dev]
-                    cmd.append(fpath)
-                    logger.info(f'play_file: aplay device={dev or "system-default"} file={fpath!r}')
-                    result = subprocess.run(cmd, capture_output=True, timeout=30)
-                    if result.returncode == 0:
-                        logger.info(f'play_file: aplay OK (device={dev or "system-default"})')
-                        return   # success - stop trying
-                    err = result.stderr.decode('utf-8', errors='replace').strip()
-                    logger.warning(f'play_file: aplay failed (device={dev or "system-default"}) rc={result.returncode}: {err}')
-                except FileNotFoundError:
-                    logger.error('play_file: aplay not found - is alsa-utils installed?')
-                    return
-                except subprocess.TimeoutExpired:
-                    logger.warning(f'play_file: aplay timed out (device={dev or "system-default"})')
-                except Exception as e:
-                    logger.warning(f'play_file: aplay exception (device={dev or "system-default"}): {e}')
-
-            logger.error(f'play_file: all aplay attempts failed for {fpath!r}')
+            logger.info(f'play_file: complete')
+        except subprocess.TimeoutExpired:
+            logger.warning('play_file: aplay timed out')
+            if proc:
+                try: proc.kill()
+                except Exception: pass
+        except Exception as e:
+            logger.warning(f'play_file: error: {e}')
         finally:
             if ptt_active:
-                time_module.sleep(0.15)
+                time_module.sleep(0.05)
                 try: orchestrator.icom_agent.ptt_off()
                 except Exception: pass
             _play_file_lock.release()
