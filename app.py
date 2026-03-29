@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.12.99
+RigGPT v2.13.0
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.12.99'
+VERSION        = 'v2.13.0'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4507,7 +4507,7 @@ def api_settings_post():
         'alexa_enabled', 'alexa_engine', 'alexa_voice',
         'alexa_model', 'alexa_trigger', 'alexa_max_tok',
         # Clips / Media Player
-        'clips_dir', 'clips_poll_interval',
+        'clips_dir', 'clips_poll_interval', 'clips_gong',
         'clips_s3_enabled', 'clips_s3_bucket',
         'clips_s3_region', 'clips_s3_prefix',
         # Discord monitor
@@ -7087,6 +7087,24 @@ def _clips_play(clip: dict):
 
         if not played:
             logger.error(f'clips: all player attempts failed for {fpath!r}')
+
+        # Gong stinger: play immediately after clip, PTT still keyed
+        if played and _app_settings.get('clips_gong', 'true') == 'true':
+            gong_path = get_gong_path()
+            if gong_path and os.path.exists(gong_path):
+                try:
+                    gong_cmd = ['aplay', '--buffer-time=50000', '--period-time=10000']
+                    if dev:
+                        gong_cmd += ['-D', dev]
+                    gong_cmd.append(gong_path)
+                    # No sleep between clip end and gong start — seamless transition
+                    gong_proc = subprocess.run(gong_cmd, capture_output=True, timeout=15)
+                    if gong_proc.returncode == 0:
+                        logger.info('clips: gong stinger played')
+                    else:
+                        logger.warning(f'clips: gong aplay failed rc={gong_proc.returncode}')
+                except Exception as ge:
+                    logger.warning(f'clips: gong error: {ge}')
 
     finally:
         _clips_proc = None

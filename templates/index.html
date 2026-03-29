@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.12.99</span>
+    <span class="sb-label">v2.13.0</span>
   </div>
 </div>
 
@@ -4230,6 +4230,11 @@ hr.div  {
               style="display:none" title="Stop playback and drop PTT">
         &#9632; STOP
       </button>
+      <label class="toggle-row" style="margin-left:auto;flex-shrink:0;font-size:9px;gap:4px">
+        <input type="checkbox" id="clips-gong" checked
+          onchange="api('POST','/api/settings',{clips_gong:this.checked?'true':'false'}).catch(()=>{})">
+        &#128276; GONG
+      </label>
     </div>
   </div>
 
@@ -10186,6 +10191,7 @@ async function cfgFlushPresets() {
     memory_qdrant_host:       document.getElementById('memory-qdrant-host')?.value || '',
     memory_embed_model:       document.getElementById('memory-embed-model')?.value || '',
     heartbeat_enabled:        document.getElementById('heartbeat-enabled')?.checked ? 'true' : 'false',
+    clips_gong:               document.getElementById('clips-gong')?.checked ? 'true' : 'false',
   };
   // Strip empty strings so we don't clobber saved values with blank defaults
   const clean = Object.fromEntries(Object.entries(presets).filter(([,v]) => v !== ''));
@@ -12035,6 +12041,11 @@ function _restoreAllSettings(s) {
   // IRC mode
   chk('tx-livechat',   s.irc_mode);
   if (s.irc_mode === 'true') txLiveChatToggle();
+  // Clips gong
+  if (s.clips_gong != null) {
+    const gEl = document.getElementById('clips-gong');
+    if (gEl) gEl.checked = s.clips_gong !== 'false';
+  }
 }
 
 // =============================================================
