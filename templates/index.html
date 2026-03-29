@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.1</span>
+    <span class="sb-label">v2.13.2</span>
   </div>
 </div>
 
@@ -1999,6 +1999,10 @@ hr.div  {
           <button class="preset-btn" data-preset="stadium"     onclick="vfxPreset('stadium')">STADIUM</button>
           <button class="preset-btn" data-preset="whisper"     onclick="vfxPreset('whisper')">WHISPER</button>
           <button class="preset-btn" data-preset="newsroom"    onclick="vfxPreset('newsroom')">NEWSROOM</button>
+          <button class="preset-btn" data-preset="broadcast"   onclick="vfxPreset('broadcast')">BROADCAST</button>
+          <button class="preset-btn" data-preset="underwater"  onclick="vfxPreset('underwater')">UNDERWATER</button>
+          <button class="preset-btn" data-preset="demon"       onclick="vfxPreset('demon')">DEMON</button>
+          <button class="preset-btn" data-preset="psychedelic" onclick="vfxPreset('psychedelic')">PSYCHEDELIC</button>
         </div>
 
         <!-- Voice FX Sliders (2-col) -->
@@ -3786,6 +3790,7 @@ hr.div  {
           <option value="alien">Alien</option><option value="underwater">Underwater</option>
           <option value="cave">Cave</option><option value="horror">Horror</option>
           <option value="whisper">Whisper</option><option value="broadcast">Broadcast</option>
+          <option value="demon">Demon</option><option value="psychedelic">Psychedelic</option>
         </select>
       </div>
 
@@ -4705,6 +4710,8 @@ hr.div  {
         <option value="megaphone">mega</option>
         <option value="haunted">haunted</option>
         <option value="chipmunk">chipmunk</option>
+        <option value="demon">demon</option>
+        <option value="psychedelic">psychedelic</option>
         <option value="random">🎲 random</option>
       </select>
       <label id="trip-a-fx-intensity-lbl" style="font-size:9px;color:var(--amber);display:none">INT</label>
@@ -5023,6 +5030,8 @@ hr.div  {
         <option value="megaphone">mega</option>
         <option value="haunted">haunted</option>
         <option value="chipmunk">chipmunk</option>
+        <option value="demon">demon</option>
+        <option value="psychedelic">psychedelic</option>
         <option value="random">🎲 random</option>
       </select>
       <label id="trip-b-fx-intensity-lbl" style="font-size:9px;color:var(--amber);display:none">INT</label>
@@ -8692,6 +8701,10 @@ const VFX_PRESETS = {
   stadium:    { pitch:0,     speed:1.00, reverb:1 },
   whisper:    { pitch:100,   speed:0.85, reverb:0 },
   newsroom:   { pitch:80,    speed:1.05, reverb:0 },
+  broadcast:  { pitch:0,     speed:1.00, reverb:0 },
+  underwater: { pitch:-400,  speed:0.80, reverb:1 },
+  demon:      { pitch:-800,  speed:0.65, reverb:1 },
+  psychedelic:{ pitch:200,   speed:1.00, reverb:1 },
 };
 
 function vfxPreset(name) {
@@ -10832,7 +10845,7 @@ async function tripStart(previewOnly = false) {
     lastText = r;
   }
   // Per-agent audio FX — capture BEFORE first _tripSpeak call
-  const _RANDOM_PRESETS = ['normal','radio','telephone','robot','cave','megaphone','haunted','chipmunk','alien','horror','underwater','ghost','vintage'];
+  const _RANDOM_PRESETS = ['normal','radio','telephone','robot','cave','megaphone','haunted','chipmunk','alien','horror','underwater','ghost','vintage','demon','psychedelic','broadcast'];
   const _tripFX = (who) => {
     let preset = document.getElementById(`trip-${who}-fx-preset`)?.value || 'normal';
     let pitch  = parseInt(document.getElementById(`trip-${who}-fx-pitch`)?.value  || '0');

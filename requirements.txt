@@ -1,4 +1,4 @@
-# RigGPT v2.13.1 -- Python Dependencies
+# RigGPT v2.13.2 -- Python Dependencies
 
 # Web framework
 flask>=2.3.0
@@ -45,3 +45,5 @@ pyttsx3>=2.90
 #   pyrtlsdr  -- RTL-SDR removed from UI
 # Removed in v2.10.20:
 pydub          # audio layering for EVP mode
+pedalboard     # Spotify DSP: in-process audio FX (replaces sox subprocess)
+scipy          # signal resampling for speed/tempo changes

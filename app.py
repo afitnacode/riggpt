@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.1
+RigGPT v2.13.2
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.1'
+VERSION        = 'v2.13.2'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1692,6 +1692,9 @@ class Pyttsx3Agent:
 
 
 class AudioEffectsAgent:
+    """Audio effects processor using Spotify Pedalboard (in-process DSP).
+    Falls back to sox subprocess if pedalboard is not available."""
+
     PRESETS = {
         # -- Core --------------------------------------------------
         'autotune':    {'pitch': 0,    'speed': 1.0, 'reverb': False, 'robot': False, 'autotune': True},
@@ -1702,7 +1705,7 @@ class AudioEffectsAgent:
         'robot':       {'pitch': 0,    'speed': 1.0, 'reverb': False, 'robot': True},
         'darth_vader': {'pitch': -500, 'speed': 0.8, 'reverb': True,  'robot': False},
         'deep':        {'pitch': -300, 'speed': 0.9, 'reverb': False, 'robot': False},
-        # -- New effects -------------------------------------------
+        # -- Environment / character -------------------------------
         'submarine':   {'pitch': -700, 'speed': 0.75,'reverb': True,  'robot': False, 'lowpass': 800},
         'megaphone':   {'pitch': 100,  'speed': 1.0, 'reverb': False, 'robot': False, 'megaphone': True},
         'telephone':   {'pitch': 0,    'speed': 1.0, 'reverb': False, 'robot': False, 'telephone': True},
@@ -1716,26 +1719,263 @@ class AudioEffectsAgent:
         'horror':      {'pitch': -600, 'speed': 0.7, 'reverb': True,  'robot': False, 'tremolo': True},
         'newsroom':    {'pitch': 0,    'speed': 1.05,'reverb': False, 'robot': False, 'newsroom': True},
         'vintage':     {'pitch': -100, 'speed': 0.95,'reverb': False, 'robot': False, 'vintage': True},
+        # -- New Pedalboard-only presets ---------------------------
+        'broadcast':   {'pitch': 0,    'speed': 1.0, 'reverb': False, 'robot': False, 'broadcast': True},
+        'underwater':  {'pitch': -400, 'speed': 0.8, 'reverb': True,  'robot': False, 'underwater': True},
+        'demon':       {'pitch': -800, 'speed': 0.65,'reverb': True,  'robot': True,  'tremolo': True},
+        'psychedelic': {'pitch': 200,  'speed': 1.0, 'reverb': True,  'robot': False, 'psychedelic': True},
     }
+
+    def __init__(self):
+        self._use_pedalboard = False
+        try:
+            import pedalboard as _pb
+            from pedalboard.io import AudioFile as _AF
+            self._pb = _pb
+            self._AF = _AF
+            self._use_pedalboard = True
+            logger.info('AudioEffectsAgent: using Pedalboard (Spotify DSP)')
+        except ImportError:
+            logger.info('AudioEffectsAgent: pedalboard not installed, using sox fallback')
 
     def apply(self, input_path, preset='normal', pitch=0, speed=1.0, reverb=0,
              echo=0, chorus=0, flanger=0, tremolo=0, overdrive=0, bitcrush=0):
         if not input_path or not os.path.exists(input_path):
             return input_path
+        if self._use_pedalboard:
+            return self._apply_pedalboard(input_path, preset, pitch, speed,
+                                          reverb, echo, chorus, flanger,
+                                          tremolo, overdrive, bitcrush)
+        else:
+            return self._apply_sox(input_path, preset, pitch, speed,
+                                   reverb, echo, chorus, flanger,
+                                   tremolo, overdrive, bitcrush)
+
+    def _apply_pedalboard(self, input_path, preset, pitch, speed,
+                          reverb_val, echo_val, chorus_val, flanger_val,
+                          tremolo_val, overdrive_val, bitcrush_val):
+        """Process audio using Pedalboard — all in-process, no subprocess."""
+        pb = self._pb
         cfg = self.PRESETS.get(preset, self.PRESETS['normal']).copy()
-        if pitch != 0:       cfg['pitch']     = pitch
-        if speed != 1.0:     cfg['speed']     = speed
-        if reverb > 0:       cfg['reverb']    = reverb   # 0-100 intensity
-        if echo > 0:         cfg['echo_fx']   = echo
-        if chorus > 0:       cfg['chorus_fx'] = chorus
-        if flanger > 0:      cfg['flange_fx'] = flanger
-        if tremolo > 0:      cfg['trem_fx']   = tremolo
-        if overdrive > 0:    cfg['drive_fx']  = overdrive
-        if bitcrush > 0:     cfg['crush_fx']  = bitcrush
+        if pitch != 0:          cfg['pitch'] = pitch
+        if speed != 1.0:        cfg['speed'] = speed
+        if reverb_val > 0:      cfg['reverb'] = reverb_val
+        if echo_val > 0:        cfg['echo_fx'] = echo_val
+        if chorus_val > 0:      cfg['chorus_fx'] = chorus_val
+        if flanger_val > 0:     cfg['flange_fx'] = flanger_val
+        if tremolo_val > 0:     cfg['trem_fx'] = tremolo_val
+        if overdrive_val > 0:   cfg['drive_fx'] = overdrive_val
+        if bitcrush_val > 0:    cfg['crush_fx'] = bitcrush_val
 
         _fd, output_path = tempfile.mkstemp(suffix='.wav')
         os.close(_fd)
-        mp3_wav = None   # tracks intermediate mp3->wav conversion file
+
+        try:
+            # Read input audio
+            import numpy as np
+            inp = input_path
+            mp3_tmp = None
+            if input_path.endswith('.mp3'):
+                _fd2, mp3_tmp = tempfile.mkstemp(suffix='.wav')
+                os.close(_fd2)
+                subprocess.run(['ffmpeg', '-y', '-i', input_path, mp3_tmp],
+                               capture_output=True, check=True)
+                inp = mp3_tmp
+
+            with self._AF(inp) as f:
+                audio = f.read(f.frames)
+                sr = f.samplerate
+
+            if mp3_tmp:
+                try: os.remove(mp3_tmp)
+                except Exception: pass
+
+            # Build effect chain
+            effects = []
+
+            # -- Preset-specific effects --
+            if cfg.get('robot'):
+                effects += [pb.Distortion(drive_db=20),
+                            pb.HighpassFilter(cutoff_frequency_hz=800),
+                            pb.LowpassFilter(cutoff_frequency_hz=2500),
+                            pb.Distortion(drive_db=15)]
+            if cfg.get('radio'):
+                effects += [pb.HighpassFilter(cutoff_frequency_hz=300),
+                            pb.LowpassFilter(cutoff_frequency_hz=3000),
+                            pb.Distortion(drive_db=5)]
+            if cfg.get('walkie'):
+                effects += [pb.HighpassFilter(cutoff_frequency_hz=500),
+                            pb.LowpassFilter(cutoff_frequency_hz=2800),
+                            pb.Distortion(drive_db=10),
+                            pb.Compressor(threshold_db=-20, ratio=6)]
+            if cfg.get('telephone'):
+                effects += [pb.HighpassFilter(cutoff_frequency_hz=400),
+                            pb.LowpassFilter(cutoff_frequency_hz=3400),
+                            pb.Distortion(drive_db=8),
+                            pb.Gain(gain_db=-2)]
+            if cfg.get('megaphone'):
+                effects += [pb.HighpassFilter(cutoff_frequency_hz=700),
+                            pb.LowpassFilter(cutoff_frequency_hz=4000),
+                            pb.Distortion(drive_db=25),
+                            pb.Gain(gain_db=2)]
+            if cfg.get('whisper'):
+                effects += [pb.Gain(gain_db=-10),
+                            pb.Distortion(drive_db=3),
+                            pb.HighpassFilter(cutoff_frequency_hz=2000)]
+            if cfg.get('echo'):
+                effects.append(pb.Delay(delay_seconds=0.06, feedback=0.4, mix=0.5))
+            if cfg.get('cave'):
+                effects += [pb.Delay(delay_seconds=0.12, feedback=0.3, mix=0.4),
+                            pb.Delay(delay_seconds=0.24, feedback=0.2, mix=0.3)]
+            if cfg.get('chorus'):
+                effects.append(pb.Chorus(rate_hz=2, depth=0.25, mix=0.5,
+                                         centre_delay_ms=7, feedback=0.1))
+            if cfg.get('flanger'):
+                effects.append(pb.Phaser(rate_hz=0.5, depth=0.7, mix=0.5, feedback=0.3))
+            if cfg.get('tremolo') or cfg.get('trem_fx', 0) > 0:
+                # Simulate tremolo with fast chorus modulation
+                rate = 5.0 + (cfg.get('trem_fx', 50) / 100.0) * 8.0
+                effects.append(pb.Chorus(rate_hz=rate, depth=0.8, mix=0.7,
+                                         centre_delay_ms=1, feedback=0.0))
+            if cfg.get('stadium'):
+                effects.append(pb.Reverb(room_size=0.9, wet_level=0.6, dry_level=0.5,
+                                         damping=0.3, width=1.0))
+            if cfg.get('autotune'):
+                effects += [pb.Chorus(rate_hz=2, depth=0.5, mix=0.6,
+                                      centre_delay_ms=5, feedback=0.2),
+                            pb.Phaser(rate_hz=0.3, depth=0.5, mix=0.4),
+                            pb.Distortion(drive_db=3)]
+            if cfg.get('vintage'):
+                effects += [pb.HighpassFilter(cutoff_frequency_hz=200),
+                            pb.LowpassFilter(cutoff_frequency_hz=6000),
+                            pb.Gain(gain_db=-1),
+                            pb.Distortion(drive_db=3)]
+            if cfg.get('newsroom'):
+                effects += [pb.HighpassFilter(cutoff_frequency_hz=250),
+                            pb.LowpassFilter(cutoff_frequency_hz=7500),
+                            pb.Compressor(threshold_db=-15, ratio=4)]
+            if cfg.get('broadcast'):
+                effects += [pb.HighpassFilter(cutoff_frequency_hz=80),
+                            pb.LowpassFilter(cutoff_frequency_hz=8000),
+                            pb.Compressor(threshold_db=-18, ratio=4),
+                            pb.Gain(gain_db=3),
+                            pb.Limiter(threshold_db=-3)]
+            if cfg.get('underwater'):
+                effects += [pb.LowpassFilter(cutoff_frequency_hz=600),
+                            pb.Chorus(rate_hz=0.3, depth=0.6, mix=0.5,
+                                      centre_delay_ms=15, feedback=0.2),
+                            pb.Reverb(room_size=0.8, wet_level=0.5, damping=0.8)]
+            if cfg.get('psychedelic'):
+                effects += [pb.Phaser(rate_hz=0.4, depth=0.8, mix=0.6, feedback=0.5),
+                            pb.Chorus(rate_hz=1.5, depth=0.4, mix=0.4,
+                                      centre_delay_ms=10, feedback=0.15),
+                            pb.Delay(delay_seconds=0.15, feedback=0.3, mix=0.25),
+                            pb.Reverb(room_size=0.7, wet_level=0.35)]
+            if cfg.get('lowpass'):
+                effects.append(pb.LowpassFilter(cutoff_frequency_hz=float(cfg['lowpass'])))
+
+            # -- Pitch shift (in semitones; cfg stores cents) --
+            p = cfg.get('pitch', 0)
+            if p != 0:
+                semitones = p / 100.0
+                effects.append(pb.PitchShift(semitones=semitones))
+
+            # -- Progressive reverb (0-100 slider) --
+            rv = cfg.get('reverb', 0)
+            if rv and rv is not True and isinstance(rv, (int, float)):
+                room = 0.2 + (rv / 100.0) * 0.7   # 0.2-0.9
+                wet  = 0.1 + (rv / 100.0) * 0.5    # 0.1-0.6
+                damp = 0.8 - (rv / 100.0) * 0.5    # 0.8-0.3
+                effects.append(pb.Reverb(room_size=room, wet_level=wet,
+                                         dry_level=max(0.3, 1.0-wet),
+                                         damping=damp, width=1.0))
+            elif rv is True:
+                effects.append(pb.Reverb(room_size=0.5, wet_level=0.3,
+                                         dry_level=0.7, damping=0.5))
+
+            # -- Slider FX overrides --
+            if cfg.get('echo_fx', 0) > 0:
+                delay_s = 0.04 + (cfg['echo_fx'] / 100.0) * 0.08
+                feedback = 0.2 + (cfg['echo_fx'] / 100.0) * 0.5
+                effects.append(pb.Delay(delay_seconds=delay_s,
+                                        feedback=min(0.7, feedback), mix=0.4))
+            if cfg.get('chorus_fx', 0) > 0:
+                c = cfg['chorus_fx'] / 100.0
+                effects.append(pb.Chorus(rate_hz=1 + c * 3, depth=0.3 + c * 0.4,
+                                         mix=0.3 + c * 0.3,
+                                         centre_delay_ms=5 + c * 10, feedback=0.1))
+            if cfg.get('flange_fx', 0) > 0:
+                f = cfg['flange_fx'] / 100.0
+                effects.append(pb.Phaser(rate_hz=0.3 + f * 1.5,
+                                         depth=0.3 + f * 0.6,
+                                         mix=0.3 + f * 0.4, feedback=0.2 + f * 0.3))
+            if cfg.get('drive_fx', 0) > 0:
+                drive_db = 1 + (cfg['drive_fx'] / 100.0) * 35
+                effects.append(pb.Distortion(drive_db=drive_db))
+            if cfg.get('crush_fx', 0) > 0:
+                bits = max(2, 14 - int(cfg['crush_fx'] / 8))
+                effects.append(pb.Bitcrush(bit_depth=bits))
+
+            # -- Final limiter (replaces sox dynaudnorm) --
+            effects.append(pb.Limiter(threshold_db=-1.5))
+
+            # Apply the chain
+            if effects:
+                board = pb.Pedalboard(effects)
+                audio = board(audio, sr)
+
+            # -- Speed/tempo change (resample approach) --
+            spd = cfg.get('speed', 1.0)
+            if spd != 1.0 and abs(spd - 1.0) > 0.01:
+                from scipy.signal import resample
+                orig_len = audio.shape[-1]
+                new_len = int(orig_len / spd)
+                if audio.ndim == 2:
+                    audio = np.array([resample(audio[ch], new_len)
+                                      for ch in range(audio.shape[0])], dtype=np.float32)
+                else:
+                    audio = resample(audio, new_len).astype(np.float32)
+
+            # Clip to prevent hard clipping
+            audio = np.clip(audio, -1.0, 1.0)
+
+            # Write output
+            with self._AF(output_path, 'w', sr, audio.shape[0] if audio.ndim == 2 else 1) as f:
+                f.write(audio)
+
+            return output_path
+
+        except Exception as e:
+            logger.warning(f'Pedalboard effects error: {e}', exc_info=True)
+            try:
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+            except Exception:
+                pass
+            # Fall back to sox
+            logger.info('Falling back to sox for this file')
+            return self._apply_sox(input_path, preset, pitch, speed,
+                                   reverb_val, echo_val, chorus_val, flanger_val,
+                                   tremolo_val, overdrive_val, bitcrush_val)
+
+    def _apply_sox(self, input_path, preset, pitch, speed,
+                   reverb_val, echo_val, chorus_val, flanger_val,
+                   tremolo_val, overdrive_val, bitcrush_val):
+        """Legacy sox subprocess fallback."""
+        cfg = self.PRESETS.get(preset, self.PRESETS['normal']).copy()
+        if pitch != 0:          cfg['pitch'] = pitch
+        if speed != 1.0:        cfg['speed'] = speed
+        if reverb_val > 0:      cfg['reverb'] = reverb_val
+        if echo_val > 0:        cfg['echo_fx'] = echo_val
+        if chorus_val > 0:      cfg['chorus_fx'] = chorus_val
+        if flanger_val > 0:     cfg['flange_fx'] = flanger_val
+        if tremolo_val > 0:     cfg['trem_fx'] = tremolo_val
+        if overdrive_val > 0:   cfg['drive_fx'] = overdrive_val
+        if bitcrush_val > 0:    cfg['crush_fx'] = bitcrush_val
+
+        _fd, output_path = tempfile.mkstemp(suffix='.wav')
+        os.close(_fd)
+        mp3_wav = None
         try:
             if input_path.endswith('.mp3'):
                 _fd, mp3_wav = tempfile.mkstemp(suffix='.wav')
@@ -1770,8 +2010,6 @@ class AudioEffectsAgent:
             if cfg.get('stadium'):
                 sox_cmd += ['reverb', '80', '80', '100', '100', '0', '0']
             if cfg.get('autotune'):
-                # Simulate autotune: pitch quantize via heavy chorus+flanger modulation
-                # combined with a slight robotic quality and pitch snap
                 sox_cmd += ['chorus', '0.5', '0.9', '50', '0.4', '0.5', '2.0', '-s',
                             'flanger', '0', '3', '0', '71', '0.5', 'lin', '0', '25',
                             'pitch', '0', 'overdrive', '5']
@@ -1785,20 +2023,17 @@ class AudioEffectsAgent:
                 sox_cmd += ['tempo', str(cfg['speed'])]
             if cfg.get('pitch', 0) != 0:
                 sox_cmd += ['pitch', str(cfg['pitch'])]
-            # -- Progressive reverb (0-100 intensity) -----------
             rv = cfg.get('reverb', 0)
             if rv and rv is not True:
-                rev_wet   = max(0, min(100, int(rv)))
-                rev_room  = 20 + int(rv * 0.8)          # 20-100
-                rev_damp  = max(20, 80 - int(rv * 0.5)) # 80-30
+                rev_wet = max(0, min(100, int(rv)))
+                rev_room = 20 + int(rv * 0.8)
+                rev_damp = max(20, 80 - int(rv * 0.5))
                 sox_cmd += ['reverb', str(rev_wet), str(rev_damp), str(rev_room)]
-            elif rv:  # preset True (backwards compat)
+            elif rv:
                 sox_cmd += ['reverb', '50', '50', '100']
-
-            # -- Bizarre FX from sliders -----------------------
             if cfg.get('echo_fx', 0) > 0:
-                echo_delay  = 40 + int(cfg['echo_fx'] * 0.8)  # 40-120ms
-                echo_decay  = round(0.2 + cfg['echo_fx'] / 100.0 * 0.65, 2)
+                echo_delay = 40 + int(cfg['echo_fx'] * 0.8)
+                echo_decay = round(0.2 + cfg['echo_fx'] / 100.0 * 0.65, 2)
                 sox_cmd += ['echo', '0.8', str(echo_decay), str(echo_delay), str(echo_decay)]
             if cfg.get('chorus_fx', 0) > 0:
                 c = cfg['chorus_fx'] / 100.0
@@ -1809,15 +2044,14 @@ class AudioEffectsAgent:
                 sox_cmd += ['flanger', '0', str(int(1+cfg['flange_fx']/20)),
                             '0', '71', '0.5', 'lin', '0', '25']
             if cfg.get('trem_fx', 0) > 0:
-                freq  = round(2.0 + cfg['trem_fx'] / 100.0 * 8.0, 1)
+                freq = round(2.0 + cfg['trem_fx'] / 100.0 * 8.0, 1)
                 depth = round(40 + cfg['trem_fx'] * 0.55)
                 sox_cmd += ['tremolo', str(freq), str(depth)]
             if cfg.get('drive_fx', 0) > 0:
                 gain = round(1 + cfg['drive_fx'] / 100.0 * 40, 1)
                 sox_cmd += ['overdrive', str(int(cfg['drive_fx'])), '0', 'vol', str(round(1/max(1,gain*0.5),2))]
             if cfg.get('crush_fx', 0) > 0:
-                bits = max(1, 13 - int(cfg['crush_fx']))
-                sox_cmd += ['rate', '8000', 'rate', '44100']  # lo-fi rate crush
+                sox_cmd += ['rate', '8000', 'rate', '44100']
 
             if len(sox_cmd) == 3:
                 import shutil
@@ -1826,8 +2060,7 @@ class AudioEffectsAgent:
                 subprocess.run(sox_cmd, capture_output=True, check=True)
             return output_path
         except Exception as e:
-            logger.warning(f"Audio effects error: {e}")
-            # Clean up the unused output file and return original
+            logger.warning(f"Sox effects error: {e}")
             try:
                 if os.path.exists(output_path):
                     os.remove(output_path)
@@ -1835,12 +2068,9 @@ class AudioEffectsAgent:
                 pass
             return input_path
         finally:
-            # Clean up the mp3->wav intermediate file if it was created
             if mp3_wav and os.path.exists(mp3_wav):
-                try:
-                    os.remove(mp3_wav)
-                except Exception:
-                    pass
+                try: os.remove(mp3_wav)
+                except Exception: pass
 
 
 # -------------------------------------------------------------

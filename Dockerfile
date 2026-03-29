@@ -32,7 +32,7 @@ WORKDIR /opt/riggpt
 # ── Python dependencies ──────────────────────────────────────
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir pydub \
+    && pip install --no-cache-dir pydub pedalboard scipy \
     && echo "Core deps installed"
 
 # Optional: faster-whisper for SENTIENT tab (uncomment to include)
