@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.2
+RigGPT v2.13.3
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.2'
+VERSION        = 'v2.13.3'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1728,15 +1728,28 @@ class AudioEffectsAgent:
 
     def __init__(self):
         self._use_pedalboard = False
+        # Pedalboard is a compiled C++ library that requires modern CPU instructions
+        # (AVX2/SSE4). On older CPUs it crashes with SIGILL (Illegal Instruction)
+        # which kills the entire process — Python's try/except can't catch OS signals.
+        # So we probe it in a subprocess first: if that subprocess survives, we import.
         try:
+            probe = subprocess.run(
+                ['python3', '-c', 'import pedalboard; from pedalboard.io import AudioFile; print("ok")'],
+                capture_output=True, timeout=10
+            )
+            if probe.returncode != 0:
+                stderr = probe.stderr.decode('utf-8', errors='replace').strip()
+                logger.info(f'AudioEffectsAgent: pedalboard probe failed (rc={probe.returncode}): {stderr[:100]}')
+                logger.info('AudioEffectsAgent: CPU may not support required instructions (AVX2/SSE4). Using sox.')
+                return
             import pedalboard as _pb
             from pedalboard.io import AudioFile as _AF
             self._pb = _pb
             self._AF = _AF
             self._use_pedalboard = True
             logger.info('AudioEffectsAgent: using Pedalboard (Spotify DSP)')
-        except ImportError:
-            logger.info('AudioEffectsAgent: pedalboard not installed, using sox fallback')
+        except Exception as e:
+            logger.info(f'AudioEffectsAgent: pedalboard not available ({e}), using sox fallback')
 
     def apply(self, input_path, preset='normal', pitch=0, speed=1.0, reverb=0,
              echo=0, chorus=0, flanger=0, tremolo=0, overdrive=0, bitcrush=0):
