@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.20
+RigGPT v2.13.21
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.20'
+VERSION        = 'v2.13.21'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7821,6 +7821,85 @@ def _voice_stop_client():
     _voice_log('Client stopped')
 
 
+# ── Custom Audio Source with Level Metering ──
+_voice_rms   = 0       # current RMS level (0-32768)
+_voice_peak  = 0       # current peak level
+_voice_source = None   # active ALSAAudioSource instance
+
+
+class ALSAAudioSource:
+    """Custom discord.py AudioSource that reads from ALSA via ffmpeg with level metering."""
+
+    def __init__(self, device: str = 'plughw:0,0'):
+        self.device = device
+        self._process = None
+        self._closed = False
+        self._start_ffmpeg()
+
+    def _start_ffmpeg(self):
+        """Start ffmpeg to capture from ALSA and output raw s16le stereo 48kHz."""
+        cmd = [
+            'ffmpeg', '-nostdin',
+            '-f', 'alsa', '-ac', '1', '-ar', '48000',
+            '-thread_queue_size', '1024',
+            '-i', self.device,
+            '-f', 's16le', '-ar', '48000', '-ac', '2',
+            '-loglevel', 'error',
+            'pipe:1'
+        ]
+        _voice_log(f'ffmpeg cmd: {" ".join(cmd)}')
+        self._process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            bufsize=3840 * 4  # ~80ms buffer
+        )
+
+    def read(self) -> bytes:
+        """Read 20ms of audio (3840 bytes for stereo 48kHz 16-bit). Called by discord.py."""
+        global _voice_rms, _voice_peak
+        if self._closed or not self._process:
+            return b''
+        data = self._process.stdout.read(3840)
+        if len(data) == 0:
+            # ffmpeg exited — check stderr
+            try:
+                err = self._process.stderr.read().decode('utf-8', errors='replace')[:300]
+                if err:
+                    _voice_log(f'ffmpeg stderr: {err}')
+                rc = self._process.poll()
+                _voice_log(f'ffmpeg exited rc={rc}')
+            except Exception:
+                pass
+            return b''
+        # Calculate RMS and peak from the PCM data
+        try:
+            import struct
+            samples = struct.unpack(f'<{len(data)//2}h', data)
+            if samples:
+                rms_val = int((sum(s*s for s in samples) / len(samples)) ** 0.5)
+                peak_val = max(abs(s) for s in samples)
+                _voice_rms = rms_val
+                _voice_peak = peak_val
+        except Exception:
+            pass
+        return data
+
+    def is_opus(self) -> bool:
+        return False
+
+    def cleanup(self):
+        global _voice_rms, _voice_peak
+        self._closed = True
+        _voice_rms = 0
+        _voice_peak = 0
+        if self._process:
+            try:
+                self._process.kill()
+                self._process.wait(timeout=5)
+            except Exception:
+                pass
+            self._process = None
+
+
 async def _voice_join_async(channel_id: str):
     """Join a voice channel and start streaming ALSA audio."""
     global _voice_conn, _voice_channel_id
@@ -7845,56 +7924,51 @@ async def _voice_join_async(channel_id: str):
     _voice_conn = await channel.connect()
     _voice_channel_id = channel_id
 
-    # Stream radio RX audio from ALSA device
+    # Stream radio RX audio from ALSA device using custom source with level metering
+    global _voice_source
     dev = AUDIO_DEVICE if (AUDIO_DEVICE and AUDIO_DEVICE != 'default') else 'default'
-    _voice_log(f'Starting ffmpeg: -f alsa -i {dev} -ac 1 -ar 48000')
+    _voice_log(f'Starting ALSA capture from {dev}')
 
-    source = _disc.FFmpegPCMAudio(
-        dev,
-        before_options='-f alsa -ac 1 -ar 48000 -thread_queue_size 512',
-        stderr=subprocess.PIPE,
-    )
+    _voice_source = ALSAAudioSource(device=dev)
 
     def _on_stream_end(error):
+        global _voice_source
         if error:
             _voice_log(f'Stream error: {error}')
         else:
-            _voice_log('Stream ended cleanly')
-        # Try to capture ffmpeg stderr for diagnostics
-        try:
-            if hasattr(source, '_process') and source._process and source._process.stderr:
-                err = source._process.stderr.read()
-                if err:
-                    _voice_log(f'ffmpeg stderr: {err.decode("utf-8", errors="replace")[:300]}')
-        except Exception:
-            pass
+            _voice_log('Stream ended')
+        if _voice_source:
+            _voice_source.cleanup()
+            _voice_source = None
 
-    _voice_conn.play(source, after=_on_stream_end)
+    _voice_conn.play(_voice_source, after=_on_stream_end)
 
-    # Check if it's actually playing after a moment
-    await asyncio.sleep(1)
+    # Verify playback after 1.5s
+    await asyncio.sleep(1.5)
     if _voice_conn.is_playing():
-        _voice_log(f'Joined #{channel.name} — streaming RX audio from {dev}')
+        _voice_log(f'✓ Streaming to #{channel.name} — RMS={_voice_rms} peak={_voice_peak}')
     else:
-        _voice_log(f'WARNING: joined #{channel.name} but playback not active — ffmpeg may have failed')
-        # Try to read stderr
-        try:
-            if hasattr(source, '_process') and source._process:
-                rc = source._process.poll()
-                if rc is not None:
-                    err = source._process.stderr.read().decode('utf-8', errors='replace')[:300] if source._process.stderr else ''
+        _voice_log(f'WARNING: joined #{channel.name} but playback stopped')
+        if _voice_source and _voice_source._process:
+            rc = _voice_source._process.poll()
+            if rc is not None:
+                try:
+                    err = _voice_source._process.stderr.read().decode('utf-8', errors='replace')[:300]
                     _voice_log(f'ffmpeg exited rc={rc}: {err}')
-        except Exception:
-            pass
+                except Exception:
+                    pass
     return True
 
 
 async def _voice_leave_async():
     """Leave the voice channel."""
-    global _voice_conn, _voice_channel_id
+    global _voice_conn, _voice_channel_id, _voice_source
     if _voice_conn and _voice_conn.is_connected():
         _voice_conn.stop()
         await _voice_conn.disconnect(force=True)
+    if _voice_source:
+        _voice_source.cleanup()
+        _voice_source = None
     _voice_conn = None
     _voice_channel_id = ''
     _voice_log('Left voice channel')
@@ -7967,6 +8041,8 @@ def api_voice_status():
         'connected':      connected,
         'playing':        playing,
         'channel_id':     _voice_channel_id,
+        'rms':            _voice_rms,
+        'peak':           _voice_peak,
     })
 
 
