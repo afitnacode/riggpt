@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.9
+RigGPT v2.13.10
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.9'
+VERSION        = 'v2.13.10'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6646,19 +6646,27 @@ def _discord_poll_once() -> str | None:
             author  = _ascii(msg.get('author', {}).get('username', 'unknown'))
             author_id = msg.get('author', {}).get('id', '')
             raw_content = msg.get('content', '')
-            # Check for bot mention BEFORE stripping markup
-            # Discord mentions look like <@USER_ID> or <@!USER_ID>
+
+            # Detect bot mention using THREE methods:
+            # 1. Discord API 'mentions' array (most reliable — server-side)
             _bot_uid = _dbot_state.get('bot_user_id', '')
-            mentions_bot = bool(_bot_uid and (f'<@{_bot_uid}>' in raw_content or f'<@!{_bot_uid}>' in raw_content))
-            # Strip Discord markup tokens before storing:
-            # <#channel_id>  <@user_id>  <@&role_id>  <:emoji:id>  <a:emoji:id>
+            api_mentions = msg.get('mentions', [])
+            mentioned_ids = {m.get('id', '') for m in api_mentions if isinstance(m, dict)}
+            mentions_bot = bool(_bot_uid and _bot_uid in mentioned_ids)
+            # 2. Raw text <@ID> check (fallback if mentions array missing)
+            if not mentions_bot and _bot_uid:
+                mentions_bot = (f'<@{_bot_uid}>' in raw_content or f'<@!{_bot_uid}>' in raw_content)
+            # 3. Plain text bot name (catches "hey Slurper" without @)
+            # (handled in _dbot_should_engage, not here)
+
+            # Strip Discord markup tokens before storing
             import re as _re_discord
-            raw_content = _re_discord.sub(r'<[#@][^>]{1,40}>', '', raw_content)   # mentions/channels
-            raw_content = _re_discord.sub(r'<a?:[A-Za-z0-9_]{1,32}:\d+>', '', raw_content)  # custom emoji
-            raw_content = _re_discord.sub(r'  +', ' ', raw_content).strip()  # collapse gaps left by removed tokens
+            raw_content = _re_discord.sub(r'<[#@][^>]{1,40}>', '', raw_content)
+            raw_content = _re_discord.sub(r'<a?:[A-Za-z0-9_]{1,32}:\d+>', '', raw_content)
+            raw_content = _re_discord.sub(r'  +', ' ', raw_content).strip()
             content = _ascii(raw_content)
             if not content:
-                continue   # skip embeds/attachments with no text body
+                continue
             _discord_messages.append({
                 'id':           mid,
                 'author':       author,
@@ -6690,7 +6698,9 @@ def _discord_poller():
     while True:
         with _discord_lock:
             enabled = _discord_state.get('enabled', False)
-            interval = max(5, int(_discord_state.get('poll_interval', 10)))
+            # Faster polling when dbot engine is active (3s vs normal 5-10s)
+            min_interval = 3 if _dbot_active else 5
+            interval = max(min_interval, int(_discord_state.get('poll_interval', 10)))
 
         if not enabled:
             _last_err = None
@@ -7095,9 +7105,15 @@ def _dbot_engine():
     _seen_ids = set()
     _last_quiet_check = time_module.time()
     _poll_count = 0
+    _id_retry = 0  # retry bot_user_id resolution if it failed
 
     while not _dbot_stop.is_set():
         try:
+            # Retry bot identity resolution if it failed on startup
+            if not _dbot_state.get('bot_user_id') and _id_retry < 5:
+                _id_retry += 1
+                _dbot_resolve_bot_id()
+
             # Get current messages from the shared discord buffer
             with _discord_lock:
                 msgs = list(_discord_messages)
@@ -7113,7 +7129,7 @@ def _dbot_engine():
             if not msgs:
                 if _poll_count % 10 == 1:
                     _dbot_log('WAIT', 'No messages in buffer — is Discord poller running?')
-                time_module.sleep(3)
+                time_module.sleep(2)
                 continue
 
             # Find new messages we haven't processed
@@ -7180,7 +7196,7 @@ def _dbot_engine():
             _dbot_log('ERROR', f'Engine error: {e}')
             logger.error(f'dbot: engine error: {e}', exc_info=True)
 
-        time_module.sleep(3)
+        time_module.sleep(2)
 
     _dbot_active = False
     _dbot_log('ENGINE', 'Bot engine stopped')
@@ -7203,8 +7219,9 @@ def api_dbot_start():
     with _discord_lock:
         if not _discord_state.get('enabled'):
             _discord_state['enabled'] = True
-            _discord_state['poll_interval'] = max(5, int(cfg.get('poll_interval', 10) or 10))
             logger.info('dbot: auto-enabled discord poller (was disabled)')
+        # Force fast polling while bot is active
+        _discord_state['poll_interval'] = 3
 
     _dbot_stop.clear()
     _dbot_state['enabled'] = True
