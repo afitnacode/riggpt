@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.4</span>
+    <span class="sb-label">v2.13.5</span>
   </div>
 </div>
 
@@ -1737,6 +1737,10 @@ hr.div  {
   <button class="tab-btn" onclick="showTab('sentient')" data-tab="sentient"
     style="color:#8844ff;border-bottom:2px solid #8844ff">
     &#129504; SENTIENT
+  </button>
+  <button class="tab-btn" onclick="showTab('discord')" data-tab="discord"
+    style="color:#5865F2;border-bottom:2px solid #5865F2">
+    &#129302; DISCORD
   </button>
 
   <div class="strip-right">
@@ -3940,6 +3944,153 @@ hr.div  {
 </div>
 
 <!-- ══════════════════════
+     PANE: DISCORD BOT
+══════════════════════════ -->
+<div id="pane-discord" class="pane">
+  <div style="display:grid;grid-template-columns:260px 1fr 240px;height:100%;overflow:hidden">
+
+    <!-- LEFT: Controls -->
+    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow-y:auto;padding:var(--s3)">
+
+      <div class="sec-head" style="color:#5865F2">ENGINE</div>
+      <div class="btn-row" style="margin-bottom:var(--s3)">
+        <button class="btn sm ok" id="dbot-start-btn" onclick="dbotStart()">▶ START</button>
+        <button class="btn sm danger" onclick="dbotStop()">■ STOP</button>
+      </div>
+
+      <div class="sec-head" style="color:#5865F2">PERSONA</div>
+      <select id="dbot-persona" style="font-size:9px;margin-bottom:var(--s2)"
+        onchange="dbotSaveCfg()">
+        <option value="troll">🔥 Troll</option>
+        <option value="expert">🎓 Expert</option>
+        <option value="drunk">🍺 Drunk</option>
+        <option value="philosopher">🤔 Philosopher</option>
+        <option value="conspiracy">👁 Conspiracy</option>
+        <option value="hype">🎉 Hype Man</option>
+        <option value="pirate">🏴‍☠️ Pirate</option>
+        <option value="noir">🕵️ Noir Detective</option>
+        <option value="robot">🤖 Glitching Robot</option>
+        <option value="custom">✏️ Custom...</option>
+      </select>
+      <textarea id="dbot-custom-prompt" rows="3"
+        style="font-size:9px;display:none;margin-bottom:var(--s2);resize:vertical"
+        placeholder="Custom persona system prompt..."
+        onchange="dbotSaveCfg()"></textarea>
+
+      <div class="sec-head" style="color:#5865F2">MOOD</div>
+      <div class="form-row" style="margin-bottom:var(--s1)">
+        <label style="font-size:8px;width:65px">INTEREST</label>
+        <input type="range" id="dbot-engagement" min="0" max="100" value="35" style="flex:1"
+          oninput="document.getElementById('dbot-engagement-v').textContent=this.value+'%'"
+          onchange="dbotSaveCfg()">
+        <span id="dbot-engagement-v" style="font-size:8px;width:28px;text-align:right;color:var(--cyan)">35%</span>
+      </div>
+      <div class="form-row" style="margin-bottom:var(--s1)">
+        <label style="font-size:8px;width:65px">TEMP</label>
+        <input type="range" id="dbot-temp" min="0.1" max="2.0" step="0.1" value="0.9" style="flex:1"
+          oninput="document.getElementById('dbot-temp-v').textContent=parseFloat(this.value).toFixed(1)"
+          onchange="dbotSaveCfg()">
+        <span id="dbot-temp-v" style="font-size:8px;width:28px;text-align:right;color:var(--amber)">0.9</span>
+      </div>
+      <div class="form-row" style="margin-bottom:var(--s1)">
+        <label style="font-size:8px;width:65px">COOLDOWN</label>
+        <input type="number" id="dbot-cooldown" value="30" min="5" max="300" style="width:50px;font-size:9px"
+          onchange="dbotSaveCfg()">
+        <span style="font-size:8px;color:var(--text3)">sec</span>
+      </div>
+      <div class="form-row" style="margin-bottom:var(--s2)">
+        <label style="font-size:8px;width:65px">QUIET</label>
+        <input type="number" id="dbot-quiet" value="120" min="30" max="600" style="width:50px;font-size:9px"
+          onchange="dbotSaveCfg()">
+        <span style="font-size:8px;color:var(--text3)">sec → starter</span>
+      </div>
+
+      <div class="sec-head" style="color:#ff6b35">🔥 HOT WORDS</div>
+      <input type="text" id="dbot-hotwords" placeholder="antenna, SWR, dummy load, ..."
+        style="font-size:9px;margin-bottom:var(--s1)"
+        onchange="dbotSaveCfg()">
+      <div class="form-row" style="margin-bottom:var(--s2)">
+        <label style="font-size:8px;width:65px">BOOST</label>
+        <input type="range" id="dbot-boost" min="0" max="80" value="40" style="flex:1"
+          oninput="document.getElementById('dbot-boost-v').textContent='+'+this.value+'%'"
+          onchange="dbotSaveCfg()">
+        <span id="dbot-boost-v" style="font-size:8px;width:32px;text-align:right;color:#ff6b35">+40%</span>
+      </div>
+
+      <div class="sec-head" style="color:#5865F2">TOPIC INJECTION</div>
+      <div class="form-row" style="margin-bottom:var(--s2)">
+        <input type="text" id="dbot-topic" placeholder="pineapple on pizza..."
+          style="font-size:9px;flex:1">
+        <button class="btn sm" onclick="dbotInject()" style="flex-shrink:0">INJECT</button>
+      </div>
+      <div id="dbot-topic-active" style="font-size:8px;color:#5865F2;margin-bottom:var(--s2);display:none">
+        📌 Steering toward: <span id="dbot-topic-label"></span>
+        <button onclick="dbotClearTopic()" style="background:none;border:none;color:var(--tx);cursor:pointer;font-size:9px">✕</button>
+      </div>
+
+      <div class="sec-head" style="color:#5865F2">STARTERS</div>
+      <div class="form-row" style="margin-bottom:var(--s1)">
+        <input type="text" id="dbot-starter-text" placeholder="So... anyone ever been abducted?"
+          style="font-size:9px;flex:1">
+        <button class="btn sm" onclick="dbotAddStarter()" style="flex-shrink:0">QUEUE</button>
+      </div>
+      <div id="dbot-starter-list" style="font-size:8px;color:var(--text3);margin-bottom:var(--s2);max-height:60px;overflow-y:auto"></div>
+      <button class="btn sm" onclick="dbotClearStarters()" style="font-size:8px;margin-bottom:var(--s2)">✕ CLEAR ALL</button>
+
+    </div>
+
+    <!-- CENTER: Conversation View -->
+    <div style="display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;padding:var(--s2) var(--s4);border-bottom:var(--b1);flex-shrink:0">
+        <span style="font-size:10px;color:#5865F2;font-weight:700;letter-spacing:.08em">LIVE CHANNEL</span>
+        <span id="dbot-channel-name" style="font-size:9px;color:var(--text3);margin-left:var(--s3)"></span>
+        <span style="flex:1"></span>
+        <span id="dbot-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--text3);margin-right:var(--s2)"></span>
+        <span id="dbot-status-label" style="font-size:8px;color:var(--text3)">offline</span>
+      </div>
+      <div id="dbot-chat" style="flex:1;overflow-y:auto;padding:var(--s3);font-size:10px;font-family:var(--mono);line-height:1.6">
+        <div style="color:var(--text3);padding:var(--s7);text-align:center">
+          Start the engine to see the live conversation.
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Stats -->
+    <div style="display:flex;flex-direction:column;border-left:var(--b1);overflow-y:auto;padding:var(--s3)">
+      <div class="sec-head" style="color:#5865F2">STATS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);margin-bottom:var(--s3)">
+        <div style="text-align:center;padding:var(--s2);background:var(--bg2);border:var(--b1)">
+          <div style="font-size:18px;font-weight:700;color:#5865F2" id="dbot-stat-responded">0</div>
+          <div style="font-size:7px;color:var(--text3);letter-spacing:.1em">RESPONDED</div>
+        </div>
+        <div style="text-align:center;padding:var(--s2);background:var(--bg2);border:var(--b1)">
+          <div style="font-size:18px;font-weight:700;color:var(--text3)" id="dbot-stat-lurked">0</div>
+          <div style="font-size:7px;color:var(--text3);letter-spacing:.1em">LURKED</div>
+        </div>
+        <div style="text-align:center;padding:var(--s2);background:var(--bg2);border:var(--b1)">
+          <div style="font-size:18px;font-weight:700;color:#ff6b35" id="dbot-stat-hot">0</div>
+          <div style="font-size:7px;color:var(--text3);letter-spacing:.1em">HOT HITS</div>
+        </div>
+        <div style="text-align:center;padding:var(--s2);background:var(--bg2);border:var(--b1)">
+          <div style="font-size:14px;font-weight:700;color:var(--cyan)" id="dbot-stat-ratio">—</div>
+          <div style="font-size:7px;color:var(--text3);letter-spacing:.1em">ENGAGE %</div>
+        </div>
+      </div>
+      <button class="btn sm" onclick="dbotResetStats()" style="font-size:8px;margin-bottom:var(--s3)">↺ RESET STATS</button>
+
+      <div class="sec-head" style="color:#5865F2">ACTIVITY LOG</div>
+      <div id="dbot-log" style="flex:1;overflow-y:auto;font-size:8px;font-family:var(--mono);
+        color:var(--text3);background:var(--bg1);border:var(--b1);padding:var(--s2);line-height:1.5;min-height:100px">
+        <span style="color:var(--text3)">-- waiting --</span>
+      </div>
+
+      <div class="alert-strip" id="dbot-alert"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════
      PANE: AI INTEGRATION
 ══════════════════════════ -->
 <div id="pane-ai" class="pane">
@@ -5177,6 +5328,7 @@ const CMD_PALETTE = [
   { name:'Go to Clips',          key:'0',  action:()=>showTab('clips') },
   { name:'Go to Spec Ops',       key:'#',  action:()=>showTab('specops') },
   { name:'Go to Sentient',      key:'@',  action:()=>showTab('sentient') },
+  { name:'Go to Discord',       key:'&',  action:()=>showTab('discord') },
   { name:'Probe radio',          key:'',   action:()=>dashProbe() },
   { name:'Export log CSV',       key:'',   action:()=>exportLog() },
   { name:'Clear log',            key:'',   action:()=>clearLog() },
@@ -5218,6 +5370,8 @@ function showTab(name) {
   if (name !== 'specops'){ _mcStop(); }
   if (name === 'sentient'){ _sentPollStart(); sentDetectDevices(); }
   if (name !== 'sentient'){ _sentPollStop(); }
+  if (name === 'discord') { dbotPollStatus(); _dbotStartPolling(); }
+  if (name !== 'discord' && !_dbot_active_ui) { _dbotStopPolling(); }
   if (name === 'sstv')   loadSSTVModes();
   if (name === 'dash')   { loadDashStats(); loadRadioModel(); _txFeedLoad(); }
   if (name === 'ai')     loadAiConfig();
@@ -12801,6 +12955,189 @@ function _sentPollStart() {
 }
 function _sentPollStop() {
   if (_sentPollTimer) { clearInterval(_sentPollTimer); _sentPollTimer = null; }
+}
+
+// ── Discord Bot Engine ───────────────────────────────────────────────────
+let _dbotPollTimer = null;
+let _dbot_active_ui = false;
+
+async function dbotStart() {
+  const r = await api('POST', '/api/dbot/start');
+  showAlert('dbot-alert', r.message || (r.success ? 'Started' : 'Failed'), r.success ? 'ok' : 'err');
+  if (r.success) {
+    _dbot_active_ui = true;
+    const btn = document.getElementById('dbot-start-btn');
+    if (btn) { btn.textContent = '● RUNNING'; btn.style.borderColor = '#33cc33'; }
+    const dot = document.getElementById('dbot-status-dot');
+    const lbl = document.getElementById('dbot-status-label');
+    if (dot) dot.style.background = '#33cc33';
+    if (lbl) { lbl.textContent = 'active'; lbl.style.color = '#33cc33'; }
+    _dbotStartPolling();
+  }
+}
+
+async function dbotStop() {
+  await api('POST', '/api/dbot/stop');
+  _dbot_active_ui = false;
+  const btn = document.getElementById('dbot-start-btn');
+  if (btn) { btn.textContent = '▶ START'; btn.style.borderColor = ''; }
+  const dot = document.getElementById('dbot-status-dot');
+  const lbl = document.getElementById('dbot-status-label');
+  if (dot) dot.style.background = 'var(--text3)';
+  if (lbl) { lbl.textContent = 'offline'; lbl.style.color = 'var(--text3)'; }
+  _dbotStopPolling();
+}
+
+function dbotSaveCfg() {
+  const persona = document.getElementById('dbot-persona')?.value || 'troll';
+  // Show/hide custom prompt textarea
+  const customEl = document.getElementById('dbot-custom-prompt');
+  if (customEl) customEl.style.display = persona === 'custom' ? '' : 'none';
+
+  const hotStr = document.getElementById('dbot-hotwords')?.value || '';
+  api('POST', '/api/dbot/config', {
+    persona,
+    custom_prompt:  document.getElementById('dbot-custom-prompt')?.value || '',
+    engagement:     document.getElementById('dbot-engagement')?.value || 35,
+    temperature:    document.getElementById('dbot-temp')?.value || 0.9,
+    cooldown_sec:   document.getElementById('dbot-cooldown')?.value || 30,
+    quiet_sec:      document.getElementById('dbot-quiet')?.value || 120,
+    hotword_boost:  document.getElementById('dbot-boost')?.value || 40,
+    hot_words:      hotStr,
+  }).catch(() => {});
+}
+
+async function dbotInject() {
+  const el = document.getElementById('dbot-topic');
+  const topic = el?.value?.trim();
+  if (!topic) return;
+  const r = await api('POST', '/api/dbot/inject', { topic });
+  if (r.success) {
+    const active = document.getElementById('dbot-topic-active');
+    const label = document.getElementById('dbot-topic-label');
+    if (active) active.style.display = '';
+    if (label) label.textContent = topic;
+    showAlert('dbot-alert', `Topic injected: ${topic}`, 'ok');
+  }
+}
+
+async function dbotClearTopic() {
+  await api('POST', '/api/dbot/inject', { topic: '' });
+  const active = document.getElementById('dbot-topic-active');
+  if (active) active.style.display = 'none';
+  document.getElementById('dbot-topic').value = '';
+}
+
+async function dbotAddStarter() {
+  const el = document.getElementById('dbot-starter-text');
+  const text = el?.value?.trim();
+  if (!text) return;
+  const r = await api('POST', '/api/dbot/starter', { text });
+  if (r.success) {
+    el.value = '';
+    showAlert('dbot-alert', `Starter queued (${r.queued} total)`, 'ok');
+    dbotPollStatus();
+  }
+}
+
+async function dbotClearStarters() {
+  await api('POST', '/api/dbot/starters/clear');
+  const el = document.getElementById('dbot-starter-list');
+  if (el) el.innerHTML = '';
+}
+
+async function dbotResetStats() {
+  await api('POST', '/api/dbot/stats/reset');
+  dbotPollStatus();
+}
+
+function _dbotStartPolling() {
+  if (_dbotPollTimer) clearInterval(_dbotPollTimer);
+  _dbotPollTimer = setInterval(dbotPollStatus, 3000);
+  dbotPollStatus();
+}
+
+function _dbotStopPolling() {
+  if (_dbotPollTimer) { clearInterval(_dbotPollTimer); _dbotPollTimer = null; }
+}
+
+async function dbotPollStatus() {
+  try {
+    // Poll bot status
+    const s = await api('GET', '/api/dbot/status');
+    document.getElementById('dbot-stat-responded').textContent = s.responded || 0;
+    document.getElementById('dbot-stat-lurked').textContent = s.lurked || 0;
+    document.getElementById('dbot-stat-hot').textContent = s.hot_hits || 0;
+    const total = (s.responded || 0) + (s.lurked || 0);
+    document.getElementById('dbot-stat-ratio').textContent =
+      total > 0 ? Math.round((s.responded / total) * 100) + '%' : '—';
+
+    // Update starters list
+    const starterEl = document.getElementById('dbot-starter-list');
+    if (starterEl && s.starters) {
+      starterEl.innerHTML = s.starters.map((st, i) =>
+        `<div style="padding:1px 0;color:var(--text2)">💬 ${st.length > 50 ? st.slice(0,50)+'...' : st}</div>`
+      ).join('') || '<span style="color:var(--text3)">none queued</span>';
+    }
+
+    // Update topic indicator
+    if (s.topic) {
+      const active = document.getElementById('dbot-topic-active');
+      const label = document.getElementById('dbot-topic-label');
+      if (active) active.style.display = '';
+      if (label) label.textContent = s.topic;
+    }
+
+    // Update engine status
+    const dot = document.getElementById('dbot-status-dot');
+    const lbl = document.getElementById('dbot-status-label');
+    const btn = document.getElementById('dbot-start-btn');
+    if (s.active) {
+      if (dot) dot.style.background = '#33cc33';
+      if (lbl) { lbl.textContent = 'active'; lbl.style.color = '#33cc33'; }
+      if (btn) { btn.textContent = '● RUNNING'; btn.style.borderColor = '#33cc33'; }
+    } else {
+      if (dot) dot.style.background = 'var(--text3)';
+      if (lbl) { lbl.textContent = 'offline'; lbl.style.color = 'var(--text3)'; }
+      if (btn) { btn.textContent = '▶ START'; btn.style.borderColor = ''; }
+    }
+
+    // Poll conversation from shared Discord buffer
+    const msgs = await api('GET', '/api/discord/messages?limit=30');
+    _dbotRenderChat(msgs.messages || [], s);
+  } catch(e) {}
+}
+
+function _dbotRenderChat(messages, botStatus) {
+  const chat = document.getElementById('dbot-chat');
+  if (!chat || !messages.length) return;
+  const hotWords = (botStatus?.hot_words || []).map(w => w.toLowerCase());
+  const botId = botStatus?.bot_user_id || '';
+
+  let html = '';
+  for (const msg of messages) {
+    const isBot = msg.author_id === botId;
+    const authorColor = isBot ? '#5865F2' : 'var(--cyan)';
+    const bgColor = isBot ? 'rgba(88,101,242,.08)' : 'transparent';
+    const badge = isBot ? ' <span style="font-size:7px;background:#5865F2;color:#fff;padding:0 3px;border-radius:2px;vertical-align:middle">BOT</span>' : '';
+    const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+
+    // Highlight hot words
+    let content = (msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    for (const w of hotWords) {
+      const re = new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+      content = content.replace(re,
+        '<span style="background:#ff6b35;color:#fff;padding:0 2px;border-radius:2px;font-weight:700">$1</span>');
+    }
+
+    html += `<div style="padding:var(--s1) var(--s2);margin-bottom:2px;background:${bgColor};border-left:2px solid ${isBot?'#5865F2':'transparent'}">
+      <span style="font-weight:700;color:${authorColor}">${msg.author || '?'}${badge}</span>
+      <span style="color:var(--text3);margin-left:var(--s2)">${ts}</span>
+      <div style="margin-top:1px;color:var(--text2);word-break:break-word">${content}</div>
+    </div>`;
+  }
+  chat.innerHTML = html;
+  chat.scrollTop = chat.scrollHeight;
 }
 
 // ── Dead-Man Switch (Browser Heartbeat) ──────────────────────────────────

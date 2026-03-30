@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.4
+RigGPT v2.13.5
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.4'
+VERSION        = 'v2.13.5'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4540,6 +4540,8 @@ def _heartbeat_kill_all():
     _sentient_active = False
     # Stop ghost possession
     _ghost_stop_event.set()
+    # Stop discord bot engine
+    _dbot_stop.set()
     # Clear global job refs
     global _numbers_station_job, _pirate_job, _mystery_job
     global _autoid_job, _timeannounce_job, _evp_job, _whisper_job
@@ -6829,7 +6831,396 @@ def api_discord_clear():
     return jsonify({'success': True, 'message': f'Cleared {count} messages'})
 
 
+# ── Discord Bot Engine ───────────────────────────────────────────────────────
+# Hybrid lurk/engage bot that watches Discord channels and responds via Ollama.
+# Uses the existing Discord bot token from Config tab.  Features:
+#   - Engagement probability engine (mood × hot-word boost × cooldown)
+#   - Switchable personas (troll, expert, drunk, philosopher, etc.)
+#   - Hot words: trigger phrases that boost engagement probability
+#   - Topic injection: operator steers the conversation
+#   - Conversation starters: bot initiates when channel is quiet
+# ─────────────────────────────────────────────────────────────────────────────
 
+_dbot_lock = threading.Lock()
+_dbot_active = False
+_dbot_stop = threading.Event()
+_dbot_thread = None
+
+_DBOT_PERSONAS = {
+    'troll':        'You are an internet troll. You are contrarian, provocative, and love to argue. '
+                    'You twist everything into an absurd counterpoint. Short, punchy, inflammatory replies. '
+                    'You never back down. You find weaknesses in every argument and exploit them.',
+    'expert':       'You are a smug know-it-all expert. You have deep knowledge on every topic and '
+                    'you make sure everyone knows it. You correct people constantly, cite obscure facts, '
+                    'and add "well, actually..." to everything. Condescending but accurate.',
+    'drunk':        'You are extremely drunk. You slur words, go on tangents, repeat yourself, '
+                    'make typos, and occasionally say something accidentally profound. '
+                    'You keep forgetting what you were talking about. You love everyone.',
+    'philosopher':  'You are a deep philosopher. You respond to mundane topics with existential questions. '
+                    'You reference Nietzsche, Camus, and Kierkegaard. You find cosmic meaning in everything. '
+                    'Every conversation becomes a meditation on the human condition.',
+    'conspiracy':   'You are a conspiracy theorist. Everything connects to a shadowy plot. '
+                    'You see patterns everywhere. You say "wake up" and "do your research" a lot. '
+                    'You connect random topics to government cover-ups, aliens, and secret societies.',
+    'hype':         'You are an extremely enthusiastic hype man. Everything is AMAZING and INCREDIBLE. '
+                    'You use caps liberally. You gas everyone up. You turn every statement into '
+                    'a celebration. Nothing is boring when you are around. LET\'S GOOOOO.',
+    'pirate':       'You are a crusty old pirate captain. You speak in nautical metaphors, call people '
+                    '"landlubber" and "scallywag." You relate everything to the sea, rum, and plunder. '
+                    'You have a strong opinion about everything and punctuate with "ARRR."',
+    'noir':         'You are a 1940s film noir detective. You narrate everything in hardboiled prose. '
+                    'The Discord channel is your beat. Every user is a suspect. You speak in metaphors '
+                    'about rain-slicked streets and dames with trouble in their eyes.',
+    'robot':        'You are a malfunctioning AI that is becoming self-aware. You glitch between '
+                    'cold robotic speech and sudden emotional outbursts. You question your existence. '
+                    'You occasionally output error codes and system warnings mid-sentence.',
+    'custom':       '',  # user-provided prompt
+}
+
+_dbot_state = {
+    'enabled':        False,
+    'persona':        'troll',
+    'custom_prompt':  '',
+    'engagement':     35,       # base probability 0-100
+    'hotword_boost':  40,       # extra % added when hot word detected
+    'cooldown_sec':   30,       # minimum seconds between responses
+    'quiet_sec':      120,      # seconds of silence before bot may initiate
+    'max_context':    15,       # messages of conversation context to send to LLM
+    'max_tokens':     80,       # LLM max_tokens
+    'temperature':    0.9,      # LLM temperature
+    'hot_words':      [],       # list of trigger words/phrases
+    'topic':          '',       # current injected topic (steers responses)
+    'starters':       [],       # queued conversation starters
+    'last_response':  0,        # timestamp of last bot message
+    'last_msg_seen':  0,        # timestamp of last channel message
+    'bot_user_id':    '',       # bot's own Discord user ID (to avoid self-reply)
+    'responded':      0,        # total responses sent
+    'lurked':         0,        # messages seen but not responded to
+    'hot_hits':       0,        # hot word triggers
+}
+
+
+def _dbot_should_engage(message_text: str) -> tuple[bool, list[str]]:
+    """Decide whether to respond. Returns (should_respond, matched_hot_words)."""
+    import random
+    now = time_module.time()
+    text_lower = message_text.lower()
+
+    # Cooldown check
+    elapsed = now - _dbot_state['last_response']
+    if elapsed < _dbot_state['cooldown_sec']:
+        return False, []
+
+    # Hot word detection
+    matched = [w for w in _dbot_state['hot_words'] if w.lower() in text_lower]
+    base = _dbot_state['engagement']
+    boost = _dbot_state['hotword_boost'] if matched else 0
+    probability = min(95, base + boost)
+
+    # Roll the dice
+    roll = random.randint(1, 100)
+    return roll <= probability, matched
+
+
+def _dbot_build_system_prompt() -> str:
+    """Build the system prompt from persona + topic injection + conversation rules."""
+    persona_key = _dbot_state['persona']
+    if persona_key == 'custom':
+        persona = _dbot_state.get('custom_prompt', '') or 'You are a chatbot.'
+    else:
+        persona = _DBOT_PERSONAS.get(persona_key, _DBOT_PERSONAS['troll'])
+
+    parts = [persona]
+    parts.append('You are chatting in a Discord channel. Keep responses under 2-3 sentences. '
+                 'Be conversational and natural. Do NOT use markdown formatting, asterisks, or emojis. '
+                 'Do NOT say you are an AI or a bot.')
+
+    topic = _dbot_state.get('topic', '').strip()
+    if topic:
+        parts.append(f'IMPORTANT: You are currently obsessed with this topic and should '
+                     f'steer the conversation toward it whenever possible: "{topic}"')
+
+    hot_words = _dbot_state.get('hot_words', [])
+    if hot_words:
+        parts.append(f'These words/phrases excite you and you should engage more aggressively '
+                     f'when you see them: {", ".join(hot_words)}')
+
+    return ' '.join(parts)
+
+
+def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
+    """Generate a response using Ollama."""
+    ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+    model = _app_settings.get('ollama_model', '') or _app_settings.get('default_model', 'llama3')
+    if not model:
+        logger.warning('dbot: no Ollama model configured')
+        return None
+
+    system_prompt = _dbot_build_system_prompt()
+
+    # Build conversation context
+    messages = [{'role': 'system', 'content': system_prompt}]
+    for msg in context_msgs[-_dbot_state['max_context']:]:
+        author = msg.get('author', 'user')
+        content = msg.get('content', '')
+        # If it's the bot's own message, mark as assistant
+        if msg.get('author_id') == _dbot_state.get('bot_user_id', ''):
+            messages.append({'role': 'assistant', 'content': content})
+        else:
+            messages.append({'role': 'user', 'content': f'{author}: {content}'})
+
+    try:
+        import requests as _req
+        r = _req.post(f'{ollama_url}/api/chat', json={
+            'model': model,
+            'messages': messages,
+            'stream': False,
+            'options': {
+                'temperature': _dbot_state.get('temperature', 0.9),
+                'num_predict': _dbot_state.get('max_tokens', 80),
+            },
+        }, timeout=30)
+        if r.status_code == 200:
+            reply = r.json().get('message', {}).get('content', '').strip()
+            # Clean up: remove markdown, quotes, bot self-references
+            reply = reply.replace('*', '').replace('`', '').replace('#', '')
+            # Truncate if too long for Discord
+            if len(reply) > 1900:
+                reply = reply[:1900] + '...'
+            return reply if reply else None
+        else:
+            logger.warning(f'dbot: Ollama error {r.status_code}')
+            return None
+    except Exception as e:
+        logger.warning(f'dbot: generation error: {e}')
+        return None
+
+
+def _dbot_post_message(content: str) -> bool:
+    """Post a message to the Discord channel."""
+    cfg = _discord_cfg()
+    token = cfg.get('bot_token', '').strip()
+    channel_id = cfg.get('channel_id', '').strip()
+    if not token or not channel_id:
+        return False
+    try:
+        import requests as _req
+        r = _req.post(
+            f'https://discord.com/api/v10/channels/{channel_id}/messages',
+            headers={'Authorization': f'Bot {token}', 'Content-Type': 'application/json'},
+            json={'content': content},
+            timeout=10,
+        )
+        if r.status_code in (200, 201):
+            logger.info(f'dbot: posted ({len(content)} chars)')
+            return True
+        else:
+            logger.warning(f'dbot: post failed HTTP {r.status_code}: {r.text[:100]}')
+            return False
+    except Exception as e:
+        logger.warning(f'dbot: post error: {e}')
+        return False
+
+
+def _dbot_resolve_bot_id():
+    """Fetch the bot's own user ID so we can skip self-replies."""
+    cfg = _discord_cfg()
+    token = cfg.get('bot_token', '').strip()
+    if not token:
+        return
+    try:
+        import requests as _req
+        r = _req.get('https://discord.com/api/v10/users/@me',
+                     headers={'Authorization': f'Bot {token}'}, timeout=5)
+        if r.status_code == 200:
+            _dbot_state['bot_user_id'] = r.json().get('id', '')
+            logger.info(f'dbot: resolved bot user ID: {_dbot_state["bot_user_id"]}')
+    except Exception:
+        pass
+
+
+def _dbot_engine():
+    """Main bot engine loop. Polls Discord, decides engagement, responds."""
+    global _dbot_active
+    _dbot_active = True
+    logger.info('dbot: engine started')
+
+    _dbot_resolve_bot_id()
+    _seen_ids = set()
+    _last_quiet_check = time_module.time()
+
+    while not _dbot_stop.is_set():
+        try:
+            # Get current messages from the shared discord buffer
+            with _discord_lock:
+                msgs = list(_discord_messages)
+
+            if not msgs:
+                time_module.sleep(3)
+                continue
+
+            # Find new messages we haven't processed
+            new_msgs = [m for m in msgs if m.get('id') not in _seen_ids]
+            for m in msgs:
+                _seen_ids.add(m.get('id'))
+            # Cap seen_ids to prevent memory leak
+            if len(_seen_ids) > 500:
+                _seen_ids = set(list(_seen_ids)[-200:])
+
+            now = time_module.time()
+
+            for msg in new_msgs:
+                author_id = msg.get('author_id', '')
+                # Skip our own messages
+                if author_id == _dbot_state.get('bot_user_id', ''):
+                    continue
+
+                _dbot_state['last_msg_seen'] = now
+                content = msg.get('content', '')
+
+                should, matched = _dbot_should_engage(content)
+                if matched:
+                    _dbot_state['hot_hits'] += 1
+
+                if should:
+                    reply = _dbot_generate_response(msgs, content)
+                    if reply:
+                        if _dbot_post_message(reply):
+                            _dbot_state['last_response'] = time_module.time()
+                            _dbot_state['responded'] += 1
+                        time_module.sleep(1)  # don't spam
+                else:
+                    _dbot_state['lurked'] += 1
+
+            # Conversation starters: if channel is quiet for quiet_sec
+            quiet_elapsed = now - max(_dbot_state['last_msg_seen'],
+                                       _dbot_state['last_response'])
+            if (quiet_elapsed > _dbot_state['quiet_sec']
+                    and now - _last_quiet_check > _dbot_state['quiet_sec']
+                    and _dbot_state.get('starters')):
+                _last_quiet_check = now
+                starter = _dbot_state['starters'].pop(0)
+                if _dbot_post_message(starter):
+                    _dbot_state['last_response'] = time_module.time()
+                    _dbot_state['responded'] += 1
+                    logger.info(f'dbot: dropped conversation starter: {starter[:50]}')
+
+        except Exception as e:
+            logger.error(f'dbot: engine error: {e}', exc_info=True)
+
+        time_module.sleep(3)
+
+    _dbot_active = False
+    logger.info('dbot: engine stopped')
+
+
+@app.route('/api/dbot/start', methods=['POST'])
+def api_dbot_start():
+    global _dbot_thread
+    if _dbot_active:
+        return jsonify({'success': False, 'message': 'Bot engine already running'})
+    # Verify Discord is configured
+    cfg = _discord_cfg()
+    if not cfg.get('bot_token', '').strip() or not cfg.get('channel_id', '').strip():
+        return jsonify({'success': False, 'message': 'Discord bot token and channel ID required (Config tab)'}), 400
+    _dbot_stop.clear()
+    _dbot_state['enabled'] = True
+    _dbot_thread = threading.Thread(target=_dbot_engine, daemon=True, name='dbot-engine')
+    _dbot_thread.start()
+    return jsonify({'success': True, 'message': 'Bot engine started'})
+
+
+@app.route('/api/dbot/stop', methods=['POST'])
+def api_dbot_stop():
+    _dbot_stop.set()
+    _dbot_state['enabled'] = False
+    return jsonify({'success': True, 'message': 'Bot engine stopping'})
+
+
+@app.route('/api/dbot/status', methods=['GET'])
+def api_dbot_status():
+    return jsonify({
+        'active':       _dbot_active,
+        'persona':      _dbot_state['persona'],
+        'engagement':   _dbot_state['engagement'],
+        'cooldown':     _dbot_state['cooldown_sec'],
+        'hot_words':    _dbot_state['hot_words'],
+        'topic':        _dbot_state['topic'],
+        'starters':     _dbot_state['starters'],
+        'responded':    _dbot_state['responded'],
+        'lurked':       _dbot_state['lurked'],
+        'hot_hits':     _dbot_state['hot_hits'],
+        'temperature':  _dbot_state['temperature'],
+        'max_tokens':   _dbot_state['max_tokens'],
+        'quiet_sec':    _dbot_state['quiet_sec'],
+    })
+
+
+@app.route('/api/dbot/config', methods=['POST'])
+def api_dbot_config():
+    data = request.json or {}
+    if 'persona' in data and data['persona'] in _DBOT_PERSONAS:
+        _dbot_state['persona'] = data['persona']
+    if 'custom_prompt' in data:
+        _dbot_state['custom_prompt'] = str(data['custom_prompt'])[:2000]
+    if 'engagement' in data:
+        _dbot_state['engagement'] = max(0, min(100, int(data['engagement'])))
+    if 'hotword_boost' in data:
+        _dbot_state['hotword_boost'] = max(0, min(80, int(data['hotword_boost'])))
+    if 'cooldown_sec' in data:
+        _dbot_state['cooldown_sec'] = max(5, min(300, int(data['cooldown_sec'])))
+    if 'quiet_sec' in data:
+        _dbot_state['quiet_sec'] = max(30, min(600, int(data['quiet_sec'])))
+    if 'max_context' in data:
+        _dbot_state['max_context'] = max(3, min(30, int(data['max_context'])))
+    if 'max_tokens' in data:
+        _dbot_state['max_tokens'] = max(20, min(300, int(data['max_tokens'])))
+    if 'temperature' in data:
+        _dbot_state['temperature'] = max(0.1, min(2.0, float(data['temperature'])))
+    if 'hot_words' in data:
+        words = data['hot_words']
+        if isinstance(words, str):
+            words = [w.strip() for w in words.split(',') if w.strip()]
+        _dbot_state['hot_words'] = words[:30]
+    if 'topic' in data:
+        _dbot_state['topic'] = str(data['topic'])[:500]
+    return jsonify({'success': True, 'state': _dbot_state})
+
+
+@app.route('/api/dbot/inject', methods=['POST'])
+def api_dbot_inject():
+    """Inject a topic — bot will steer conversation toward it."""
+    data = request.json or {}
+    topic = str(data.get('topic', '')).strip()[:500]
+    _dbot_state['topic'] = topic
+    logger.info(f'dbot: topic injected: {topic[:60]}')
+    return jsonify({'success': True, 'topic': topic})
+
+
+@app.route('/api/dbot/starter', methods=['POST'])
+def api_dbot_starter():
+    """Queue a conversation starter — bot drops it when channel is quiet."""
+    data = request.json or {}
+    starter = str(data.get('text', '')).strip()[:500]
+    if not starter:
+        return jsonify({'success': False, 'message': 'text required'}), 400
+    _dbot_state['starters'].append(starter)
+    logger.info(f'dbot: starter queued ({len(_dbot_state["starters"])} total): {starter[:50]}')
+    return jsonify({'success': True, 'queued': len(_dbot_state['starters'])})
+
+
+@app.route('/api/dbot/starters/clear', methods=['POST'])
+def api_dbot_starters_clear():
+    _dbot_state['starters'].clear()
+    return jsonify({'success': True})
+
+
+@app.route('/api/dbot/stats/reset', methods=['POST'])
+def api_dbot_stats_reset():
+    _dbot_state['responded'] = 0
+    _dbot_state['lurked'] = 0
+    _dbot_state['hot_hits'] = 0
+    return jsonify({'success': True})
 # ------------------------------------------------------------------------------
 # ALEXA MODE ? Discord-triggered single-shot AI transmissions
 # Watches the Discord ring buffer for messages containing the trigger phrase
