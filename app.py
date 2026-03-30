@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.10
+RigGPT v2.13.11
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.10'
+VERSION        = 'v2.13.11'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6674,6 +6674,7 @@ def _discord_poll_once() -> str | None:
                 'content':      content,
                 'ts':           msg.get('timestamp', ''),
                 'mentions_bot': mentions_bot,
+                'mention_ids':  list(mentioned_ids),  # raw user IDs for engine re-check
             })
             added += 1
 
@@ -7151,7 +7152,21 @@ def _dbot_engine():
 
                 _dbot_state['last_msg_seen'] = now
                 content = msg.get('content', '')
+
+                # Engine-side mention detection (don't rely solely on poller flag)
+                # Poller flag may be False if bot_user_id wasn't resolved at ingest time
                 mentions_bot = msg.get('mentions_bot', False)
+                if not mentions_bot:
+                    bot_uid = _dbot_state.get('bot_user_id', '')
+                    if bot_uid:
+                        # Re-check against stored Discord API mention_ids
+                        mention_ids = msg.get('mention_ids', [])
+                        if bot_uid in mention_ids:
+                            mentions_bot = True
+                    # Also check plain text bot name (catches "hey Slurper")
+                    bot_name = _discord_state.get('bot_name', '').lower()
+                    if bot_name and bot_name in content.lower():
+                        mentions_bot = True
 
                 should, matched, was_mentioned = _dbot_should_engage(content, mentions_bot)
                 if matched:
@@ -7173,7 +7188,9 @@ def _dbot_engine():
                             _dbot_log('ERROR', 'Failed to post message to Discord')
                     else:
                         _dbot_log('ERROR', 'LLM returned empty response')
-                    time_module.sleep(1)  # don't spam
+                    # Brief pause between responses but don't skip remaining messages
+                    if not was_mentioned:
+                        time_module.sleep(1)
                 else:
                     _dbot_state['lurked'] += 1
                     if matched:
