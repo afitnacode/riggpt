@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.16</span>
+    <span class="sb-label">v2.13.17</span>
   </div>
 </div>
 
@@ -13143,6 +13143,25 @@ async function dbotPollStatus() {
       if (topicLabel) topicLabel.textContent = s.topic;
     } else {
       if (topicActive) topicActive.style.display = 'none';
+    }
+
+    // Restore all dbot settings from status
+    const _set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    _set('dbot-persona', s.persona);
+    const customEl = document.getElementById('dbot-custom-prompt');
+    if (customEl) customEl.style.display = s.persona === 'custom' ? '' : 'none';
+    _set('dbot-engagement', s.engagement);
+    document.getElementById('dbot-engagement-v').textContent = (s.engagement || 35) + '%';
+    _set('dbot-temp', s.temperature);
+    document.getElementById('dbot-temp-v').textContent = parseFloat(s.temperature || 0.9).toFixed(1);
+    _set('dbot-cooldown', s.cooldown);
+    _set('dbot-max-tokens', s.max_tokens);
+    _set('dbot-quiet', s.quiet_sec);
+    _set('dbot-boost', s.hotword_boost || 40);
+    document.getElementById('dbot-boost-v').textContent = '+' + (s.hotword_boost || 40) + '%';
+    if (s.hot_words && Array.isArray(s.hot_words)) {
+      const hw = document.getElementById('dbot-hotwords');
+      if (hw && document.activeElement !== hw) hw.value = s.hot_words.join(', ');
     }
 
     // Restore model selection if populated

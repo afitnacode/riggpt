@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.16
+RigGPT v2.13.17
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.16'
+VERSION        = 'v2.13.17'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7507,6 +7507,7 @@ def api_dbot_status():
         'engagement':   _dbot_state['engagement'],
         'cooldown':     _dbot_state['cooldown_sec'],
         'hot_words':    _dbot_state['hot_words'],
+        'hotword_boost': _dbot_state['hotword_boost'],
         'topic':        _dbot_state['topic'],
         'starters':     _dbot_state['starters'],
         'responded':    _dbot_state['responded'],
