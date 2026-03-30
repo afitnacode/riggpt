@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.19
+RigGPT v2.13.20
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.19'
+VERSION        = 'v2.13.20'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7847,13 +7847,45 @@ async def _voice_join_async(channel_id: str):
 
     # Stream radio RX audio from ALSA device
     dev = AUDIO_DEVICE if (AUDIO_DEVICE and AUDIO_DEVICE != 'default') else 'default'
+    _voice_log(f'Starting ffmpeg: -f alsa -i {dev} -ac 1 -ar 48000')
+
     source = _disc.FFmpegPCMAudio(
         dev,
-        before_options=f'-f alsa -ac 1 -ar 48000 -thread_queue_size 512',
+        before_options='-f alsa -ac 1 -ar 48000 -thread_queue_size 512',
+        stderr=subprocess.PIPE,
     )
-    _voice_conn.play(source, after=lambda e: _voice_log(
-        f'Stream ended: {e}' if e else 'Stream ended cleanly'))
-    _voice_log(f'Joined #{channel.name} — streaming RX audio from {dev}')
+
+    def _on_stream_end(error):
+        if error:
+            _voice_log(f'Stream error: {error}')
+        else:
+            _voice_log('Stream ended cleanly')
+        # Try to capture ffmpeg stderr for diagnostics
+        try:
+            if hasattr(source, '_process') and source._process and source._process.stderr:
+                err = source._process.stderr.read()
+                if err:
+                    _voice_log(f'ffmpeg stderr: {err.decode("utf-8", errors="replace")[:300]}')
+        except Exception:
+            pass
+
+    _voice_conn.play(source, after=_on_stream_end)
+
+    # Check if it's actually playing after a moment
+    await asyncio.sleep(1)
+    if _voice_conn.is_playing():
+        _voice_log(f'Joined #{channel.name} — streaming RX audio from {dev}')
+    else:
+        _voice_log(f'WARNING: joined #{channel.name} but playback not active — ffmpeg may have failed')
+        # Try to read stderr
+        try:
+            if hasattr(source, '_process') and source._process:
+                rc = source._process.poll()
+                if rc is not None:
+                    err = source._process.stderr.read().decode('utf-8', errors='replace')[:300] if source._process.stderr else ''
+                    _voice_log(f'ffmpeg exited rc={rc}: {err}')
+        except Exception:
+            pass
     return True
 
 
@@ -7936,6 +7968,51 @@ def api_voice_status():
         'playing':        playing,
         'channel_id':     _voice_channel_id,
     })
+
+
+@app.route('/api/voice/test', methods=['POST'])
+def api_voice_test():
+    """Test ALSA capture — records 2s and reports whether audio was captured."""
+    dev = AUDIO_DEVICE if (AUDIO_DEVICE and AUDIO_DEVICE != 'default') else 'default'
+    _fd, test_path = tempfile.mkstemp(suffix='.wav')
+    os.close(_fd)
+    try:
+        # Test 1: Can ffmpeg read from ALSA?
+        cmd = ['ffmpeg', '-y', '-f', 'alsa', '-ac', '1', '-ar', '48000',
+               '-i', dev, '-t', '2', '-f', 'wav', test_path]
+        result = subprocess.run(cmd, capture_output=True, timeout=10)
+        if result.returncode != 0:
+            err = result.stderr.decode('utf-8', errors='replace')[-300:]
+            return jsonify({'success': False,
+                'message': f'ffmpeg capture failed (rc={result.returncode})',
+                'stderr': err, 'device': dev})
+
+        # Test 2: Does the file have actual audio data?
+        size = os.path.getsize(test_path)
+        import numpy as np
+        import wave
+        try:
+            with wave.open(test_path, 'rb') as wf:
+                frames = wf.readframes(wf.getnframes())
+                audio = np.frombuffer(frames, dtype=np.int16).astype(np.float32)
+                rms = int(np.sqrt(np.mean(audio ** 2)))
+                peak = int(np.max(np.abs(audio)))
+        except Exception:
+            rms, peak = 0, 0
+
+        return jsonify({
+            'success': True, 'device': dev,
+            'size_bytes': size, 'rms': rms, 'peak': peak,
+            'message': f'Capture OK: {size//1024}KB, RMS={rms}, peak={peak}'
+                       + (' — audio detected' if rms > 50 else ' — SILENT (radio may be muted or off)')
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'message': 'ffmpeg timed out (10s) — device may be busy', 'device': dev})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)[:200], 'device': dev})
+    finally:
+        try: os.remove(test_path)
+        except Exception: pass
 
 
 # ------------------------------------------------------------------------------

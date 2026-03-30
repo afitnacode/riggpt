@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.19</span>
+    <span class="sb-label">v2.13.20</span>
   </div>
 </div>
 
@@ -4090,6 +4090,7 @@ hr.div  {
       <div class="btn-row" style="margin-bottom:var(--s2)">
         <button class="btn sm ok" id="voice-join-btn" onclick="voiceJoin()">🔊 JOIN</button>
         <button class="btn sm danger" onclick="voiceLeave()">🔇 LEAVE</button>
+        <button class="btn sm" onclick="voiceTest()">🧪 TEST</button>
       </div>
       <div id="voice-status" style="font-size:8px;color:var(--text3);margin-bottom:var(--s2)">
         Not connected
@@ -13473,6 +13474,22 @@ async function voicePollStatus() {
       if (btn) { btn.textContent = '🔊 JOIN'; btn.style.borderColor = ''; }
     }
   } catch(e) {}
+}
+
+async function voiceTest() {
+  const status = document.getElementById('voice-status');
+  if (status) { status.textContent = '🧪 Testing capture...'; status.style.color = 'var(--amber)'; }
+  try {
+    const r = await api('POST', '/api/voice/test');
+    if (status) {
+      status.innerHTML = r.success
+        ? `✓ ${r.message} <span style="color:var(--text3)">(${r.device})</span>`
+        : `✗ ${r.message}${r.stderr ? '<br><span style="color:var(--text3)">' + r.stderr.slice(-100) + '</span>' : ''}`;
+      status.style.color = r.success ? '#43b581' : 'var(--tx)';
+    }
+  } catch(e) {
+    if (status) { status.textContent = '✗ ' + e.message; status.style.color = 'var(--tx)'; }
+  }
 }
 
 // ── Dead-Man Switch (Browser Heartbeat) ──────────────────────────────────
