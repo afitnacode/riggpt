@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.7</span>
+    <span class="sb-label">v2.13.8</span>
   </div>
 </div>
 
@@ -13179,7 +13179,7 @@ async function dbotPollStatus() {
     const logEl = document.getElementById('dbot-log');
     if (logEl && logData.log && logData.log.length) {
       const colorMap = {
-        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)',
+        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', MENTION:'#ff44ff',
         HOT:'#ff6b35', ENGAGE:'#33cc33', LURK:'var(--text3)',
         SENT:'#5865F2', ERROR:'var(--tx)', STARTER:'var(--cyan)'
       };
@@ -13248,10 +13248,14 @@ function _dbotRenderChat(messages, botStatus) {
   let html = '';
   for (const msg of messages) {
     const isBot = msg.author_id === botId;
-    const authorColor = isBot ? '#5865F2' : 'var(--cyan)';
-    const bgColor = isBot ? 'rgba(88,101,242,.08)' : 'transparent';
-    const badge = isBot ? ' <span style="font-size:7px;background:#5865F2;color:#fff;padding:0 3px;border-radius:2px;vertical-align:middle">BOT</span>' : '';
-    const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+    const isMention = msg.mentions_bot === true;
+    const authorColor = isBot ? '#5865F2' : isMention ? '#ff44ff' : 'var(--cyan)';
+    const bgColor = isBot ? 'rgba(88,101,242,.08)' : isMention ? 'rgba(255,68,255,.06)' : 'transparent';
+    const borderColor = isBot ? '#5865F2' : isMention ? '#ff44ff' : 'transparent';
+    const badge = isBot ? ' <span style="font-size:7px;background:#5865F2;color:#fff;padding:0 3px;border-radius:2px;vertical-align:middle">BOT</span>'
+                 : isMention ? ' <span style="font-size:7px;background:#ff44ff;color:#fff;padding:0 3px;border-radius:2px;vertical-align:middle">@</span>'
+                 : '';
+    const ts = (msg.ts || msg.timestamp) ? new Date(msg.ts || msg.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
 
     // Highlight hot words
     let content = (msg.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -13261,7 +13265,7 @@ function _dbotRenderChat(messages, botStatus) {
         '<span style="background:#ff6b35;color:#fff;padding:0 2px;border-radius:2px;font-weight:700">$1</span>');
     }
 
-    html += `<div style="padding:var(--s1) var(--s2);margin-bottom:2px;background:${bgColor};border-left:2px solid ${isBot?'#5865F2':'transparent'}">
+    html += `<div style="padding:var(--s1) var(--s2);margin-bottom:2px;background:${bgColor};border-left:2px solid ${borderColor}">
       <span style="font-weight:700;color:${authorColor}">${msg.author || '?'}${badge}</span>
       <span style="color:var(--text3);margin-left:var(--s2)">${ts}</span>
       <div style="margin-top:1px;color:var(--text2);word-break:break-word">${content}</div>

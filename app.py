@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.7
+RigGPT v2.13.8
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.7'
+VERSION        = 'v2.13.8'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6644,7 +6644,12 @@ def _discord_poll_once() -> str | None:
             if mid in existing_ids:
                 continue
             author  = _ascii(msg.get('author', {}).get('username', 'unknown'))
+            author_id = msg.get('author', {}).get('id', '')
             raw_content = msg.get('content', '')
+            # Check for bot mention BEFORE stripping markup
+            # Discord mentions look like <@USER_ID> or <@!USER_ID>
+            _bot_uid = _dbot_state.get('bot_user_id', '')
+            mentions_bot = bool(_bot_uid and (f'<@{_bot_uid}>' in raw_content or f'<@!{_bot_uid}>' in raw_content))
             # Strip Discord markup tokens before storing:
             # <#channel_id>  <@user_id>  <@&role_id>  <:emoji:id>  <a:emoji:id>
             import re as _re_discord
@@ -6655,10 +6660,12 @@ def _discord_poll_once() -> str | None:
             if not content:
                 continue   # skip embeds/attachments with no text body
             _discord_messages.append({
-                'id':      mid,
-                'author':  author,
-                'content': content,
-                'ts':      msg.get('timestamp', ''),
+                'id':           mid,
+                'author':       author,
+                'author_id':    author_id,
+                'content':      content,
+                'ts':           msg.get('timestamp', ''),
+                'mentions_bot': mentions_bot,
             })
             added += 1
 
@@ -6914,16 +6921,27 @@ def _dbot_log(kind: str, text: str):
     logger.info(f'dbot: [{kind}] {text[:120]}')
 
 
-def _dbot_should_engage(message_text: str) -> tuple[bool, list[str]]:
-    """Decide whether to respond. Returns (should_respond, matched_hot_words)."""
+def _dbot_should_engage(message_text: str, mentions_bot: bool = False) -> tuple[bool, list[str], bool]:
+    """Decide whether to respond. Returns (should_respond, matched_hot_words, was_mentioned).
+    Direct @mentions always respond immediately (skip cooldown + probability)."""
     import random
     now = time_module.time()
     text_lower = message_text.lower()
 
-    # Cooldown check
+    # Check for bot name in plain text (case-insensitive)
+    bot_name = _discord_state.get('bot_name', '').strip().lower()
+    name_mentioned = bool(bot_name and bot_name in text_lower)
+    is_mentioned = mentions_bot or name_mentioned
+
+    # Direct mention = always respond, skip cooldown
+    if is_mentioned:
+        matched = [w for w in _dbot_state['hot_words'] if w.lower() in text_lower]
+        return True, matched, True
+
+    # Cooldown check (only for non-mentions)
     elapsed = now - _dbot_state['last_response']
     if elapsed < _dbot_state['cooldown_sec']:
-        return False, []
+        return False, [], False
 
     # Hot word detection
     matched = [w for w in _dbot_state['hot_words'] if w.lower() in text_lower]
@@ -6933,7 +6951,7 @@ def _dbot_should_engage(message_text: str) -> tuple[bool, list[str]]:
 
     # Roll the dice
     roll = random.randint(1, 100)
-    return roll <= probability, matched
+    return roll <= probability, matched, False
 
 
 def _dbot_build_system_prompt() -> str:
@@ -7045,7 +7063,7 @@ def _dbot_post_message(content: str) -> bool:
 
 
 def _dbot_resolve_bot_id():
-    """Fetch the bot's own user ID so we can skip self-replies."""
+    """Fetch the bot's own user ID and username so we can skip self-replies and detect @mentions."""
     cfg = _discord_cfg()
     token = cfg.get('bot_token', '').strip()
     if not token:
@@ -7055,10 +7073,16 @@ def _dbot_resolve_bot_id():
         r = _req.get('https://discord.com/api/v10/users/@me',
                      headers={'Authorization': f'Bot {token}'}, timeout=5)
         if r.status_code == 200:
-            _dbot_state['bot_user_id'] = r.json().get('id', '')
-            logger.info(f'dbot: resolved bot user ID: {_dbot_state["bot_user_id"]}')
-    except Exception:
-        pass
+            data = r.json()
+            _dbot_state['bot_user_id'] = data.get('id', '')
+            bot_name = data.get('username', '')
+            # Store in _discord_state too so _dbot_should_engage can find it
+            with _discord_lock:
+                if not _discord_state.get('bot_name'):
+                    _discord_state['bot_name'] = bot_name
+            _dbot_log('ENGINE', f'Bot identity: {bot_name} (ID: {_dbot_state["bot_user_id"]})')
+    except Exception as e:
+        _dbot_log('ERROR', f'Failed to resolve bot identity: {e}')
 
 
 def _dbot_engine():
@@ -7111,14 +7135,18 @@ def _dbot_engine():
 
                 _dbot_state['last_msg_seen'] = now
                 content = msg.get('content', '')
+                mentions_bot = msg.get('mentions_bot', False)
 
-                should, matched = _dbot_should_engage(content)
+                should, matched, was_mentioned = _dbot_should_engage(content, mentions_bot)
                 if matched:
                     _dbot_state['hot_hits'] += 1
                     _dbot_log('HOT', f'🔥 "{", ".join(matched)}" in msg from {author}: {content[:50]}')
 
+                if was_mentioned:
+                    _dbot_log('MENTION', f'📣 @mentioned by {author}: {content[:60]}')
+
                 if should:
-                    _dbot_log('ENGAGE', f'Responding to {author}: {content[:50]}...')
+                    _dbot_log('ENGAGE', f'Responding to {author}{" (mentioned)" if was_mentioned else ""}: {content[:50]}...')
                     reply = _dbot_generate_response(msgs, content)
                     if reply:
                         if _dbot_post_message(reply):
