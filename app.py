@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.6
+RigGPT v2.13.7
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.6'
+VERSION        = 'v2.13.7'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6897,6 +6897,7 @@ _dbot_state = {
     'responded':      0,        # total responses sent
     'lurked':         0,        # messages seen but not responded to
     'hot_hits':       0,        # hot word triggers
+    'model':          '',       # LLM model override (empty = use global)
 }
 
 _dbot_log_buffer = []  # ring buffer for debug log
@@ -6964,9 +6965,12 @@ def _dbot_build_system_prompt() -> str:
 def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
     """Generate a response using Ollama."""
     ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
-    model = _app_settings.get('ollama_model', '') or _app_settings.get('default_model', 'llama3')
+    # dbot-specific model override, then global fallbacks
+    model = (_dbot_state.get('model', '') or
+             _app_settings.get('ollama_model', '') or
+             _app_settings.get('default_model', ''))
     if not model:
-        logger.warning('dbot: no Ollama model configured')
+        _dbot_log('ERROR', 'No model configured — set one on the Discord tab or AI tab')
         return None
 
     system_prompt = _dbot_build_system_prompt()
@@ -6976,7 +6980,6 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
     for msg in context_msgs[-_dbot_state['max_context']:]:
         author = msg.get('author', 'user')
         content = msg.get('content', '')
-        # If it's the bot's own message, mark as assistant
         if msg.get('author_id') == _dbot_state.get('bot_user_id', ''):
             messages.append({'role': 'assistant', 'content': content})
         else:
@@ -6984,6 +6987,7 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
 
     try:
         import requests as _req
+        _dbot_log('LLM', f'→ {ollama_url} model={model} ctx={len(messages)} msgs')
         r = _req.post(f'{ollama_url}/api/chat', json={
             'model': model,
             'messages': messages,
@@ -6995,17 +6999,22 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
         }, timeout=30)
         if r.status_code == 200:
             reply = r.json().get('message', {}).get('content', '').strip()
-            # Clean up: remove markdown, quotes, bot self-references
             reply = reply.replace('*', '').replace('`', '').replace('#', '')
-            # Truncate if too long for Discord
             if len(reply) > 1900:
                 reply = reply[:1900] + '...'
             return reply if reply else None
         else:
-            logger.warning(f'dbot: Ollama error {r.status_code}')
+            body = r.text[:200].replace('\n', ' ')
+            _dbot_log('ERROR', f'Ollama HTTP {r.status_code}: {body}')
             return None
+    except _req.exceptions.ConnectionError:
+        _dbot_log('ERROR', f'Cannot connect to Ollama at {ollama_url} — is it running?')
+        return None
+    except _req.exceptions.Timeout:
+        _dbot_log('ERROR', f'Ollama timeout after 30s (model={model})')
+        return None
     except Exception as e:
-        logger.warning(f'dbot: generation error: {e}')
+        _dbot_log('ERROR', f'Generation error: {e}')
         return None
 
 
@@ -7201,6 +7210,8 @@ def api_dbot_status():
         'temperature':  _dbot_state['temperature'],
         'max_tokens':   _dbot_state['max_tokens'],
         'quiet_sec':    _dbot_state['quiet_sec'],
+        'model':        _dbot_state.get('model', ''),
+        'bot_user_id':  _dbot_state.get('bot_user_id', ''),
     })
 
 
@@ -7232,6 +7243,8 @@ def api_dbot_config():
         _dbot_state['hot_words'] = words[:30]
     if 'topic' in data:
         _dbot_state['topic'] = str(data['topic'])[:500]
+    if 'model' in data:
+        _dbot_state['model'] = str(data['model']).strip()[:100]
     return jsonify({'success': True, 'state': _dbot_state})
 
 
@@ -7314,6 +7327,39 @@ def api_dbot_log():
 def api_dbot_log_clear():
     _dbot_log_buffer.clear()
     return jsonify({'success': True})
+
+
+@app.route('/api/dbot/test', methods=['POST'])
+def api_dbot_test():
+    """Test LLM generation with current dbot settings. Returns the reply."""
+    data = request.json or {}
+    test_msg = data.get('message', 'Hello, anyone here?').strip() or 'Hello, anyone here?'
+
+    # Build a minimal context
+    fake_msgs = [{'author': 'TestUser', 'content': test_msg, 'author_id': 'test'}]
+    reply = _dbot_generate_response(fake_msgs, test_msg)
+    if reply:
+        return jsonify({'success': True, 'reply': reply})
+    else:
+        # Pull last error from log buffer
+        errors = [l for l in _dbot_log_buffer[-5:] if '[ERROR]' in l or '[LLM]' in l]
+        hint = errors[-1] if errors else 'No error details — check journalctl'
+        return jsonify({'success': False, 'message': f'LLM returned no response', 'hint': hint})
+
+
+@app.route('/api/dbot/models', methods=['GET'])
+def api_dbot_models():
+    """Fetch available models from Ollama."""
+    ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+    try:
+        import requests as _req
+        r = _req.get(f'{ollama_url}/api/tags', timeout=10)
+        if r.status_code == 200:
+            models = [m.get('name', '') for m in r.json().get('models', [])]
+            return jsonify({'success': True, 'models': sorted(models)})
+        return jsonify({'success': False, 'models': [], 'message': f'HTTP {r.status_code}'})
+    except Exception as e:
+        return jsonify({'success': False, 'models': [], 'message': str(e)[:100]})
 
 # ------------------------------------------------------------------------------
 # ALEXA MODE ? Discord-triggered single-shot AI transmissions
