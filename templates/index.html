@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.17</span>
+    <span class="sb-label">v2.13.18</span>
   </div>
 </div>
 
@@ -4000,12 +4000,18 @@ hr.div  {
       </div>
       <div id="dbot-canon-desc" style="font-size:8px;color:var(--text3);margin-bottom:var(--s2);display:none"></div>
 
-      <div style="padding:var(--s2) 0;border-bottom:var(--b1);margin-bottom:var(--s2);display:flex;align-items:center;gap:var(--s3)">
+      <div style="padding:var(--s2) 0;border-bottom:var(--b1);margin-bottom:var(--s2);display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap">
         <label class="toggle-row" style="font-size:9px;gap:4px;flex:1">
           <input type="checkbox" id="dbot-tx-enabled"
             onchange="dbotSaveCfg()"> TX ENABLED
         </label>
         <span id="dbot-tx-status" style="font-size:8px;color:var(--tx)">off</span>
+        <span style="color:var(--border2);margin:0 2px">│</span>
+        <label class="toggle-row" style="font-size:9px;gap:4px;flex:1">
+          <input type="checkbox" id="dbot-memory-enabled"
+            onchange="dbotSaveCfg()"> QDRANT MEMORY
+        </label>
+        <span id="dbot-memory-status" style="font-size:8px;color:var(--text3)">off</span>
       </div>
 
       <div class="sec-head" style="color:#5865F2">MOOD</div>
@@ -13058,6 +13064,7 @@ function dbotSaveCfg() {
     model:          document.getElementById('dbot-model')?.value || '',
     canon_file:     document.getElementById('dbot-canon')?.value || '',
     tx_enabled:     document.getElementById('dbot-tx-enabled')?.checked ? 'true' : 'false',
+    memory_enabled: document.getElementById('dbot-memory-enabled')?.checked ? 'true' : 'false',
   }).catch(() => {});
   _dbotUpdateCanonDesc();
 }
@@ -13188,6 +13195,14 @@ async function dbotPollStatus() {
     // Restore max_tokens
     const tokEl = document.getElementById('dbot-max-tokens');
     if (tokEl && s.max_tokens) tokEl.value = s.max_tokens;
+    // Restore memory enabled
+    const memEl = document.getElementById('dbot-memory-enabled');
+    const memStatus = document.getElementById('dbot-memory-status');
+    if (memEl) memEl.checked = !!s.memory_enabled;
+    if (memStatus) {
+      memStatus.textContent = s.memory_enabled ? 'active' : 'off';
+      memStatus.style.color = s.memory_enabled ? '#33cc33' : 'var(--text3)';
+    }
 
     // Update engine status
     const dot = document.getElementById('dbot-status-dot');
@@ -13244,7 +13259,7 @@ async function dbotPollStatus() {
     const logEl = document.getElementById('dbot-log');
     if (logEl && logData.log && logData.log.length) {
       const colorMap = {
-        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff', CMD:'#ff9500',
+        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff', CMD:'#ff9500', MEMORY:'#33cc33',
         HOT:'#ff6b35', ENGAGE:'#33cc33', LURK:'var(--text3)',
         SENT:'#5865F2', ERROR:'var(--tx)', STARTER:'var(--cyan)'
       };

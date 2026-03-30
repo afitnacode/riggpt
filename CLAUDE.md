@@ -26,7 +26,7 @@ CLAUDE.md               This file — read on startup
   - `/home/riggpt/app_settings.json` — all settings
   - `/home/riggpt/api_keys.json` — API credentials
 
-## Current version: v2.13.17
+## Current version: v2.13.18
 
 ## Version sync rule — ALWAYS update all 5 on every version bump
 1. `app.py` docstring header (`RigGPT vX.X.X`)
@@ -57,7 +57,7 @@ journalctl -u riggpt -n 50
 - `app.py` (~360KB): grep only, never full read
 - Both change frequently — always grep for exact text before any edit
 
-## Tab structure (v2.13.17)
+## Tab structure (v2.13.18)
 ```
 CONSOLE(1) WF ART(2) SSTV(3) SCHEDULE(4) LOG(5)
 CONFIG(6) SYSTEM(7) API CFG(8) AI(9)  ACID TRIP(!)  CLIPS(0)  SPEC OPS(#)  SENTIENT(@)  DISCORD(&)
@@ -67,7 +67,7 @@ CONFIG(6) SYSTEM(7) API CFG(8) AI(9)  ACID TRIP(!)  CLIPS(0)  SPEC OPS(#)  SENTI
   `pane-ai`, `pane-trip`, `pane-clips`, `pane-specops`, `pane-sentient`, `pane-discord`
 - TABS constant in JS: `['dash','wfall','sstv','sched','hist','cfg','system','apicfg','ai','trip','clips','specops']`
 - TX controls are embedded in `pane-dash` (Console tab), not a separate pane
-- BEACON was merged into SCHEDULE (50/50 split) in v2.13.17
+- BEACON was merged into SCHEDULE (50/50 split) in v2.13.18
 - `pane-dub` (Trenchtown FX) was removed in v2.12.34; FX/pads live in Clips tab
 
 ## Key app.py patterns

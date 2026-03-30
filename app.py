@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.17
+RigGPT v2.13.18
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.17'
+VERSION        = 'v2.13.18'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6919,6 +6919,7 @@ _dbot_state = {
     'model':          '',       # LLM model override (empty = use global)
     'canon_file':     '',       # personality/canon file from /home/riggpt/canon/
     'tx_enabled':     False,    # whether bot is allowed to transmit over the air
+    'memory_enabled': False,    # inject Qdrant community memory into prompts
 }
 
 _dbot_log_buffer = []  # ring buffer for debug log
@@ -6970,8 +6971,8 @@ def _dbot_should_engage(message_text: str, raw_content: str = '') -> tuple[bool,
     return roll <= probability, matched, False
 
 
-def _dbot_build_system_prompt() -> str:
-    """Build the system prompt from persona + canon file + radio state + topic injection."""
+def _dbot_build_system_prompt(trigger_text: str = '') -> str:
+    """Build the system prompt from persona + canon + memory + radio + topic."""
     persona_key = _dbot_state['persona']
     if persona_key == 'custom':
         persona = _dbot_state.get('custom_prompt', '') or 'You are a chatbot.'
@@ -6986,6 +6987,19 @@ def _dbot_build_system_prompt() -> str:
         canon_content = _dbot_load_canon(canon_file)
         if canon_content:
             parts.append(f'PERSONALITY AND BACKGROUND:\n{canon_content}')
+
+    # Inject Qdrant community memory if enabled
+    if _dbot_state.get('memory_enabled') and trigger_text:
+        try:
+            mem = _get_memory()
+            if mem and mem.is_available():
+                context = mem.build_context(trigger_text, turn_n=0, agent_side='a')
+                if context:
+                    parts.append(f'COMMUNITY MEMORY (things you know about this Discord community '
+                                 f'from past conversations — reference naturally, don\'t quote directly):\n{context}')
+                    _dbot_log('MEMORY', f'Injected {len(context)} chars of community context')
+        except Exception as e:
+            _dbot_log('ERROR', f'Qdrant memory query failed: {e}')
 
     parts.append('You are chatting in a Discord channel. Keep responses under 2-3 sentences. '
                  'Be conversational and natural. Do NOT use markdown formatting, asterisks, or emojis. '
@@ -7078,7 +7092,7 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
         _dbot_log('ERROR', 'No model configured — set one on the Discord tab or AI tab')
         return None
 
-    system_prompt = _dbot_build_system_prompt()
+    system_prompt = _dbot_build_system_prompt(trigger_msg)
 
     # Build conversation context
     messages = [{'role': 'system', 'content': system_prompt}]
@@ -7519,6 +7533,7 @@ def api_dbot_status():
         'model':        _dbot_state.get('model', ''),
         'canon_file':   _dbot_state.get('canon_file', ''),
         'tx_enabled':   _dbot_state.get('tx_enabled', False),
+        'memory_enabled': _dbot_state.get('memory_enabled', False),
         'bot_user_id':  _dbot_state.get('bot_user_id', ''),
     })
 
@@ -7557,6 +7572,8 @@ def api_dbot_config():
         _dbot_state['canon_file'] = str(data['canon_file']).strip()[:200]
     if 'tx_enabled' in data:
         _dbot_state['tx_enabled'] = str(data['tx_enabled']).lower() in ('true', '1', 'yes')
+    if 'memory_enabled' in data:
+        _dbot_state['memory_enabled'] = str(data['memory_enabled']).lower() in ('true', '1', 'yes')
     return jsonify({'success': True, 'state': _dbot_state})
 
 
