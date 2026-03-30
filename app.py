@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.8
+RigGPT v2.13.9
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.8'
+VERSION        = 'v2.13.9'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6982,7 +6982,7 @@ def _dbot_build_system_prompt() -> str:
 
 def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
     """Generate a response using Ollama."""
-    ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+    ollama_url = _app_settings.get('ollama_url', 'http://192.168.40.15:11434')
     # dbot-specific model override, then global fallbacks
     model = (_dbot_state.get('model', '') or
              _app_settings.get('ollama_model', '') or
@@ -7378,7 +7378,7 @@ def api_dbot_test():
 @app.route('/api/dbot/models', methods=['GET'])
 def api_dbot_models():
     """Fetch available models from Ollama."""
-    ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+    ollama_url = _app_settings.get('ollama_url', 'http://192.168.40.15:11434')
     try:
         import requests as _req
         r = _req.get(f'{ollama_url}/api/tags', timeout=10)
@@ -9583,7 +9583,7 @@ def _run_evp():
 
     # Optionally use AI to generate fresh EVP
     try:
-        ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+        ollama_url = _app_settings.get('ollama_url', 'http://192.168.40.15:11434')
         model = _app_settings.get('default_model', '')
         if model:
             import requests as _req
@@ -9778,7 +9778,7 @@ def _run_whisper():
 
     # Try AI generation
     try:
-        ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+        ollama_url = _app_settings.get('ollama_url', 'http://192.168.40.15:11434')
         model = _app_settings.get('default_model', '')
         if model:
             import requests as _req
@@ -10259,7 +10259,7 @@ def _sentient_listener_loop():
                 ai_model = _app_settings.get('sentient_ai_model', '') or \
                            _app_settings.get('default_model', '')
                 temp = float(_app_settings.get('sentient_temp', '0.9'))
-                ollama_url = _app_settings.get('ollama_host', 'http://localhost:11434')
+                ollama_url = _app_settings.get('ollama_url', 'http://192.168.40.15:11434')
 
                 # Build context
                 src_tag = 'another AI radio station' if is_bot else 'a human operator'
