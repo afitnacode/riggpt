@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.3
+RigGPT v2.13.4
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.3'
+VERSION        = 'v2.13.4'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6455,8 +6455,8 @@ def _ctrl_poll_once() -> str | None:
         return _ascii(f'Request error: {e}')
 
     if r.status_code == 401: return 'Invalid bot token'
-    if r.status_code == 403: return 'Bot lacks permission to read this channel'
-    if r.status_code == 404: return 'Channel not found'
+    if r.status_code == 403: return f'Bot lacks permission to read channel {channel_id} — check bot has "Read Message History" + "View Channel" in Discord server settings'
+    if r.status_code == 404: return f'Channel {channel_id} not found — verify channel ID is correct'
     if r.status_code != 200: return _ascii(f'HTTP {r.status_code}')
 
     try:
@@ -6620,9 +6620,9 @@ def _discord_poll_once() -> str | None:
     if r.status_code == 401:
         return 'Invalid bot token'
     if r.status_code == 403:
-        return 'Bot lacks permission to read this channel'
+        return f'Bot lacks permission to read channel {channel_id} — check bot has "Read Message History" + "View Channel" in Discord server settings'
     if r.status_code == 404:
-        return 'Channel not found'
+        return f'Channel {channel_id} not found — verify channel ID is correct'
     if r.status_code != 200:
         return _ascii(f'HTTP {r.status_code}')
 
@@ -6677,12 +6677,14 @@ def _discord_poll_once() -> str | None:
 def _discord_poller():
     """Background thread that polls Discord on the configured interval."""
     logger.info('discord-poller: thread started')
+    _last_err = None  # throttle: only log when error changes
     while True:
         with _discord_lock:
             enabled = _discord_state.get('enabled', False)
             interval = max(5, int(_discord_state.get('poll_interval', 10)))
 
         if not enabled:
+            _last_err = None
             time_module.sleep(5)
             continue
 
@@ -6691,7 +6693,11 @@ def _discord_poller():
             with _discord_lock:
                 _discord_state['connected'] = False
                 _discord_state['error']     = err
-            logger.warning(f'discord-poller: {err}')
+            if err != _last_err:
+                logger.warning(f'discord-poller: {err}')
+                _last_err = err
+        else:
+            _last_err = None
 
         time_module.sleep(interval)
 
