@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.11
+RigGPT v2.13.12
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.11'
+VERSION        = 'v2.13.12'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6672,9 +6672,10 @@ def _discord_poll_once() -> str | None:
                 'author':       author,
                 'author_id':    author_id,
                 'content':      content,
+                'raw_content':  _ascii(msg.get('content', '')),  # BEFORE stripping — engine uses for @mention detection
                 'ts':           msg.get('timestamp', ''),
                 'mentions_bot': mentions_bot,
-                'mention_ids':  list(mentioned_ids),  # raw user IDs for engine re-check
+                'mention_ids':  list(mentioned_ids),
             })
             added += 1
 
@@ -7152,20 +7153,32 @@ def _dbot_engine():
 
                 _dbot_state['last_msg_seen'] = now
                 content = msg.get('content', '')
+                raw = msg.get('raw_content', '')
 
-                # Engine-side mention detection (don't rely solely on poller flag)
-                # Poller flag may be False if bot_user_id wasn't resolved at ingest time
+                # Log every new message with mention detection details
+                _dbot_log('MSG', f'{author}: {content[:40]}  '
+                          f'[flag={msg.get("mentions_bot")} '
+                          f'ids={msg.get("mention_ids",[])} '
+                          f'bot={_dbot_state.get("bot_user_id","?")} '
+                          f'raw_has_@={"<@" in raw}]')
+
+                # Engine-side mention detection — belt AND suspenders
+                # The poller flag may be wrong if bot_user_id wasn't resolved at ingest.
+                # We check EVERYTHING here at processing time.
                 mentions_bot = msg.get('mentions_bot', False)
+                bot_uid = _dbot_state.get('bot_user_id', '')
+                if not mentions_bot and bot_uid:
+                    # Check stored Discord API mention_ids
+                    if bot_uid in msg.get('mention_ids', []):
+                        mentions_bot = True
+                    # Check raw_content for <@ID> patterns (most reliable)
+                    raw = msg.get('raw_content', '')
+                    if f'<@{bot_uid}>' in raw or f'<@!{bot_uid}>' in raw:
+                        mentions_bot = True
+                # Check plain text bot name (catches "hey Slurper")
                 if not mentions_bot:
-                    bot_uid = _dbot_state.get('bot_user_id', '')
-                    if bot_uid:
-                        # Re-check against stored Discord API mention_ids
-                        mention_ids = msg.get('mention_ids', [])
-                        if bot_uid in mention_ids:
-                            mentions_bot = True
-                    # Also check plain text bot name (catches "hey Slurper")
-                    bot_name = _discord_state.get('bot_name', '').lower()
-                    if bot_name and bot_name in content.lower():
+                    bot_name = _discord_state.get('bot_name', '').strip().lower()
+                    if bot_name and len(bot_name) > 1 and bot_name in content.lower():
                         mentions_bot = True
 
                 should, matched, was_mentioned = _dbot_should_engage(content, mentions_bot)
