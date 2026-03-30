@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.14
+RigGPT v2.13.15
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.14'
+VERSION        = 'v2.13.15'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6918,6 +6918,7 @@ _dbot_state = {
     'hot_hits':       0,        # hot word triggers
     'model':          '',       # LLM model override (empty = use global)
     'canon_file':     '',       # personality/canon file from /home/riggpt/canon/
+    'tx_enabled':     False,    # whether bot is allowed to transmit over the air
 }
 
 _dbot_log_buffer = []  # ring buffer for debug log
@@ -7171,6 +7172,177 @@ def _dbot_resolve_bot_id():
         _dbot_log('ERROR', f'Failed to resolve bot identity: {e}')
 
 
+def _dbot_handle_command(content: str, raw_content: str, author: str) -> str | None:
+    """Check if a message is a command addressed to the bot. Returns response text or None."""
+    import re as _re
+
+    bot_name = _discord_state.get('bot_name', '').strip().lower()
+    if not bot_name or bot_name not in content.lower():
+        # Also check raw_content for @mention format
+        if not bot_name or bot_name not in raw_content.lower():
+            return None
+
+    text = content.lower().strip()
+
+    # ── STATUS COMMAND ──
+    if _re.search(r'\bstatus\b', text):
+        return _dbot_build_status_report()
+
+    # ── FREQUENCY COMMAND ──
+    # "slurper tune to 14.225" / "slurper frequency 7200" / "slurper go to 28.400 mhz"
+    freq_match = _re.search(r'(?:tune|freq|frequency|go to|set freq|qsy|change to)\s+(?:to\s+)?(\d+[\.\d]*)\s*(mhz|khz)?', text)
+    if freq_match:
+        val = float(freq_match.group(1))
+        unit = (freq_match.group(2) or '').lower()
+        if unit == 'khz':
+            freq_hz = int(val * 1000)
+        elif val < 1000:  # assume MHz if small number
+            freq_hz = int(val * 1e6)
+        else:  # assume kHz if large number like 14225
+            freq_hz = int(val * 1000) if val < 100000 else int(val)
+        return _dbot_set_frequency(freq_hz, author)
+
+    # ── MODE COMMAND ──
+    # "slurper mode USB" / "slurper switch to LSB" / "slurper set mode AM"
+    mode_match = _re.search(r'(?:mode|switch to|change mode|set mode)\s+(lsb|usb|am|cw|fm|rtty|dv|cw-r|rtty-r|usb-d|lsb-d)', text)
+    if mode_match:
+        mode = mode_match.group(1).upper()
+        return _dbot_set_mode(mode, author)
+
+    # ── TX COMMAND ── (disabled unless tx_enabled)
+    if _re.search(r'\b(transmit|tx|key up|ptt)\b', text) and _re.search(r'\b(say|speak|transmit|send)\b', text):
+        if not _dbot_state.get('tx_enabled', False):
+            return "TX is disabled by the operator. i can't transmit right now."
+        # Future: extract text and transmit
+        return "TX control isn't wired up yet... but the operator has it enabled so maybe soon."
+
+    return None
+
+
+def _dbot_set_frequency(freq_hz: int, author: str) -> str:
+    """Change the radio frequency via CI-V."""
+    if not orchestrator._connected:
+        return "radio isn't connected right now, can't change frequency"
+    mhz = freq_hz / 1e6
+    if mhz < 0.5 or mhz > 470:
+        return f"{mhz:.3f} MHz? that's not a real frequency. try something between 0.5 and 450 MHz."
+    try:
+        ok = orchestrator.icom_agent.set_frequency(freq_hz)
+        if ok:
+            band = _freq_to_band(freq_hz)
+            _dbot_log('CMD', f'📻 Frequency → {mhz:.4f} MHz {band} (requested by {author})')
+            return f"done, tuned to {mhz:.4f} MHz" + (f" ({band})" if band else "")
+        else:
+            return f"tried to tune to {mhz:.4f} MHz but the radio didn't acknowledge. might be out of range."
+    except Exception as e:
+        return f"frequency change failed: {e}"
+
+
+def _dbot_set_mode(mode: str, author: str) -> str:
+    """Change the radio mode via CI-V."""
+    if not orchestrator._connected:
+        return "radio isn't connected, can't change mode"
+    try:
+        ok = orchestrator.icom_agent.set_mode(mode)
+        if ok:
+            _dbot_log('CMD', f'📻 Mode → {mode} (requested by {author})')
+            return f"switched to {mode}"
+        else:
+            return f"tried to set {mode} but the radio didn't acknowledge"
+    except Exception as e:
+        return f"mode change failed: {e}"
+
+
+def _dbot_build_status_report() -> str:
+    """Build a multi-section ASCII status report for Discord."""
+    import platform
+
+    lines = []
+    lines.append('```ansi')
+    lines.append('\x1b[1;36m╔══════════════════════════════════════════╗\x1b[0m')
+    lines.append('\x1b[1;36m║       R I G G P T    S T A T U S        ║\x1b[0m')
+    lines.append('\x1b[1;36m╚══════════════════════════════════════════╝\x1b[0m')
+
+    # ── Radio ──
+    lines.append('')
+    lines.append('\x1b[1;33m┌─── 📻 RADIO ───────────────────────────┐\x1b[0m')
+    with _radio_state_lock:
+        rs = dict(_radio_state)
+    freq = rs.get('frequency')
+    if freq:
+        mhz = freq / 1e6
+        mode = rs.get('mode', '?') or '?'
+        band = rs.get('band', '') or ''
+        smeter = rs.get('smeter', {})
+        s_label = smeter.get('label', '-') if isinstance(smeter, dict) else '-'
+        tx = rs.get('tx', False)
+        vfo = rs.get('vfo', '?')
+        controls = rs.get('controls', {})
+
+        lines.append(f'\x1b[1;32m│\x1b[0m  Frequency: \x1b[1;37m{mhz:.4f} MHz\x1b[0m' + (f' ({band})' if band else ''))
+        lines.append(f'\x1b[1;32m│\x1b[0m  Mode: \x1b[1;37m{mode}\x1b[0m  VFO: \x1b[1;37m{"A" if vfo == 0 else "B" if vfo == 1 else vfo}\x1b[0m')
+        lines.append(f'\x1b[1;32m│\x1b[0m  S-Meter: \x1b[1;37m{s_label}\x1b[0m  TX: \x1b[1;{"31mYES" if tx else "32mno"}\x1b[0m')
+        if controls:
+            af = controls.get('af_gain')
+            pwr = controls.get('rf_power')
+            lines.append(f'\x1b[1;32m│\x1b[0m  AF: {round(af/255*100) if af else "?"}%  '
+                         f'Power: {round(pwr/255*100) if pwr else "?"}%')
+    else:
+        lines.append(f'\x1b[1;31m│  ⚠ Radio not connected\x1b[0m')
+    lines.append('\x1b[1;33m└────────────────────────────────────────┘\x1b[0m')
+
+    # ── System ──
+    lines.append('')
+    lines.append('\x1b[1;35m┌─── 🖥️ SYSTEM ──────────────────────────┐\x1b[0m')
+    lines.append(f'\x1b[1;35m│\x1b[0m  Version: \x1b[1;37m{VERSION}\x1b[0m')
+    lines.append(f'\x1b[1;35m│\x1b[0m  Python: \x1b[1;37m{platform.python_version()}\x1b[0m')
+    if _psutil_ok:
+        cpu = _psutil.cpu_percent(interval=0)
+        vm = _psutil.virtual_memory()
+        try:
+            uptime = int(time_module.time() - _psutil.boot_time())
+            h, m = divmod(uptime // 60, 60)
+            d, h = divmod(h, 24)
+            up_str = f'{d}d {h}h {m}m' if d else f'{h}h {m}m'
+        except Exception:
+            up_str = '?'
+        lines.append(f'\x1b[1;35m│\x1b[0m  CPU: \x1b[1;37m{cpu}%\x1b[0m  '
+                     f'RAM: \x1b[1;37m{vm.percent}%\x1b[0m ({round(vm.used/1024**2)}MB/{round(vm.total/1024**2)}MB)')
+        lines.append(f'\x1b[1;35m│\x1b[0m  Uptime: \x1b[1;37m{up_str}\x1b[0m')
+    lines.append('\x1b[1;35m└────────────────────────────────────────┘\x1b[0m')
+
+    # ── LLM ──
+    lines.append('')
+    lines.append('\x1b[1;34m┌─── 🧠 LLM ─────────────────────────────┐\x1b[0m')
+    model = _dbot_state.get('model', '') or _app_settings.get('ollama_model', '') or '?'
+    ollama_url = _app_settings.get('ollama_url', '?')
+    persona = _dbot_state.get('persona', '?')
+    lines.append(f'\x1b[1;34m│\x1b[0m  Model: \x1b[1;37m{model}\x1b[0m')
+    lines.append(f'\x1b[1;34m│\x1b[0m  Ollama: \x1b[1;37m{ollama_url}\x1b[0m')
+    lines.append(f'\x1b[1;34m│\x1b[0m  Persona: \x1b[1;37m{persona}\x1b[0m  Temp: \x1b[1;37m{_dbot_state.get("temperature", 0.9)}\x1b[0m')
+    lines.append(f'\x1b[1;34m│\x1b[0m  Responded: \x1b[1;37m{_dbot_state["responded"]}\x1b[0m  '
+                 f'Lurked: \x1b[1;37m{_dbot_state["lurked"]}\x1b[0m  '
+                 f'Hot: \x1b[1;37m{_dbot_state["hot_hits"]}\x1b[0m')
+    lines.append('\x1b[1;34m└────────────────────────────────────────┘\x1b[0m')
+
+    # ── Discord Bot ──
+    lines.append('')
+    lines.append('\x1b[1;36m┌─── 🤖 BOT ─────────────────────────────┐\x1b[0m')
+    lines.append(f'\x1b[1;36m│\x1b[0m  Interest: \x1b[1;37m{_dbot_state["engagement"]}%\x1b[0m  '
+                 f'Cooldown: \x1b[1;37m{_dbot_state["cooldown_sec"]}s\x1b[0m')
+    lines.append(f'\x1b[1;36m│\x1b[0m  TX: \x1b[1;{"32mENABLED" if _dbot_state.get("tx_enabled") else "31mDISABLED"}\x1b[0m')
+    hot = _dbot_state.get('hot_words', [])
+    if hot:
+        lines.append(f'\x1b[1;36m│\x1b[0m  Hot: \x1b[1;33m{", ".join(hot[:5])}\x1b[0m')
+    topic = _dbot_state.get('topic', '')
+    if topic:
+        lines.append(f'\x1b[1;36m│\x1b[0m  Topic: \x1b[1;33m{topic[:40]}\x1b[0m')
+    lines.append('\x1b[1;36m└────────────────────────────────────────┘\x1b[0m')
+
+    lines.append('```')
+    return '\n'.join(lines)
+
+
 def _dbot_engine():
     """Main bot engine loop. Polls Discord, decides engagement, responds."""
     global _dbot_active
@@ -7228,6 +7400,16 @@ def _dbot_engine():
                 _dbot_state['last_msg_seen'] = now
                 content = msg.get('content', '')
                 raw = msg.get('raw_content', '')
+
+                # Check for direct commands BEFORE engagement logic
+                cmd_reply = _dbot_handle_command(content, raw, author)
+                if cmd_reply:
+                    _dbot_log('CMD', f'Command from {author}: {content[:50]}')
+                    if _dbot_post_message(cmd_reply):
+                        _dbot_state['last_response'] = time_module.time()
+                        _dbot_state['responded'] += 1
+                        _dbot_log('SENT', f'→ {cmd_reply[:80]}')
+                    continue
 
                 should, matched, was_addressed = _dbot_should_engage(content, raw)
                 if matched:
@@ -7335,6 +7517,7 @@ def api_dbot_status():
         'quiet_sec':    _dbot_state['quiet_sec'],
         'model':        _dbot_state.get('model', ''),
         'canon_file':   _dbot_state.get('canon_file', ''),
+        'tx_enabled':   _dbot_state.get('tx_enabled', False),
         'bot_user_id':  _dbot_state.get('bot_user_id', ''),
     })
 
@@ -7371,6 +7554,8 @@ def api_dbot_config():
         _dbot_state['model'] = str(data['model']).strip()[:100]
     if 'canon_file' in data:
         _dbot_state['canon_file'] = str(data['canon_file']).strip()[:200]
+    if 'tx_enabled' in data:
+        _dbot_state['tx_enabled'] = str(data['tx_enabled']).lower() in ('true', '1', 'yes')
     return jsonify({'success': True, 'state': _dbot_state})
 
 
