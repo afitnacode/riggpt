@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.13.18 -- Installer
+# RigGPT v2.13.19 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,7 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.13.18"
+VERSION="2.13.19"
 
 # -- Parse flags ------------------------------------------------
 # -y / --yes  : skip upgrade confirmation prompt (for scripted installs)
@@ -123,7 +123,7 @@ fi
 echo "[1/7] Installing system packages..."
 apt-get update -qq
 apt-get install -y -qq \
-    python3 python3-pip alsa-utils ffmpeg sox espeak-ng curl \
+    python3 python3-pip alsa-utils ffmpeg sox espeak-ng curl libopus0 libffi-dev \
     2>/dev/null || echo "  WARNING: some apt packages failed (continuing)"
 
 # -- Service user + persistent home ─────────────────────────────
@@ -230,6 +230,7 @@ echo "[5/7] Installing Python dependencies..."
 pip3 install \
     flask flask-cors pyserial requests apscheduler pysstv pillow numpy \
     psutil edge-tts gtts pyttsx3 gunicorn gevent pydub pedalboard scipy \
+    'discord.py[voice]' PyNaCl \
     --break-system-packages -q --root-user-action=ignore 2>&1 | grep -v "^$" || true
 
 echo "  Note: Coqui TTS (optional ~2GB): pip3 install TTS --break-system-packages"

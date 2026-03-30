@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.18
+RigGPT v2.13.19
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -301,6 +301,7 @@ import serial
 import serial.tools.list_ports
 import subprocess
 import threading
+import asyncio
 try:
     import psutil as _psutil
     _psutil_ok = True
@@ -392,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.18'
+VERSION        = 'v2.13.19'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -4542,6 +4543,11 @@ def _heartbeat_kill_all():
     _ghost_stop_event.set()
     # Stop discord bot engine
     _dbot_stop.set()
+    # Stop voice streaming
+    try:
+        _voice_stop_client()
+    except Exception:
+        pass
     # Clear global job refs
     global _numbers_station_job, _pirate_job, _mystery_job
     global _autoid_job, _timeannounce_job, _evp_job, _whisper_job
@@ -7713,6 +7719,224 @@ def api_dbot_canon():
         except Exception:
             pass
     return jsonify({'success': True, 'files': files})
+
+
+# ── Discord Voice Streaming ──────────────────────────────────────────────────
+# Pipes the radio's RX audio (ALSA capture) into a Discord voice channel.
+# Uses discord.py[voice] running in a dedicated asyncio thread.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_voice_lock    = threading.Lock()
+_voice_loop    = None       # asyncio event loop for the discord client
+_voice_client  = None       # discord.Client instance
+_voice_conn    = None       # discord.VoiceClient (active connection)
+_voice_thread  = None       # background thread
+_voice_ready   = threading.Event()
+_voice_active  = False
+_voice_channel_id = ''      # currently joined channel
+
+
+def _voice_log(text: str):
+    ts = time_module.strftime('%H:%M:%S')
+    logger.info(f'voice: {text[:120]}')
+    _dbot_log('VOICE', text)
+
+
+def _voice_start_client():
+    """Start the discord.py client in a background thread with its own event loop."""
+    global _voice_loop, _voice_client, _voice_thread, _voice_active
+
+    cfg = _discord_cfg()
+    token = cfg.get('bot_token', '').strip()
+    if not token:
+        _voice_log('No bot token configured')
+        return False
+
+    if _voice_active:
+        _voice_log('Client already running')
+        return True
+
+    try:
+        import discord as _disc
+
+        _voice_loop = asyncio.new_event_loop()
+        intents = _disc.Intents.default()
+        intents.voice_states = True
+        _voice_client = _disc.Client(intents=intents)
+
+        @_voice_client.event
+        async def on_ready():
+            _voice_log(f'Gateway connected as {_voice_client.user}')
+            _voice_ready.set()
+
+        def _run():
+            global _voice_active
+            _voice_active = True
+            asyncio.set_event_loop(_voice_loop)
+            try:
+                _voice_loop.run_until_complete(_voice_client.start(token))
+            except Exception as e:
+                _voice_log(f'Client error: {e}')
+            finally:
+                _voice_active = False
+                _voice_ready.clear()
+
+        _voice_thread = threading.Thread(target=_run, daemon=True, name='discord-voice')
+        _voice_thread.start()
+
+        # Wait for Gateway connection (up to 15s)
+        if _voice_ready.wait(timeout=15):
+            _voice_log('Client ready')
+            return True
+        else:
+            _voice_log('Client startup timed out (15s)')
+            return False
+
+    except ImportError:
+        _voice_log('discord.py[voice] not installed — pip install discord.py[voice] PyNaCl')
+        return False
+    except Exception as e:
+        _voice_log(f'Client start failed: {e}')
+        return False
+
+
+def _voice_stop_client():
+    """Disconnect and stop the discord.py client."""
+    global _voice_conn, _voice_active, _voice_client, _voice_loop
+    if _voice_loop and _voice_client:
+        async def _shutdown():
+            global _voice_conn
+            if _voice_conn and _voice_conn.is_connected():
+                await _voice_conn.disconnect(force=True)
+                _voice_conn = None
+            await _voice_client.close()
+
+        try:
+            future = asyncio.run_coroutine_threadsafe(_shutdown(), _voice_loop)
+            future.result(timeout=10)
+        except Exception as e:
+            _voice_log(f'Shutdown error: {e}')
+    _voice_active = False
+    _voice_ready.clear()
+    _voice_log('Client stopped')
+
+
+async def _voice_join_async(channel_id: str):
+    """Join a voice channel and start streaming ALSA audio."""
+    global _voice_conn, _voice_channel_id
+    import discord as _disc
+
+    if _voice_conn and _voice_conn.is_connected():
+        _voice_conn.stop()
+        await _voice_conn.disconnect(force=True)
+        _voice_conn = None
+
+    channel = _voice_client.get_channel(int(channel_id))
+    if not channel:
+        # Try fetching if not in cache
+        try:
+            channel = await _voice_client.fetch_channel(int(channel_id))
+        except Exception:
+            pass
+    if not channel:
+        _voice_log(f'Channel {channel_id} not found')
+        return False
+
+    _voice_conn = await channel.connect()
+    _voice_channel_id = channel_id
+
+    # Stream radio RX audio from ALSA device
+    dev = AUDIO_DEVICE if (AUDIO_DEVICE and AUDIO_DEVICE != 'default') else 'default'
+    source = _disc.FFmpegPCMAudio(
+        dev,
+        before_options=f'-f alsa -ac 1 -ar 48000 -thread_queue_size 512',
+    )
+    _voice_conn.play(source, after=lambda e: _voice_log(
+        f'Stream ended: {e}' if e else 'Stream ended cleanly'))
+    _voice_log(f'Joined #{channel.name} — streaming RX audio from {dev}')
+    return True
+
+
+async def _voice_leave_async():
+    """Leave the voice channel."""
+    global _voice_conn, _voice_channel_id
+    if _voice_conn and _voice_conn.is_connected():
+        _voice_conn.stop()
+        await _voice_conn.disconnect(force=True)
+    _voice_conn = None
+    _voice_channel_id = ''
+    _voice_log('Left voice channel')
+
+
+@app.route('/api/voice/channels', methods=['GET'])
+def api_voice_channels():
+    """List voice channels in the configured guild."""
+    cfg = _discord_cfg()
+    token = cfg.get('bot_token', '').strip()
+    guild_id = cfg.get('guild_id', '').strip()
+    if not token or not guild_id:
+        return jsonify({'success': False, 'channels': [], 'message': 'Bot token and guild ID required'})
+    try:
+        import requests as _req
+        r = _req.get(f'https://discord.com/api/v10/guilds/{guild_id}/channels',
+                     headers={'Authorization': f'Bot {token}'}, timeout=10)
+        if r.status_code != 200:
+            return jsonify({'success': False, 'channels': [], 'message': f'HTTP {r.status_code}'})
+        # Filter to voice channels (type 2) and stage channels (type 13)
+        channels = [{'id': c['id'], 'name': c['name'], 'type': c['type']}
+                     for c in r.json() if c.get('type') in (2, 13)]
+        return jsonify({'success': True, 'channels': sorted(channels, key=lambda c: c['name'])})
+    except Exception as e:
+        return jsonify({'success': False, 'channels': [], 'message': str(e)[:100]})
+
+
+@app.route('/api/voice/join', methods=['POST'])
+def api_voice_join():
+    """Join a voice channel and start streaming RX audio."""
+    data = request.json or {}
+    channel_id = str(data.get('channel_id', '')).strip()
+    if not channel_id:
+        return jsonify({'success': False, 'message': 'channel_id required'}), 400
+
+    # Start client if not running
+    if not _voice_active or not _voice_ready.is_set():
+        if not _voice_start_client():
+            return jsonify({'success': False, 'message': 'Failed to start Discord Gateway client'})
+
+    try:
+        future = asyncio.run_coroutine_threadsafe(_voice_join_async(channel_id), _voice_loop)
+        result = future.result(timeout=15)
+        return jsonify({'success': result,
+                        'message': 'Streaming RX audio' if result else 'Failed to join channel'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)[:100]})
+
+
+@app.route('/api/voice/leave', methods=['POST'])
+def api_voice_leave():
+    """Leave the voice channel."""
+    if not _voice_loop:
+        return jsonify({'success': True, 'message': 'Not connected'})
+    try:
+        future = asyncio.run_coroutine_threadsafe(_voice_leave_async(), _voice_loop)
+        future.result(timeout=10)
+        return jsonify({'success': True, 'message': 'Left voice channel'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)[:100]})
+
+
+@app.route('/api/voice/status', methods=['GET'])
+def api_voice_status():
+    connected = bool(_voice_conn and _voice_conn.is_connected())
+    playing = bool(connected and _voice_conn.is_playing())
+    return jsonify({
+        'client_active':  _voice_active,
+        'gateway_ready':  _voice_ready.is_set(),
+        'connected':      connected,
+        'playing':        playing,
+        'channel_id':     _voice_channel_id,
+    })
+
 
 # ------------------------------------------------------------------------------
 # ALEXA MODE ? Discord-triggered single-shot AI transmissions

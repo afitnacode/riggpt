@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     usbutils \
+    libopus0 \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Create service user + persistent directories ─────────────
@@ -33,6 +35,7 @@ WORKDIR /opt/riggpt
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir pydub pedalboard scipy \
+    && pip install --no-cache-dir 'discord.py[voice]' PyNaCl \
     && echo "Core deps installed"
 
 # Optional: faster-whisper for SENTIENT tab (uncomment to include)

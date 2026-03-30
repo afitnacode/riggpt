@@ -1,4 +1,4 @@
-# RigGPT v2.13.18 -- Python Dependencies
+# RigGPT v2.13.19 -- Python Dependencies
 
 # Web framework
 flask>=2.3.0
@@ -47,3 +47,5 @@ pyttsx3>=2.90
 pydub          # audio layering for EVP mode
 pedalboard     # Spotify DSP: in-process audio FX (replaces sox subprocess)
 scipy          # signal resampling for speed/tempo changes
+discord.py[voice]  # Discord Gateway + voice channel streaming
+PyNaCl         # voice encryption for discord.py
