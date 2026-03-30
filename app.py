@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.13
+RigGPT v2.13.14
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.13'
+VERSION        = 'v2.13.14'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6970,7 +6970,7 @@ def _dbot_should_engage(message_text: str, raw_content: str = '') -> tuple[bool,
 
 
 def _dbot_build_system_prompt() -> str:
-    """Build the system prompt from persona + canon file + topic injection + conversation rules."""
+    """Build the system prompt from persona + canon file + radio state + topic injection."""
     persona_key = _dbot_state['persona']
     if persona_key == 'custom':
         persona = _dbot_state.get('custom_prompt', '') or 'You are a chatbot.'
@@ -6990,6 +6990,11 @@ def _dbot_build_system_prompt() -> str:
                  'Be conversational and natural. Do NOT use markdown formatting, asterisks, or emojis. '
                  'Do NOT say you are an AI or a bot.')
 
+    # Inject live radio telemetry
+    radio_info = _dbot_radio_context()
+    if radio_info:
+        parts.append(f'LIVE RADIO STATUS (you are connected to this ham radio and can reference it):\n{radio_info}')
+
     topic = _dbot_state.get('topic', '').strip()
     if topic:
         parts.append(f'IMPORTANT: You are currently obsessed with this topic and should '
@@ -7001,6 +7006,48 @@ def _dbot_build_system_prompt() -> str:
                      f'when you see them: {", ".join(hot_words)}')
 
     return '\n\n'.join(parts)
+
+
+def _dbot_radio_context() -> str | None:
+    """Build a human-readable snapshot of the radio's current state."""
+    with _radio_state_lock:
+        rs = dict(_radio_state)
+
+    freq = rs.get('frequency')
+    if not freq:
+        return None  # radio not connected or not responding
+
+    mhz = freq / 1e6
+    mode = rs.get('mode', '?') or '?'
+    band = rs.get('band', '') or ''
+    smeter = rs.get('smeter', {})
+    s_label = smeter.get('label', '-') if isinstance(smeter, dict) else '-'
+    tx = rs.get('tx', False)
+    vfo = rs.get('vfo', '?') or '?'
+    meters = rs.get('meters', {})
+    controls = rs.get('controls', {})
+
+    lines = [f'Frequency: {mhz:.4f} MHz ({band})' if band else f'Frequency: {mhz:.4f} MHz',
+             f'Mode: {mode}',
+             f'VFO: {"A" if vfo == 0 else "B" if vfo == 1 else vfo}',
+             f'S-Meter: {s_label}',
+             f'TX: {"YES — transmitting" if tx else "no (receiving)"}']
+
+    if controls:
+        af = controls.get('af_gain')
+        rf = controls.get('rf_gain')
+        pwr = controls.get('rf_power')
+        if af is not None: lines.append(f'AF Gain: {round(af/255*100)}%')
+        if rf is not None: lines.append(f'RF Gain: {round(rf/255*100)}%')
+        if pwr is not None: lines.append(f'TX Power: {round(pwr/255*100)}%')
+
+    if tx and meters:
+        po = meters.get('po', {})
+        swr = meters.get('swr', {})
+        if po.get('pct'): lines.append(f'Output Power: {po["pct"]}%')
+        if swr.get('pct'): lines.append(f'SWR: {swr["pct"]}%')
+
+    return '\n'.join(lines)
 
 
 def _dbot_load_canon(filename: str) -> str | None:
