@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.15
+RigGPT v2.13.16
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.15'
+VERSION        = 'v2.13.16'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6905,7 +6905,7 @@ _dbot_state = {
     'cooldown_sec':   30,       # minimum seconds between responses
     'quiet_sec':      120,      # seconds of silence before bot may initiate
     'max_context':    15,       # messages of conversation context to send to LLM
-    'max_tokens':     80,       # LLM max_tokens
+    'max_tokens':     200,       # LLM max_tokens
     'temperature':    0.9,      # LLM temperature
     'hot_words':      [],       # list of trigger words/phrases
     'topic':          '',       # current injected topic (steers responses)
@@ -7099,7 +7099,7 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
             'stream': False,
             'options': {
                 'temperature': _dbot_state.get('temperature', 0.9),
-                'num_predict': _dbot_state.get('max_tokens', 80),
+                'num_predict': _dbot_state.get('max_tokens', 200),
             },
         }, timeout=30)
         if r.status_code == 200:
@@ -7540,7 +7540,7 @@ def api_dbot_config():
     if 'max_context' in data:
         _dbot_state['max_context'] = max(3, min(30, int(data['max_context'])))
     if 'max_tokens' in data:
-        _dbot_state['max_tokens'] = max(20, min(300, int(data['max_tokens'])))
+        _dbot_state['max_tokens'] = max(50, min(500, int(data['max_tokens'])))
     if 'temperature' in data:
         _dbot_state['temperature'] = max(0.1, min(2.0, float(data['temperature'])))
     if 'hot_words' in data:
