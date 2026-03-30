@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.12</span>
+    <span class="sb-label">v2.13.13</span>
   </div>
 </div>
 
@@ -3991,6 +3991,15 @@ hr.div  {
         margin-bottom:var(--s2);max-height:60px;overflow-y:auto;display:none;
         background:var(--bg2);border:var(--b1);padding:var(--s2)"></div>
 
+      <div class="sec-head" style="color:#5865F2">CANON / PERSONALITY</div>
+      <div class="form-row" style="margin-bottom:var(--s2)">
+        <select id="dbot-canon" style="font-size:9px;flex:1" onchange="dbotSaveCfg()">
+          <option value="">(none — use persona only)</option>
+        </select>
+        <button class="btn sm" onclick="dbotLoadCanon()" style="flex-shrink:0;font-size:8px" title="Refresh file list">↻</button>
+      </div>
+      <div id="dbot-canon-desc" style="font-size:8px;color:var(--text3);margin-bottom:var(--s2);display:none"></div>
+
       <div class="sec-head" style="color:#5865F2">MOOD</div>
       <div class="form-row" style="margin-bottom:var(--s1)">
         <label style="font-size:8px;width:65px">INTEREST</label>
@@ -5397,7 +5406,7 @@ function showTab(name) {
   if (name !== 'specops'){ _mcStop(); }
   if (name === 'sentient'){ _sentPollStart(); sentDetectDevices(); }
   if (name !== 'sentient'){ _sentPollStop(); }
-  if (name === 'discord') { dbotPollStatus(); _dbotStartPolling(); dbotLoadModels(); }
+  if (name === 'discord') { dbotPollStatus(); _dbotStartPolling(); dbotLoadModels(); dbotLoadCanon(); }
   if (name !== 'discord' && !_dbot_active_ui) { _dbotStopPolling(); }
   if (name === 'sstv')   loadSSTVModes();
   if (name === 'dash')   { loadDashStats(); loadRadioModel(); _txFeedLoad(); }
@@ -13032,7 +13041,9 @@ function dbotSaveCfg() {
     hotword_boost:  document.getElementById('dbot-boost')?.value || 40,
     hot_words:      hotStr,
     model:          document.getElementById('dbot-model')?.value || '',
+    canon_file:     document.getElementById('dbot-canon')?.value || '',
   }).catch(() => {});
+  _dbotUpdateCanonDesc();
 }
 
 async function dbotInject() {
@@ -13123,6 +13134,14 @@ async function dbotPollStatus() {
       const modelSel = document.getElementById('dbot-model');
       if (modelSel && modelSel.options.length > 1) modelSel.value = s.model;
     }
+    // Restore canon file selection
+    if (s.canon_file) {
+      const canonSel = document.getElementById('dbot-canon');
+      if (canonSel && canonSel.options.length > 1) {
+        canonSel.value = s.canon_file;
+        _dbotUpdateCanonDesc();
+      }
+    }
 
     // Update engine status
     const dot = document.getElementById('dbot-status-dot');
@@ -13179,7 +13198,7 @@ async function dbotPollStatus() {
     const logEl = document.getElementById('dbot-log');
     if (logEl && logData.log && logData.log.length) {
       const colorMap = {
-        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', MENTION:'#ff44ff', MSG:'var(--text3)',
+        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff',
         HOT:'#ff6b35', ENGAGE:'#33cc33', LURK:'var(--text3)',
         SENT:'#5865F2', ERROR:'var(--tx)', STARTER:'var(--cyan)'
       };
@@ -13236,6 +13255,39 @@ async function dbotTestLLM() {
     }
   } catch(e) {
     if (resultEl) { resultEl.textContent = '✗ ' + e.message; resultEl.style.color = 'var(--tx)'; }
+  }
+}
+
+async function dbotLoadCanon() {
+  const sel = document.getElementById('dbot-canon');
+  if (!sel) return;
+  try {
+    const r = await api('GET', '/api/dbot/canon');
+    const current = sel.value || '';
+    sel.innerHTML = '<option value="">(none — use persona only)</option>';
+    for (const f of (r.files || [])) {
+      const opt = document.createElement('option');
+      opt.value = f.name;
+      opt.textContent = f.name + (f.desc ? ' — ' + f.desc : '');
+      opt.title = f.desc || f.name;
+      sel.appendChild(opt);
+    }
+    if (current) sel.value = current;
+    // Show description of selected
+    _dbotUpdateCanonDesc();
+  } catch(e) {}
+}
+
+function _dbotUpdateCanonDesc() {
+  const sel = document.getElementById('dbot-canon');
+  const desc = document.getElementById('dbot-canon-desc');
+  if (!sel || !desc) return;
+  const opt = sel.selectedOptions[0];
+  if (sel.value && opt?.title) {
+    desc.textContent = '📜 ' + opt.title;
+    desc.style.display = '';
+  } else {
+    desc.style.display = 'none';
   }
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.12
+RigGPT v2.13.13
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.12'
+VERSION        = 'v2.13.13'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6917,6 +6917,7 @@ _dbot_state = {
     'lurked':         0,        # messages seen but not responded to
     'hot_hits':       0,        # hot word triggers
     'model':          '',       # LLM model override (empty = use global)
+    'canon_file':     '',       # personality/canon file from /home/riggpt/canon/
 }
 
 _dbot_log_buffer = []  # ring buffer for debug log
@@ -6933,24 +6934,26 @@ def _dbot_log(kind: str, text: str):
     logger.info(f'dbot: [{kind}] {text[:120]}')
 
 
-def _dbot_should_engage(message_text: str, mentions_bot: bool = False) -> tuple[bool, list[str], bool]:
-    """Decide whether to respond. Returns (should_respond, matched_hot_words, was_mentioned).
-    Direct @mentions always respond immediately (skip cooldown + probability)."""
+def _dbot_should_engage(message_text: str, raw_content: str = '') -> tuple[bool, list[str], bool]:
+    """Decide whether to respond. Returns (should_respond, matched_hot_words, was_addressed).
+    If the bot's name appears in the message (e.g. 'hey slurper'), always respond."""
     import random
     now = time_module.time()
     text_lower = message_text.lower()
+    raw_lower = raw_content.lower()
 
-    # Check for bot name in plain text (case-insensitive)
+    # Check for bot name in plain text OR in raw (pre-stripped) content
     bot_name = _discord_state.get('bot_name', '').strip().lower()
-    name_mentioned = bool(bot_name and bot_name in text_lower)
-    is_mentioned = mentions_bot or name_mentioned
+    addressed = False
+    if bot_name and len(bot_name) > 1:
+        addressed = (bot_name in text_lower) or (bot_name in raw_lower)
 
-    # Direct mention = always respond, skip cooldown
-    if is_mentioned:
+    # Addressed by name = always respond, skip cooldown
+    if addressed:
         matched = [w for w in _dbot_state['hot_words'] if w.lower() in text_lower]
         return True, matched, True
 
-    # Cooldown check (only for non-mentions)
+    # Cooldown check (only for non-addressed messages)
     elapsed = now - _dbot_state['last_response']
     if elapsed < _dbot_state['cooldown_sec']:
         return False, [], False
@@ -6967,7 +6970,7 @@ def _dbot_should_engage(message_text: str, mentions_bot: bool = False) -> tuple[
 
 
 def _dbot_build_system_prompt() -> str:
-    """Build the system prompt from persona + topic injection + conversation rules."""
+    """Build the system prompt from persona + canon file + topic injection + conversation rules."""
     persona_key = _dbot_state['persona']
     if persona_key == 'custom':
         persona = _dbot_state.get('custom_prompt', '') or 'You are a chatbot.'
@@ -6975,6 +6978,14 @@ def _dbot_build_system_prompt() -> str:
         persona = _DBOT_PERSONAS.get(persona_key, _DBOT_PERSONAS['troll'])
 
     parts = [persona]
+
+    # Load canon/personality file if selected
+    canon_file = _dbot_state.get('canon_file', '').strip()
+    if canon_file:
+        canon_content = _dbot_load_canon(canon_file)
+        if canon_content:
+            parts.append(f'PERSONALITY AND BACKGROUND:\n{canon_content}')
+
     parts.append('You are chatting in a Discord channel. Keep responses under 2-3 sentences. '
                  'Be conversational and natural. Do NOT use markdown formatting, asterisks, or emojis. '
                  'Do NOT say you are an AI or a bot.')
@@ -6989,7 +7000,23 @@ def _dbot_build_system_prompt() -> str:
         parts.append(f'These words/phrases excite you and you should engage more aggressively '
                      f'when you see them: {", ".join(hot_words)}')
 
-    return ' '.join(parts)
+    return '\n\n'.join(parts)
+
+
+def _dbot_load_canon(filename: str) -> str | None:
+    """Load a canon/personality .md file from canon directories."""
+    filename = os.path.basename(filename)  # path traversal protection
+    for d in [CANON_DIR_A, CANON_DIR_B, '/home/riggpt/canon']:
+        path = os.path.join(d, filename)
+        if os.path.isfile(path):
+            try:
+                content = open(path, 'r', encoding='utf-8').read().strip()
+                if content:
+                    # Truncate very large files to stay within LLM context
+                    return content[:4000]
+            except Exception as e:
+                logger.warning(f'dbot: canon file read error: {e}')
+    return None
 
 
 def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
@@ -7155,42 +7182,16 @@ def _dbot_engine():
                 content = msg.get('content', '')
                 raw = msg.get('raw_content', '')
 
-                # Log every new message with mention detection details
-                _dbot_log('MSG', f'{author}: {content[:40]}  '
-                          f'[flag={msg.get("mentions_bot")} '
-                          f'ids={msg.get("mention_ids",[])} '
-                          f'bot={_dbot_state.get("bot_user_id","?")} '
-                          f'raw_has_@={"<@" in raw}]')
-
-                # Engine-side mention detection — belt AND suspenders
-                # The poller flag may be wrong if bot_user_id wasn't resolved at ingest.
-                # We check EVERYTHING here at processing time.
-                mentions_bot = msg.get('mentions_bot', False)
-                bot_uid = _dbot_state.get('bot_user_id', '')
-                if not mentions_bot and bot_uid:
-                    # Check stored Discord API mention_ids
-                    if bot_uid in msg.get('mention_ids', []):
-                        mentions_bot = True
-                    # Check raw_content for <@ID> patterns (most reliable)
-                    raw = msg.get('raw_content', '')
-                    if f'<@{bot_uid}>' in raw or f'<@!{bot_uid}>' in raw:
-                        mentions_bot = True
-                # Check plain text bot name (catches "hey Slurper")
-                if not mentions_bot:
-                    bot_name = _discord_state.get('bot_name', '').strip().lower()
-                    if bot_name and len(bot_name) > 1 and bot_name in content.lower():
-                        mentions_bot = True
-
-                should, matched, was_mentioned = _dbot_should_engage(content, mentions_bot)
+                should, matched, was_addressed = _dbot_should_engage(content, raw)
                 if matched:
                     _dbot_state['hot_hits'] += 1
                     _dbot_log('HOT', f'🔥 "{", ".join(matched)}" in msg from {author}: {content[:50]}')
 
-                if was_mentioned:
-                    _dbot_log('MENTION', f'📣 @mentioned by {author}: {content[:60]}')
+                if was_addressed:
+                    _dbot_log('ADDRESSED', f'📣 {author}: {content[:60]}')
 
                 if should:
-                    _dbot_log('ENGAGE', f'Responding to {author}{" (mentioned)" if was_mentioned else ""}: {content[:50]}...')
+                    _dbot_log('ENGAGE', f'Responding to {author}{" (addressed)" if was_addressed else ""}: {content[:50]}...')
                     reply = _dbot_generate_response(msgs, content)
                     if reply:
                         if _dbot_post_message(reply):
@@ -7202,7 +7203,7 @@ def _dbot_engine():
                     else:
                         _dbot_log('ERROR', 'LLM returned empty response')
                     # Brief pause between responses but don't skip remaining messages
-                    if not was_mentioned:
+                    if not was_addressed:
                         time_module.sleep(1)
                 else:
                     _dbot_state['lurked'] += 1
@@ -7286,6 +7287,7 @@ def api_dbot_status():
         'max_tokens':   _dbot_state['max_tokens'],
         'quiet_sec':    _dbot_state['quiet_sec'],
         'model':        _dbot_state.get('model', ''),
+        'canon_file':   _dbot_state.get('canon_file', ''),
         'bot_user_id':  _dbot_state.get('bot_user_id', ''),
     })
 
@@ -7320,6 +7322,8 @@ def api_dbot_config():
         _dbot_state['topic'] = str(data['topic'])[:500]
     if 'model' in data:
         _dbot_state['model'] = str(data['model']).strip()[:100]
+    if 'canon_file' in data:
+        _dbot_state['canon_file'] = str(data['canon_file']).strip()[:200]
     return jsonify({'success': True, 'state': _dbot_state})
 
 
@@ -7435,6 +7439,30 @@ def api_dbot_models():
         return jsonify({'success': False, 'models': [], 'message': f'HTTP {r.status_code}'})
     except Exception as e:
         return jsonify({'success': False, 'models': [], 'message': str(e)[:100]})
+
+
+@app.route('/api/dbot/canon', methods=['GET'])
+def api_dbot_canon():
+    """List available canon/personality .md files from all canon directories."""
+    files = []
+    seen = set()
+    for d in [CANON_DIR_A, CANON_DIR_B, '/home/riggpt/canon']:
+        try:
+            if not os.path.isdir(d):
+                continue
+            for f in sorted(os.listdir(d)):
+                if f.lower().endswith('.md') and os.path.isfile(os.path.join(d, f)) and f not in seen:
+                    seen.add(f)
+                    # Read first line as description
+                    try:
+                        first_line = open(os.path.join(d, f), 'r').readline().strip()
+                        first_line = first_line.lstrip('#').strip()[:80]
+                    except Exception:
+                        first_line = ''
+                    files.append({'name': f, 'dir': os.path.basename(d), 'desc': first_line})
+        except Exception:
+            pass
+    return jsonify({'success': True, 'files': files})
 
 # ------------------------------------------------------------------------------
 # ALEXA MODE ? Discord-triggered single-shot AI transmissions
