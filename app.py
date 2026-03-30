@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.5
+RigGPT v2.13.6
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -392,7 +392,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.5'
+VERSION        = 'v2.13.6'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6899,6 +6899,19 @@ _dbot_state = {
     'hot_hits':       0,        # hot word triggers
 }
 
+_dbot_log_buffer = []  # ring buffer for debug log
+_DBOT_LOG_MAX = 150
+
+
+def _dbot_log(kind: str, text: str):
+    """Append to dbot debug log (ring buffer + journalctl)."""
+    ts = time_module.strftime('%H:%M:%S')
+    entry = f'[{ts}] [{kind}] {text}'
+    _dbot_log_buffer.append(entry)
+    if len(_dbot_log_buffer) > _DBOT_LOG_MAX:
+        del _dbot_log_buffer[:len(_dbot_log_buffer) - _DBOT_LOG_MAX]
+    logger.info(f'dbot: [{kind}] {text[:120]}')
+
 
 def _dbot_should_engage(message_text: str) -> tuple[bool, list[str]]:
     """Decide whether to respond. Returns (should_respond, matched_hot_words)."""
@@ -7043,19 +7056,30 @@ def _dbot_engine():
     """Main bot engine loop. Polls Discord, decides engagement, responds."""
     global _dbot_active
     _dbot_active = True
-    logger.info('dbot: engine started')
+    _dbot_log('ENGINE', 'Bot engine started')
 
     _dbot_resolve_bot_id()
     _seen_ids = set()
     _last_quiet_check = time_module.time()
+    _poll_count = 0
 
     while not _dbot_stop.is_set():
         try:
             # Get current messages from the shared discord buffer
             with _discord_lock:
                 msgs = list(_discord_messages)
+                poller_ok = _discord_state.get('connected', False)
+                poller_err = _discord_state.get('error', '')
+
+            _poll_count += 1
+            # Log buffer status periodically (every ~30s = 10 polls)
+            if _poll_count % 10 == 1:
+                _dbot_log('POLL', f'buffer={len(msgs)} msgs, poller={"OK" if poller_ok else "ERR"}'
+                          f'{(": " + poller_err[:60]) if poller_err else ""}')
 
             if not msgs:
+                if _poll_count % 10 == 1:
+                    _dbot_log('WAIT', 'No messages in buffer — is Discord poller running?')
                 time_module.sleep(3)
                 continue
 
@@ -7071,6 +7095,7 @@ def _dbot_engine():
 
             for msg in new_msgs:
                 author_id = msg.get('author_id', '')
+                author = msg.get('author', '?')
                 # Skip our own messages
                 if author_id == _dbot_state.get('bot_user_id', ''):
                     continue
@@ -7081,16 +7106,25 @@ def _dbot_engine():
                 should, matched = _dbot_should_engage(content)
                 if matched:
                     _dbot_state['hot_hits'] += 1
+                    _dbot_log('HOT', f'🔥 "{", ".join(matched)}" in msg from {author}: {content[:50]}')
 
                 if should:
+                    _dbot_log('ENGAGE', f'Responding to {author}: {content[:50]}...')
                     reply = _dbot_generate_response(msgs, content)
                     if reply:
                         if _dbot_post_message(reply):
                             _dbot_state['last_response'] = time_module.time()
                             _dbot_state['responded'] += 1
-                        time_module.sleep(1)  # don't spam
+                            _dbot_log('SENT', f'→ {reply[:80]}')
+                        else:
+                            _dbot_log('ERROR', 'Failed to post message to Discord')
+                    else:
+                        _dbot_log('ERROR', 'LLM returned empty response')
+                    time_module.sleep(1)  # don't spam
                 else:
                     _dbot_state['lurked'] += 1
+                    if matched:
+                        _dbot_log('LURK', f'Hot word hit but dice said no — {author}: {content[:40]}')
 
             # Conversation starters: if channel is quiet for quiet_sec
             quiet_elapsed = now - max(_dbot_state['last_msg_seen'],
@@ -7100,17 +7134,19 @@ def _dbot_engine():
                     and _dbot_state.get('starters')):
                 _last_quiet_check = now
                 starter = _dbot_state['starters'].pop(0)
+                _dbot_log('STARTER', f'Channel quiet {int(quiet_elapsed)}s, dropping: {starter[:50]}')
                 if _dbot_post_message(starter):
                     _dbot_state['last_response'] = time_module.time()
                     _dbot_state['responded'] += 1
-                    logger.info(f'dbot: dropped conversation starter: {starter[:50]}')
 
         except Exception as e:
+            _dbot_log('ERROR', f'Engine error: {e}')
             logger.error(f'dbot: engine error: {e}', exc_info=True)
 
         time_module.sleep(3)
 
     _dbot_active = False
+    _dbot_log('ENGINE', 'Bot engine stopped')
     logger.info('dbot: engine stopped')
 
 
@@ -7121,12 +7157,24 @@ def api_dbot_start():
         return jsonify({'success': False, 'message': 'Bot engine already running'})
     # Verify Discord is configured
     cfg = _discord_cfg()
-    if not cfg.get('bot_token', '').strip() or not cfg.get('channel_id', '').strip():
+    token      = cfg.get('bot_token', '').strip()
+    channel_id = cfg.get('channel_id', '').strip()
+    if not token or not channel_id:
         return jsonify({'success': False, 'message': 'Discord bot token and channel ID required (Config tab)'}), 400
+
+    # Ensure the shared discord poller is enabled (it fills _discord_messages)
+    with _discord_lock:
+        if not _discord_state.get('enabled'):
+            _discord_state['enabled'] = True
+            _discord_state['poll_interval'] = max(5, int(cfg.get('poll_interval', 10) or 10))
+            logger.info('dbot: auto-enabled discord poller (was disabled)')
+
     _dbot_stop.clear()
     _dbot_state['enabled'] = True
     _dbot_thread = threading.Thread(target=_dbot_engine, daemon=True, name='dbot-engine')
     _dbot_thread.start()
+    logger.info(f'dbot: engine started (channel={channel_id}, persona={_dbot_state["persona"]}, '
+                f'interest={_dbot_state["engagement"]}%)')
     return jsonify({'success': True, 'message': 'Bot engine started'})
 
 
@@ -7221,6 +7269,52 @@ def api_dbot_stats_reset():
     _dbot_state['lurked'] = 0
     _dbot_state['hot_hits'] = 0
     return jsonify({'success': True})
+
+
+@app.route('/api/dbot/health', methods=['GET'])
+def api_dbot_health():
+    """Return bot connection health: server name, channel name, bot identity, poller status."""
+    cfg = _discord_cfg()
+    token      = cfg.get('bot_token', '').strip()
+    channel_id = cfg.get('channel_id', '').strip()
+    guild_id   = cfg.get('guild_id', '').strip()
+
+    health = {
+        'engine_active':  _dbot_active,
+        'bot_user_id':    _dbot_state.get('bot_user_id', ''),
+        'bot_name':       '',
+        'guild_name':     '',
+        'channel_name':   '',
+        'channel_id':     channel_id,
+        'guild_id':       guild_id,
+        'poller_enabled': _discord_state.get('enabled', False),
+        'poller_connected': _discord_state.get('connected', False),
+        'poller_error':   _discord_state.get('error', ''),
+        'buffer_size':    len(_discord_messages),
+        'token_set':      bool(token),
+        'channel_set':    bool(channel_id),
+    }
+
+    # Resolve names from discord state (already cached by _discord_apply_config)
+    with _discord_lock:
+        health['bot_name']     = _discord_state.get('bot_name', '')
+        health['guild_name']   = _discord_state.get('guild_name', '')
+        health['channel_name'] = _discord_state.get('channel_name', '')
+
+    return jsonify(health)
+
+
+@app.route('/api/dbot/log', methods=['GET'])
+def api_dbot_log():
+    n = min(150, max(1, request.args.get('n', type=int, default=50)))
+    return jsonify({'log': _dbot_log_buffer[-n:]})
+
+
+@app.route('/api/dbot/log/clear', methods=['POST'])
+def api_dbot_log_clear():
+    _dbot_log_buffer.clear()
+    return jsonify({'success': True})
+
 # ------------------------------------------------------------------------------
 # ALEXA MODE ? Discord-triggered single-shot AI transmissions
 # Watches the Discord ring buffer for messages containing the trigger phrase

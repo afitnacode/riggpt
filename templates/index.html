@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.5</span>
+    <span class="sb-label">v2.13.6</span>
   </div>
 </div>
 
@@ -4055,8 +4055,18 @@ hr.div  {
       </div>
     </div>
 
-    <!-- RIGHT: Stats -->
+    <!-- RIGHT: Health + Stats + Log -->
     <div style="display:flex;flex-direction:column;border-left:var(--b1);overflow-y:auto;padding:var(--s3)">
+
+      <div class="sec-head" style="color:#5865F2">CONNECTION</div>
+      <div style="font-size:8px;font-family:var(--mono);margin-bottom:var(--s3);line-height:1.7;background:var(--bg2);border:var(--b1);padding:var(--s2)">
+        <div>🤖 <span id="dbot-health-bot" style="color:var(--cyan)">—</span></div>
+        <div>🏠 <span id="dbot-health-guild" style="color:var(--text2)">—</span></div>
+        <div>💬 <span id="dbot-health-channel" style="color:var(--text2)">—</span></div>
+        <div>📡 Poller: <span id="dbot-health-poller" style="color:var(--text3)">—</span></div>
+        <div>📦 Buffer: <span id="dbot-health-buffer" style="color:var(--text3)">0</span> msgs</div>
+      </div>
+
       <div class="sec-head" style="color:#5865F2">STATS</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);margin-bottom:var(--s3)">
         <div style="text-align:center;padding:var(--s2);background:var(--bg2);border:var(--b1)">
@@ -4078,7 +4088,10 @@ hr.div  {
       </div>
       <button class="btn sm" onclick="dbotResetStats()" style="font-size:8px;margin-bottom:var(--s3)">↺ RESET STATS</button>
 
-      <div class="sec-head" style="color:#5865F2">ACTIVITY LOG</div>
+      <div class="sec-head" style="color:#5865F2;display:flex;align-items:center">
+        <span style="flex:1">DEBUG LOG</span>
+        <button class="btn sm" onclick="dbotClearLog()" style="font-size:7px;padding:1px 4px">CLEAR</button>
+      </div>
       <div id="dbot-log" style="flex:1;overflow-y:auto;font-size:8px;font-family:var(--mono);
         color:var(--text3);background:var(--bg1);border:var(--b1);padding:var(--s2);line-height:1.5;min-height:100px">
         <span style="color:var(--text3)">-- waiting --</span>
@@ -13081,11 +13094,13 @@ async function dbotPollStatus() {
     }
 
     // Update topic indicator
+    const topicActive = document.getElementById('dbot-topic-active');
+    const topicLabel = document.getElementById('dbot-topic-label');
     if (s.topic) {
-      const active = document.getElementById('dbot-topic-active');
-      const label = document.getElementById('dbot-topic-label');
-      if (active) active.style.display = '';
-      if (label) label.textContent = s.topic;
+      if (topicActive) topicActive.style.display = '';
+      if (topicLabel) topicLabel.textContent = s.topic;
+    } else {
+      if (topicActive) topicActive.style.display = 'none';
     }
 
     // Update engine status
@@ -13102,10 +13117,66 @@ async function dbotPollStatus() {
       if (btn) { btn.textContent = '▶ START'; btn.style.borderColor = ''; }
     }
 
+    // Poll health
+    const h = await api('GET', '/api/dbot/health');
+    const hBot = document.getElementById('dbot-health-bot');
+    const hGuild = document.getElementById('dbot-health-guild');
+    const hChannel = document.getElementById('dbot-health-channel');
+    const hPoller = document.getElementById('dbot-health-poller');
+    const hBuffer = document.getElementById('dbot-health-buffer');
+    const chName = document.getElementById('dbot-channel-name');
+    if (hBot) hBot.textContent = h.bot_name || (h.bot_user_id ? `ID: ${h.bot_user_id}` : 'not resolved');
+    if (hGuild) hGuild.textContent = h.guild_name || (h.guild_id ? `ID: ${h.guild_id}` : 'not set');
+    if (hChannel) hChannel.textContent = h.channel_name || (h.channel_id ? `ID: ${h.channel_id}` : 'not set');
+    if (hPoller) {
+      if (!h.token_set || !h.channel_set) {
+        hPoller.textContent = '⚠ token/channel not configured';
+        hPoller.style.color = 'var(--tx)';
+      } else if (h.poller_error) {
+        hPoller.textContent = '✗ ' + h.poller_error.slice(0, 50);
+        hPoller.style.color = 'var(--tx)';
+      } else if (h.poller_connected) {
+        hPoller.textContent = '✓ connected';
+        hPoller.style.color = '#33cc33';
+      } else if (h.poller_enabled) {
+        hPoller.textContent = '… polling';
+        hPoller.style.color = 'var(--amber)';
+      } else {
+        hPoller.textContent = '○ disabled';
+        hPoller.style.color = 'var(--text3)';
+      }
+    }
+    if (hBuffer) hBuffer.textContent = h.buffer_size || 0;
+    if (chName) chName.textContent = h.channel_name ? `#${h.channel_name}` : '';
+
     // Poll conversation from shared Discord buffer
     const msgs = await api('GET', '/api/discord/messages?limit=30');
     _dbotRenderChat(msgs.messages || [], s);
+
+    // Poll debug log
+    const logData = await api('GET', '/api/dbot/log?n=50');
+    const logEl = document.getElementById('dbot-log');
+    if (logEl && logData.log && logData.log.length) {
+      const colorMap = {
+        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)',
+        HOT:'#ff6b35', ENGAGE:'#33cc33', LURK:'var(--text3)',
+        SENT:'#5865F2', ERROR:'var(--tx)', STARTER:'var(--cyan)'
+      };
+      logEl.innerHTML = logData.log.map(line => {
+        const m = line.match(/\[(\w+)\]/g);
+        const kind = m && m[1] ? m[1].replace(/[[\]]/g, '') : '';
+        const col = colorMap[kind] || 'var(--text2)';
+        return `<div style="color:${col}">${line.replace(/</g,'&lt;')}</div>`;
+      }).join('');
+      logEl.scrollTop = logEl.scrollHeight;
+    }
   } catch(e) {}
+}
+
+async function dbotClearLog() {
+  await api('POST', '/api/dbot/log/clear');
+  const el = document.getElementById('dbot-log');
+  if (el) el.innerHTML = '<span style="color:var(--text3)">-- cleared --</span>';
 }
 
 function _dbotRenderChat(messages, botStatus) {
