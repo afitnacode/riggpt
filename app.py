@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.27
+RigGPT v2.13.28
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.27'
+VERSION        = 'v2.13.28'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6709,6 +6709,7 @@ def _discord_poll_once() -> str | None:
                 'ts':           msg.get('timestamp', ''),
                 'mentions_bot': mentions_bot,
                 'mention_ids':  list(mentioned_ids),
+                'reply_to_id':  (msg.get('referenced_message') or {}).get('author', {}).get('id', ''),
             })
             added += 1
 
@@ -7517,6 +7518,28 @@ def _dbot_engine():
                     continue
 
                 should, matched, was_addressed = _dbot_should_engage(content, raw)
+
+                # Contextual reply detection — catch replies directed at the bot
+                # even without the bot's name in the message
+                if not was_addressed:
+                    bot_uid = _dbot_state.get('bot_user_id', '')
+                    # 1. Discord reply feature: user clicked Reply on a bot message
+                    if bot_uid and msg.get('reply_to_id') == bot_uid:
+                        was_addressed = True
+                        should = True
+                        _dbot_log('REPLY', f'↩ Discord reply to bot from {author}: {content[:50]}')
+                    # 2. Conversational reply: message right after a bot message
+                    #    (like "Not talking to you you cock tickler" after the bot spoke)
+                    elif bot_uid:
+                        msg_id = msg.get('id', '')
+                        for idx, m in enumerate(msgs):
+                            if m.get('id') == msg_id and idx > 0:
+                                prev = msgs[idx - 1]
+                                if prev.get('author_id') == bot_uid:
+                                    was_addressed = True
+                                    should = True
+                                    _dbot_log('REPLY', f'↩ Conversational reply from {author} (follows bot): {content[:50]}')
+                                break
                 if matched:
                     _dbot_state['hot_hits'] += 1
                     _dbot_log('HOT', f'🔥 "{", ".join(matched)}" in msg from {author}: {content[:50]}')
