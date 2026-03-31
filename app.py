@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.24
+RigGPT v2.13.25
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.24'
+VERSION        = 'v2.13.25'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7168,7 +7168,7 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
 
     try:
         import requests as _req
-        _dbot_log('LLM', f'→ {ollama_url} model={model} ctx={len(messages)} msgs')
+        _dbot_log('LLM', f'→ {ollama_url} model={model} ctx={len(messages)} msgs sys_prompt={len(system_prompt)} chars')
         r = _req.post(f'{ollama_url}/api/chat', json={
             'model': model,
             'messages': messages,
@@ -7179,15 +7179,22 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
             },
         }, timeout=30)
         if r.status_code == 200:
-            raw_reply = r.json().get('message', {}).get('content', '')
+            data = r.json()
+            raw_content = data.get('message', {}).get('content', '')
+            # Log raw content length BEFORE any processing
+            if not raw_content:
+                _dbot_log('ERROR', f'Ollama returned empty content field. '
+                          f'Keys in response: {list(data.keys())}. '
+                          f'message keys: {list(data.get("message", {}).keys())}')
+                return None
             # Some models (qwen3) wrap responses in <think>...</think> tags
             import re as _re_think
-            raw_reply = _re_think.sub(r'<think>.*?</think>', '', raw_reply, flags=_re_think.DOTALL)
-            reply = _sanitize_unicode(raw_reply).strip()
+            reply = _re_think.sub(r'<think>.*?</think>', '', raw_content, flags=_re_think.DOTALL)
+            reply = _sanitize_unicode(reply).strip()
             reply = reply.replace('*', '').replace('`', '').replace('#', '').strip()
             if not reply:
-                _dbot_log('ERROR', f'LLM empty after sanitization (raw_len={len(raw_reply)}, '
-                          f'raw[:100]={repr(raw_reply[:100])})')
+                _dbot_log('ERROR', f'LLM reply was all think-tags or formatting '
+                          f'(raw_len={len(raw_content)}, raw[:120]={repr(raw_content[:120])})')
                 return None
             if len(reply) > 1900:
                 reply = reply[:1900] + '...'
