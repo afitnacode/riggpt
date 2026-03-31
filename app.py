@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.29
+RigGPT v2.13.30
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.29'
+VERSION        = 'v2.13.30'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7935,7 +7935,14 @@ _voice_peak  = 0       # current peak level
 _voice_source = None   # active ALSAAudioSource instance
 
 
-class ALSAAudioSource:
+try:
+    import discord as _discord_voice_mod
+    _AudioSourceBase = _discord_voice_mod.AudioSource
+except ImportError:
+    _AudioSourceBase = object
+
+
+class ALSAAudioSource(_AudioSourceBase):
     """Custom discord.py AudioSource that reads from ALSA via ffmpeg with level metering."""
 
     def __init__(self, device: str = 'plughw:0,0'):
