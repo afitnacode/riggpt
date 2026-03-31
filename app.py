@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.22
+RigGPT v2.13.23
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.22'
+VERSION        = 'v2.13.23'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7046,9 +7046,12 @@ def _dbot_build_system_prompt(trigger_text: str = '') -> str:
         except Exception as e:
             _dbot_log('ERROR', f'Qdrant memory query failed: {e}')
 
-    parts.append('You are chatting in a Discord channel. Keep responses under 2-3 sentences. '
+    parts.append('You are chatting in a Discord channel. Keep responses SHORT — 1-3 sentences max. '
                  'Be conversational and natural. Do NOT use markdown formatting, asterisks, or emojis. '
-                 'Do NOT say you are an AI or a bot.')
+                 'Do NOT say you are an AI or a bot. '
+                 'IMPORTANT: Do NOT repeat, rephrase, or reference your own previous messages. '
+                 'Do NOT argue with yourself. Each response should be FRESH — react only to what '
+                 'the other person just said. Never recap or continue your own monologue.')
 
     # Inject live radio telemetry
     radio_info = _dbot_radio_context()
@@ -7140,11 +7143,22 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
     system_prompt = _dbot_build_system_prompt(trigger_msg)
 
     # Build conversation context
+    # Limit bot's own messages to prevent self-riffing: max 3 assistant turns,
+    # and truncate them so the LLM gets the gist without mirroring long rants.
     messages = [{'role': 'system', 'content': system_prompt}]
+    bot_uid = _dbot_state.get('bot_user_id', '')
+    bot_msgs_added = 0
+    max_bot_msgs = 3
     for msg in context_msgs[-_dbot_state['max_context']:]:
         author = msg.get('author', 'user')
         content = msg.get('content', '')
-        if msg.get('author_id') == _dbot_state.get('bot_user_id', ''):
+        if msg.get('author_id') == bot_uid:
+            bot_msgs_added += 1
+            if bot_msgs_added > max_bot_msgs:
+                continue  # skip older bot messages
+            # Truncate own messages in context to prevent length mirroring
+            if len(content) > 150:
+                content = content[:150] + '...'
             messages.append({'role': 'assistant', 'content': content})
         else:
             messages.append({'role': 'user', 'content': f'{author}: {content}'})
