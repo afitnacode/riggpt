@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.21</span>
+    <span class="sb-label">v2.13.22</span>
   </div>
 </div>
 
@@ -3947,10 +3947,10 @@ hr.div  {
      PANE: DISCORD BOT
 ══════════════════════════ -->
 <div id="pane-discord" class="pane">
-  <div style="display:grid;grid-template-columns:260px 1fr 240px;height:100%;overflow:hidden">
+  <div style="display:grid;grid-template-columns:220px 1fr 240px;grid-template-rows:1fr auto;height:100%;overflow:hidden">
 
-    <!-- LEFT: Controls -->
-    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow-y:auto;padding:var(--s3)">
+    <!-- LEFT: Identity + Engine -->
+    <div style="display:flex;flex-direction:column;border-right:var(--b1);overflow-y:auto;padding:var(--s3);grid-row:1">
 
       <div class="sec-head" style="color:#5865F2">ENGINE</div>
       <div class="btn-row" style="margin-bottom:var(--s3)">
@@ -3970,6 +3970,7 @@ hr.div  {
         <option value="pirate">🏴‍☠️ Pirate</option>
         <option value="noir">🕵️ Noir Detective</option>
         <option value="robot">🤖 Glitching Robot</option>
+        <option value="bulger">📻 Dick Bulger</option>
         <option value="custom">✏️ Custom...</option>
       </select>
       <textarea id="dbot-custom-prompt" rows="3"
@@ -4000,115 +4001,27 @@ hr.div  {
       </div>
       <div id="dbot-canon-desc" style="font-size:8px;color:var(--text3);margin-bottom:var(--s2);display:none"></div>
 
-      <div style="padding:var(--s2) 0;border-bottom:var(--b1);margin-bottom:var(--s2);display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap">
-        <label class="toggle-row" style="font-size:9px;gap:4px;flex:1">
-          <input type="checkbox" id="dbot-tx-enabled"
-            onchange="dbotSaveCfg()"> TX ENABLED
-        </label>
-        <span id="dbot-tx-status" style="font-size:8px;color:var(--tx)">off</span>
-        <span style="color:var(--border2);margin:0 2px">│</span>
-        <label class="toggle-row" style="font-size:9px;gap:4px;flex:1">
-          <input type="checkbox" id="dbot-memory-enabled"
-            onchange="dbotSaveCfg()"> QDRANT MEMORY
-        </label>
-        <span id="dbot-memory-status" style="font-size:8px;color:var(--text3)">off</span>
-      </div>
-
-      <div class="sec-head" style="color:#5865F2">MOOD</div>
-      <div class="form-row" style="margin-bottom:var(--s1)">
-        <label style="font-size:8px;width:65px">INTEREST</label>
-        <input type="range" id="dbot-engagement" min="0" max="100" value="35" style="flex:1"
-          oninput="document.getElementById('dbot-engagement-v').textContent=this.value+'%'"
-          onchange="dbotSaveCfg()">
-        <span id="dbot-engagement-v" style="font-size:8px;width:28px;text-align:right;color:var(--cyan)">35%</span>
-      </div>
-      <div class="form-row" style="margin-bottom:var(--s1)">
-        <label style="font-size:8px;width:65px">TEMP</label>
-        <input type="range" id="dbot-temp" min="0.1" max="2.0" step="0.1" value="0.9" style="flex:1"
-          oninput="document.getElementById('dbot-temp-v').textContent=parseFloat(this.value).toFixed(1)"
-          onchange="dbotSaveCfg()">
-        <span id="dbot-temp-v" style="font-size:8px;width:28px;text-align:right;color:var(--amber)">0.9</span>
-      </div>
-      <div class="form-row" style="margin-bottom:var(--s1)">
-        <label style="font-size:8px;width:65px">COOLDOWN</label>
-        <input type="number" id="dbot-cooldown" value="30" min="5" max="300" style="width:50px;font-size:9px"
-          onchange="dbotSaveCfg()">
-        <span style="font-size:8px;color:var(--text3)">sec</span>
-      </div>
-      <div class="form-row" style="margin-bottom:var(--s1)">
-        <label style="font-size:8px;width:65px">MAX TOK</label>
-        <input type="number" id="dbot-max-tokens" value="200" min="50" max="500" style="width:50px;font-size:9px"
-          onchange="dbotSaveCfg()">
-        <span style="font-size:8px;color:var(--text3)">tokens</span>
-      </div>
-      <div class="form-row" style="margin-bottom:var(--s2)">
-        <label style="font-size:8px;width:65px">QUIET</label>
-        <input type="number" id="dbot-quiet" value="120" min="30" max="600" style="width:50px;font-size:9px"
-          onchange="dbotSaveCfg()">
-        <span style="font-size:8px;color:var(--text3)">sec → starter</span>
-      </div>
-
-      <div class="sec-head" style="color:#ff6b35">🔥 HOT WORDS</div>
-      <input type="text" id="dbot-hotwords" placeholder="antenna, SWR, dummy load, ..."
-        style="font-size:9px;margin-bottom:var(--s1)"
-        onchange="dbotSaveCfg()">
-      <div class="form-row" style="margin-bottom:var(--s2)">
-        <label style="font-size:8px;width:65px">BOOST</label>
-        <input type="range" id="dbot-boost" min="0" max="80" value="40" style="flex:1"
-          oninput="document.getElementById('dbot-boost-v').textContent='+'+this.value+'%'"
-          onchange="dbotSaveCfg()">
-        <span id="dbot-boost-v" style="font-size:8px;width:32px;text-align:right;color:#ff6b35">+40%</span>
-      </div>
-
-      <div class="sec-head" style="color:#5865F2">TOPIC INJECTION</div>
-      <div class="form-row" style="margin-bottom:var(--s2)">
-        <input type="text" id="dbot-topic" placeholder="pineapple on pizza..."
-          style="font-size:9px;flex:1">
-        <button class="btn sm" onclick="dbotInject()" style="flex-shrink:0">INJECT</button>
-      </div>
-      <div id="dbot-topic-active" style="font-size:8px;color:#5865F2;margin-bottom:var(--s2);display:none">
-        📌 Steering toward: <span id="dbot-topic-label"></span>
-        <button onclick="dbotClearTopic()" style="background:none;border:none;color:var(--tx);cursor:pointer;font-size:9px">✕</button>
-      </div>
-
-      <div class="sec-head" style="color:#5865F2">STARTERS</div>
-      <div class="form-row" style="margin-bottom:var(--s1)">
-        <input type="text" id="dbot-starter-text" placeholder="So... anyone ever been abducted?"
-          style="font-size:9px;flex:1">
-        <button class="btn sm" onclick="dbotAddStarter()" style="flex-shrink:0">QUEUE</button>
-      </div>
-      <div id="dbot-starter-list" style="font-size:8px;color:var(--text3);margin-bottom:var(--s2);max-height:60px;overflow-y:auto"></div>
-      <button class="btn sm" onclick="dbotClearStarters()" style="font-size:8px;margin-bottom:var(--s2)">✕ CLEAR ALL</button>
-
-      <div class="sec-head" style="color:#43b581">🔊 VOICE STREAM</div>
-      <div class="form-row" style="margin-bottom:var(--s1)">
-        <select id="voice-channel" style="font-size:9px;flex:1">
-          <option value="">Select voice channel...</option>
-        </select>
-        <button class="btn sm" onclick="voiceLoadChannels()" style="flex-shrink:0;font-size:8px">↻</button>
-      </div>
-      <div class="btn-row" style="margin-bottom:var(--s2)">
-        <button class="btn sm ok" id="voice-join-btn" onclick="voiceJoin()">🔊 JOIN</button>
-        <button class="btn sm danger" onclick="voiceLeave()">🔇 LEAVE</button>
-        <button class="btn sm" onclick="voiceTest()">🧪 TEST</button>
-      </div>
-      <div id="voice-status" style="font-size:8px;color:var(--text3);margin-bottom:var(--s1)">
-        Not connected
-      </div>
-      <div id="voice-meter-wrap" style="display:none;margin-bottom:var(--s2)">
-        <div style="display:flex;align-items:center;gap:4px">
-          <span style="font-size:7px;color:var(--text3);width:20px">RMS</span>
-          <div style="flex:1;height:8px;background:var(--bg3);border-radius:2px;overflow:hidden">
-            <div id="voice-meter-bar" style="height:100%;width:0%;background:#43b581;transition:width .15s"></div>
-          </div>
-          <span id="voice-meter-val" style="font-size:7px;color:var(--text3);width:35px;text-align:right">0</span>
+      <div style="padding:var(--s2) 0;border-top:var(--b1);display:flex;flex-direction:column;gap:var(--s1)">
+        <div style="display:flex;align-items:center;gap:var(--s3)">
+          <label class="toggle-row" style="font-size:9px;gap:4px;flex:1">
+            <input type="checkbox" id="dbot-tx-enabled"
+              onchange="dbotSaveCfg()"> TX ENABLED
+          </label>
+          <span id="dbot-tx-status" style="font-size:8px;color:var(--tx)">off</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--s3)">
+          <label class="toggle-row" style="font-size:9px;gap:4px;flex:1">
+            <input type="checkbox" id="dbot-memory-enabled"
+              onchange="dbotSaveCfg()"> QDRANT MEMORY
+          </label>
+          <span id="dbot-memory-status" style="font-size:8px;color:var(--text3)">off</span>
         </div>
       </div>
 
     </div>
 
     <!-- CENTER: Conversation View -->
-    <div style="display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;flex-direction:column;overflow:hidden;grid-row:1">
       <div style="display:flex;align-items:center;padding:var(--s2) var(--s4);border-bottom:var(--b1);flex-shrink:0">
         <span style="font-size:10px;color:#5865F2;font-weight:700;letter-spacing:.08em">LIVE CHANNEL</span>
         <span id="dbot-channel-name" style="font-size:9px;color:var(--text3);margin-left:var(--s3)"></span>
@@ -4116,7 +4029,7 @@ hr.div  {
         <span id="dbot-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--text3);margin-right:var(--s2)"></span>
         <span id="dbot-status-label" style="font-size:8px;color:var(--text3)">offline</span>
       </div>
-      <div id="dbot-chat" style="flex:1;overflow-y:auto;padding:var(--s3);font-size:10px;font-family:var(--mono);line-height:1.6">
+      <div id="dbot-chat" style="flex:1;overflow-y:auto;padding:var(--s3);font-size:10px;font-family:var(--mono);line-height:1.5">
         <div style="color:var(--text3);padding:var(--s7);text-align:center">
           Start the engine to see the live conversation.
         </div>
@@ -4124,7 +4037,7 @@ hr.div  {
     </div>
 
     <!-- RIGHT: Health + Stats + Log -->
-    <div style="display:flex;flex-direction:column;border-left:var(--b1);overflow-y:auto;padding:var(--s3)">
+    <div style="display:flex;flex-direction:column;border-left:var(--b1);overflow-y:auto;padding:var(--s3);grid-row:1">
 
       <div class="sec-head" style="color:#5865F2">CONNECTION</div>
       <div style="font-size:8px;font-family:var(--mono);margin-bottom:var(--s3);line-height:1.7;background:var(--bg2);border:var(--b1);padding:var(--s2)">
@@ -4166,6 +4079,114 @@ hr.div  {
       </div>
 
       <div class="alert-strip" id="dbot-alert"></div>
+    </div>
+
+    <!-- BOTTOM BAR: Mood + Hot Words + Topic + Starters + Voice -->
+    <div style="grid-column:1/-1;grid-row:2;border-top:var(--b1);padding:var(--s2) var(--s3);overflow-x:auto;
+      display:flex;gap:var(--s4);align-items:flex-start;background:var(--bg2);min-height:0">
+
+      <!-- Mood -->
+      <div style="min-width:180px;flex-shrink:0">
+        <div class="sec-head" style="color:#5865F2;margin-bottom:2px">MOOD</div>
+        <div class="form-row" style="margin-bottom:2px">
+          <label style="font-size:7px;width:52px">INTEREST</label>
+          <input type="range" id="dbot-engagement" min="0" max="100" value="35" style="flex:1"
+            oninput="document.getElementById('dbot-engagement-v').textContent=this.value+'%'"
+            onchange="dbotSaveCfg()">
+          <span id="dbot-engagement-v" style="font-size:7px;width:24px;text-align:right;color:var(--cyan)">35%</span>
+        </div>
+        <div class="form-row" style="margin-bottom:2px">
+          <label style="font-size:7px;width:52px">TEMP</label>
+          <input type="range" id="dbot-temp" min="0.1" max="2.0" step="0.1" value="0.9" style="flex:1"
+            oninput="document.getElementById('dbot-temp-v').textContent=parseFloat(this.value).toFixed(1)"
+            onchange="dbotSaveCfg()">
+          <span id="dbot-temp-v" style="font-size:7px;width:24px;text-align:right;color:var(--amber)">0.9</span>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:2px">
+          <div class="form-row" style="flex:1">
+            <label style="font-size:7px;width:32px">CD</label>
+            <input type="number" id="dbot-cooldown" value="30" min="5" max="300" style="width:38px;font-size:8px" onchange="dbotSaveCfg()">
+            <span style="font-size:7px;color:var(--text3)">s</span>
+          </div>
+          <div class="form-row" style="flex:1">
+            <label style="font-size:7px;width:32px">TOK</label>
+            <input type="number" id="dbot-max-tokens" value="200" min="50" max="500" style="width:38px;font-size:8px" onchange="dbotSaveCfg()">
+          </div>
+          <div class="form-row" style="flex:1">
+            <label style="font-size:7px;width:32px">QT</label>
+            <input type="number" id="dbot-quiet" value="120" min="30" max="600" style="width:38px;font-size:8px" onchange="dbotSaveCfg()">
+            <span style="font-size:7px;color:var(--text3)">s</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="width:1px;background:var(--border2);align-self:stretch;flex-shrink:0"></div>
+
+      <!-- Hot Words -->
+      <div style="min-width:160px;flex:1;max-width:220px">
+        <div class="sec-head" style="color:#ff6b35;margin-bottom:2px">🔥 HOT WORDS</div>
+        <input type="text" id="dbot-hotwords" placeholder="antenna, SWR, ..."
+          style="font-size:8px;margin-bottom:2px;width:100%" onchange="dbotSaveCfg()">
+        <div class="form-row">
+          <label style="font-size:7px;width:36px">BOOST</label>
+          <input type="range" id="dbot-boost" min="0" max="80" value="40" style="flex:1"
+            oninput="document.getElementById('dbot-boost-v').textContent='+'+this.value+'%'"
+            onchange="dbotSaveCfg()">
+          <span id="dbot-boost-v" style="font-size:7px;width:28px;text-align:right;color:#ff6b35">+40%</span>
+        </div>
+      </div>
+
+      <div style="width:1px;background:var(--border2);align-self:stretch;flex-shrink:0"></div>
+
+      <!-- Topic + Starters -->
+      <div style="min-width:180px;flex:1;max-width:260px">
+        <div class="sec-head" style="color:#5865F2;margin-bottom:2px">TOPIC / STARTERS</div>
+        <div class="form-row" style="margin-bottom:2px">
+          <input type="text" id="dbot-topic" placeholder="pineapple on pizza..."
+            style="font-size:8px;flex:1">
+          <button class="btn sm" onclick="dbotInject()" style="flex-shrink:0;font-size:7px;padding:1px 4px">INJECT</button>
+        </div>
+        <div id="dbot-topic-active" style="font-size:7px;color:#5865F2;margin-bottom:2px;display:none">
+          📌 <span id="dbot-topic-label"></span>
+          <button onclick="dbotClearTopic()" style="background:none;border:none;color:var(--tx);cursor:pointer;font-size:8px">✕</button>
+        </div>
+        <div class="form-row" style="margin-bottom:2px">
+          <input type="text" id="dbot-starter-text" placeholder="So... anyone ever been abducted?"
+            style="font-size:8px;flex:1">
+          <button class="btn sm" onclick="dbotAddStarter()" style="flex-shrink:0;font-size:7px;padding:1px 4px">QUEUE</button>
+        </div>
+        <div id="dbot-starter-list" style="font-size:7px;color:var(--text3);max-height:30px;overflow-y:auto"></div>
+        <button class="btn sm" onclick="dbotClearStarters()" style="font-size:7px;padding:1px 4px">✕ CLEAR</button>
+      </div>
+
+      <div style="width:1px;background:var(--border2);align-self:stretch;flex-shrink:0"></div>
+
+      <!-- Voice -->
+      <div style="min-width:170px;flex-shrink:0">
+        <div class="sec-head" style="color:#43b581;margin-bottom:2px">🔊 VOICE</div>
+        <div class="form-row" style="margin-bottom:2px">
+          <select id="voice-channel" style="font-size:8px;flex:1">
+            <option value="">Voice channel...</option>
+          </select>
+          <button class="btn sm" onclick="voiceLoadChannels()" style="flex-shrink:0;font-size:7px;padding:1px 3px">↻</button>
+        </div>
+        <div class="btn-row" style="margin-bottom:2px">
+          <button class="btn sm ok" id="voice-join-btn" onclick="voiceJoin()" style="font-size:8px">🔊 JOIN</button>
+          <button class="btn sm danger" onclick="voiceLeave()" style="font-size:8px">🔇 LEAVE</button>
+          <button class="btn sm" onclick="voiceTest()" style="font-size:8px">🧪</button>
+        </div>
+        <div id="voice-status" style="font-size:7px;color:var(--text3);margin-bottom:2px">Not connected</div>
+        <div id="voice-meter-wrap" style="display:none">
+          <div style="display:flex;align-items:center;gap:3px">
+            <span style="font-size:6px;color:var(--text3);width:16px">RMS</span>
+            <div style="flex:1;height:6px;background:var(--bg3);border-radius:2px;overflow:hidden">
+              <div id="voice-meter-bar" style="height:100%;width:0%;background:#43b581;transition:width .15s"></div>
+            </div>
+            <span id="voice-meter-val" style="font-size:6px;color:var(--text3);width:30px;text-align:right">0</span>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -13393,8 +13414,8 @@ function _dbotRenderChat(messages, botStatus) {
     const authorColor = isBot ? '#5865F2' : isMention ? '#ff44ff' : 'var(--cyan)';
     const bgColor = isBot ? 'rgba(88,101,242,.08)' : isMention ? 'rgba(255,68,255,.06)' : 'transparent';
     const borderColor = isBot ? '#5865F2' : isMention ? '#ff44ff' : 'transparent';
-    const badge = isBot ? ' <span style="font-size:7px;background:#5865F2;color:#fff;padding:0 3px;border-radius:2px;vertical-align:middle">BOT</span>'
-                 : isMention ? ' <span style="font-size:7px;background:#ff44ff;color:#fff;padding:0 3px;border-radius:2px;vertical-align:middle">@</span>'
+    const badge = isBot ? ' <span style="font-size:6px;background:#5865F2;color:#fff;padding:0 3px;border-radius:2px;vertical-align:middle">BOT</span>'
+                 : isMention ? ' <span style="font-size:6px;background:#ff44ff;color:#fff;padding:0 3px;border-radius:2px;vertical-align:middle">@</span>'
                  : '';
     const ts = (msg.ts || msg.timestamp) ? new Date(msg.ts || msg.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
 
@@ -13406,10 +13427,10 @@ function _dbotRenderChat(messages, botStatus) {
         '<span style="background:#ff6b35;color:#fff;padding:0 2px;border-radius:2px;font-weight:700">$1</span>');
     }
 
-    html += `<div style="padding:var(--s1) var(--s2);margin-bottom:2px;background:${bgColor};border-left:2px solid ${borderColor}">
+    html += `<div style="padding:2px var(--s2);margin-bottom:1px;background:${bgColor};border-left:2px solid ${borderColor};word-break:break-word">
+      <span style="color:var(--text3);font-size:8px;margin-right:4px">${ts}</span>
       <span style="font-weight:700;color:${authorColor}">${msg.author || '?'}${badge}</span>
-      <span style="color:var(--text3);margin-left:var(--s2)">${ts}</span>
-      <div style="margin-top:1px;color:var(--text2);word-break:break-word">${content}</div>
+      <span style="color:var(--text2);margin-left:4px">${content}</span>
     </div>`;
   }
   chat.innerHTML = html;

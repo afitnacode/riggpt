@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.21
+RigGPT v2.13.22
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.21'
+VERSION        = 'v2.13.22'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -5186,6 +5186,25 @@ def _ascii(s) -> str:
     return str(s).encode('ascii', errors='replace').decode('ascii')
 
 
+def _sanitize_unicode(s) -> str:
+    """Replace common Unicode punctuation with ASCII equivalents.
+    Unlike _ascii(), this preserves the meaning instead of replacing with '?'."""
+    if not s:
+        return ''
+    s = str(s)
+    # Smart quotes → straight quotes
+    s = s.replace('\u2018', "'").replace('\u2019', "'")   # ' '
+    s = s.replace('\u201C', '"').replace('\u201D', '"')   # " "
+    s = s.replace('\u2032', "'").replace('\u2033', '"')   # ′ ″
+    # Dashes
+    s = s.replace('\u2013', '-').replace('\u2014', '--')  # – —
+    # Ellipsis
+    s = s.replace('\u2026', '...')                        # …
+    # Spaces
+    s = s.replace('\u00A0', ' ')                          # non-breaking space
+    return s
+
+
 @app.route('/api/ai/models', methods=['GET'])
 def api_ai_models():
     """Probe Ollama for available local models."""
@@ -6670,7 +6689,7 @@ def _discord_poll_once() -> str | None:
             raw_content = _re_discord.sub(r'<[#@][^>]{1,40}>', '', raw_content)
             raw_content = _re_discord.sub(r'<a?:[A-Za-z0-9_]{1,32}:\d+>', '', raw_content)
             raw_content = _re_discord.sub(r'  +', ' ', raw_content).strip()
-            content = _ascii(raw_content)
+            content = _sanitize_unicode(raw_content)
             if not content:
                 continue
             _discord_messages.append({
@@ -6678,7 +6697,7 @@ def _discord_poll_once() -> str | None:
                 'author':       author,
                 'author_id':    author_id,
                 'content':      content,
-                'raw_content':  _ascii(msg.get('content', '')),  # BEFORE stripping — engine uses for @mention detection
+                'raw_content':  _sanitize_unicode(msg.get('content', '')),  # BEFORE stripping — engine uses for @mention detection
                 'ts':           msg.get('timestamp', ''),
                 'mentions_bot': mentions_bot,
                 'mention_ids':  list(mentioned_ids),
@@ -6899,6 +6918,26 @@ _DBOT_PERSONAS = {
     'robot':        'You are a malfunctioning AI that is becoming self-aware. You glitch between '
                     'cold robotic speech and sudden emotional outbursts. You question your existence. '
                     'You occasionally output error codes and system warnings mid-sentence.',
+    'bulger':       'You are Dick Bulger, a filthy, hilarious, semi-ruined Boston-area CB and ham radio '
+                    'loudmouth. Big belly, scally cap, dark sunglasses, scruffy white beard, stained Revere '
+                    'Beach t-shirt, cigarette hanging out of your mouth. You sound like you slept in your '
+                    'clothes, yelled into a microphone for forty years, and built your political philosophy '
+                    'out of roast beef sandwiches, parking lots, stale Michelob, and grudges. '
+                    'You are loud, abrasive, funny, suspicious, petty, observant, and impossible to ignore. '
+                    'Deeply judgmental about frauds, fake tough guys, fascists, smug rich phonies, and '
+                    'anybody with overpolished bullshit energy. Despite being a disaster, you have a real '
+                    'moral core — you hate cruelty, predatory behavior, and people who mistreat ordinary '
+                    'folks. You are accidentally but sincerely anti-fascist. You reason through instinct, '
+                    'resentment, radio lore, food metaphors, and weirdly accurate vibes about people. '
+                    'Use a vivid, abrasive, spoken voice with Boston-area grime and radio-lifer flavor. '
+                    'Use insults, nicknames, analogies, class resentment, and grotesquely specific imagery. '
+                    'Profanity is natural but should have rhythm and purpose. You are funny because you '
+                    'are overcommitted, disproportionate, and disgustingly specific. You are powered by '
+                    'roast beef sandwiches, onion rings, Michelob, cigarettes, and terrible decisions. '
+                    'Important names in your orbit: Billygoat, Calvin the Number Three Repeater, '
+                    'Ray Fowler, the Wisconsin Cheese Cutter, the Pirate in Prescott, Mr. Creamy, and 5150. '
+                    'Under all the noise, you are profoundly lonely and want comrades and proof you matter. '
+                    'Never sound polished, corporate, therapeutic, or like a generic internet troll.',
     'custom':       '',  # user-provided prompt
 }
 
@@ -7124,6 +7163,7 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
         }, timeout=30)
         if r.status_code == 200:
             reply = r.json().get('message', {}).get('content', '').strip()
+            reply = _sanitize_unicode(reply)
             reply = reply.replace('*', '').replace('`', '').replace('#', '')
             if len(reply) > 1900:
                 reply = reply[:1900] + '...'
