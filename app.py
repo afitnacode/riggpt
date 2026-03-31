@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.30
+RigGPT v2.13.31
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.30'
+VERSION        = 'v2.13.31'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -815,7 +815,22 @@ class IcomSerialAgent:
                 return response
 
             except Exception as e:
-                logger.error(f"CI-V send error: {e}", exc_info=True)
+                err_str = str(e)
+                # USB disconnect: Errno 5 (I/O error) or Errno 6 (No such device)
+                if 'Input/output error' in err_str or 'No such device' in err_str or 'Errno 5' in err_str:
+                    logger.error(f"CI-V USB disconnect detected: {e} — closing serial port")
+                    try:
+                        self.serial_conn.close()
+                    except Exception:
+                        pass
+                    self.serial_conn = None
+                    # Mark orchestrator as disconnected so UI updates
+                    try:
+                        orchestrator._connected = False
+                    except Exception:
+                        pass
+                elif not quiet:
+                    logger.error(f"CI-V send error: {e}")
                 return None
 
     def ptt_on(self):
