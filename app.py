@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.26
+RigGPT v2.13.27
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.26'
+VERSION        = 'v2.13.27'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1001,32 +1001,40 @@ class IcomSerialAgent:
         return None
 
     def read_level(self, sub):
-        """Generic level read: cmd 0x14, subcmd sub. Returns 0-255."""
+        """Generic level read: cmd 0x14, subcmd sub. Returns 0-255 (BCD decoded)."""
         resp = self.send_command(0x14, sub, quiet=True)
         if not resp: return None
         try:
             data = list(resp)
             for i in range(len(data)-4):
                 if data[i]==0xFE and data[i+1]==0xFE and data[i+4]==0x14:
-                    return (data[i+6]<<8)|data[i+7]
+                    hi, lo = data[i+6], data[i+7]
+                    # IC-7610 returns 4-digit BCD in 2 bytes (same as S-meter)
+                    return ((hi >> 4) * 1000 + (hi & 0xF) * 100 +
+                            (lo >> 4) * 10   + (lo & 0xF))
         except Exception: pass
         return None
 
     def set_level(self, sub, value):
-        """Generic level set: cmd 0x14, subcmd sub, value 0-255."""
-        hi = (value>>8)&0xFF; lo = value&0xFF
+        """Generic level set: cmd 0x14, subcmd sub, value 0-255 (encoded as BCD)."""
+        value = max(0, min(255, int(value)))
+        # Encode decimal value to 2 BCD bytes: 128 → 0x01, 0x28
+        hi = ((value // 100) & 0x0F) | (((value // 1000) & 0x0F) << 4)
+        lo = (((value % 100) // 10) << 4) | (value % 10)
         resp = self.send_command(0x14, sub, hi, lo)
         return resp is not None and 0xFB in resp
 
     def read_meter(self, sub):
-        """Generic meter read: cmd 0x15, subcmd sub. Returns 0-255."""
+        """Generic meter read: cmd 0x15, subcmd sub. Returns 0-255 (BCD decoded)."""
         resp = self.send_command(0x15, sub, quiet=True)
         if not resp: return None
         try:
             data = list(resp)
             for i in range(len(data)-4):
                 if data[i]==0xFE and data[i+1]==0xFE and data[i+4]==0x15:
-                    return (data[i+6]<<8)|data[i+7]
+                    hi, lo = data[i+6], data[i+7]
+                    return ((hi >> 4) * 1000 + (hi & 0xF) * 100 +
+                            (lo >> 4) * 10   + (lo & 0xF))
         except Exception: pass
         return None
 
