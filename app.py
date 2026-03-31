@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.25
+RigGPT v2.13.26
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.25'
+VERSION        = 'v2.13.26'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7173,6 +7173,7 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
             'model': model,
             'messages': messages,
             'stream': False,
+            'think': False,   # disable qwen3 thinking mode — puts all tokens into content
             'options': {
                 'temperature': _dbot_state.get('temperature', 0.9),
                 'num_predict': _dbot_state.get('max_tokens', 200),
@@ -7180,7 +7181,12 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
         }, timeout=30)
         if r.status_code == 200:
             data = r.json()
-            raw_content = data.get('message', {}).get('content', '')
+            msg_data = data.get('message', {})
+            raw_content = msg_data.get('content', '')
+            # Fallback: if content is empty but thinking field has text, use that
+            if not raw_content.strip() and msg_data.get('thinking', ''):
+                raw_content = msg_data['thinking']
+                _dbot_log('LLM', f'content was empty, using thinking field ({len(raw_content)} chars)')
             # Log raw content length BEFORE any processing
             if not raw_content:
                 _dbot_log('ERROR', f'Ollama returned empty content field. '
