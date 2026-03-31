@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.23
+RigGPT v2.13.24
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.23'
+VERSION        = 'v2.13.24'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7143,20 +7143,23 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
     system_prompt = _dbot_build_system_prompt(trigger_msg)
 
     # Build conversation context
-    # Limit bot's own messages to prevent self-riffing: max 3 assistant turns,
-    # and truncate them so the LLM gets the gist without mirroring long rants.
-    messages = [{'role': 'system', 'content': system_prompt}]
+    # Limit bot's own messages to prevent self-riffing: keep only the 3 most
+    # RECENT assistant turns (not oldest), and truncate them.
+    ctx_slice = context_msgs[-_dbot_state['max_context']:]
     bot_uid = _dbot_state.get('bot_user_id', '')
-    bot_msgs_added = 0
-    max_bot_msgs = 3
-    for msg in context_msgs[-_dbot_state['max_context']:]:
+
+    # Pre-scan: find indices of bot messages, keep only last 3
+    bot_indices = [i for i, m in enumerate(ctx_slice) if m.get('author_id') == bot_uid]
+    keep_bot = set(bot_indices[-3:])  # last 3 bot messages
+
+    messages = [{'role': 'system', 'content': system_prompt}]
+    for i, msg in enumerate(ctx_slice):
         author = msg.get('author', 'user')
         content = msg.get('content', '')
         if msg.get('author_id') == bot_uid:
-            bot_msgs_added += 1
-            if bot_msgs_added > max_bot_msgs:
+            if i not in keep_bot:
                 continue  # skip older bot messages
-            # Truncate own messages in context to prevent length mirroring
+            # Truncate own messages to prevent length mirroring
             if len(content) > 150:
                 content = content[:150] + '...'
             messages.append({'role': 'assistant', 'content': content})
@@ -7176,12 +7179,19 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
             },
         }, timeout=30)
         if r.status_code == 200:
-            reply = r.json().get('message', {}).get('content', '').strip()
-            reply = _sanitize_unicode(reply)
-            reply = reply.replace('*', '').replace('`', '').replace('#', '')
+            raw_reply = r.json().get('message', {}).get('content', '')
+            # Some models (qwen3) wrap responses in <think>...</think> tags
+            import re as _re_think
+            raw_reply = _re_think.sub(r'<think>.*?</think>', '', raw_reply, flags=_re_think.DOTALL)
+            reply = _sanitize_unicode(raw_reply).strip()
+            reply = reply.replace('*', '').replace('`', '').replace('#', '').strip()
+            if not reply:
+                _dbot_log('ERROR', f'LLM empty after sanitization (raw_len={len(raw_reply)}, '
+                          f'raw[:100]={repr(raw_reply[:100])})')
+                return None
             if len(reply) > 1900:
                 reply = reply[:1900] + '...'
-            return reply if reply else None
+            return reply
         else:
             body = r.text[:200].replace('\n', ' ')
             _dbot_log('ERROR', f'Ollama HTTP {r.status_code}: {body}')
