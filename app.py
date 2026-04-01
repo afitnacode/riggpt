@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.31
+RigGPT v2.13.32
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.31'
+VERSION        = 'v2.13.32'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7201,6 +7201,8 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
             'options': {
                 'temperature': _dbot_state.get('temperature', 0.9),
                 'num_predict': _dbot_state.get('max_tokens', 200),
+                'repeat_penalty': 1.3,
+                'repeat_last_n': 128,
             },
         }, timeout=30)
         if r.status_code == 200:
@@ -7217,9 +7219,10 @@ def _dbot_generate_response(context_msgs: list, trigger_msg: str) -> str | None:
                           f'Keys in response: {list(data.keys())}. '
                           f'message keys: {list(data.get("message", {}).keys())}')
                 return None
-            # Some models (qwen3) wrap responses in <think>...</think> tags
+            # Strip qwen3 <think>...</think> blocks AND orphaned tags
             import re as _re_think
             reply = _re_think.sub(r'<think>.*?</think>', '', raw_content, flags=_re_think.DOTALL)
+            reply = reply.replace('</think>', '').replace('<think>', '')
             reply = _sanitize_unicode(reply).strip()
             reply = reply.replace('*', '').replace('`', '').replace('#', '').strip()
             if not reply:
@@ -9506,6 +9509,42 @@ def api_memory_query():
         return jsonify({'success': True, 'results': results, 'count': len(results)})
     except Exception as e:
         return jsonify({'success': False, 'message': _ascii(str(e))}), 500
+
+
+@app.route('/api/memory/flush', methods=['POST'])
+def api_memory_flush():
+    """Delete all points from all Qdrant collections and recreate them empty."""
+    import requests as _req
+    mem = _get_memory()
+    if not mem.is_available():
+        return jsonify({'success': False, 'message': 'Qdrant not available'}), 503
+
+    host = mem.qdrant_host
+    collections = ['discord_messages', 'user_profiles', 'channel_themes', 'conversation_threads']
+    # Detect vector dimension from embed model
+    vec_dim = 768  # default for nomic-embed-text
+    try:
+        test_vec = mem._embed('test')
+        if test_vec:
+            vec_dim = len(test_vec)
+    except Exception:
+        pass
+
+    results = {}
+    for col in collections:
+        try:
+            # Delete collection
+            _req.delete(f'{host}/collections/{col}', timeout=10)
+            # Recreate with correct vector dimensions
+            r = _req.put(f'{host}/collections/{col}', json={
+                'vectors': {'size': vec_dim, 'distance': 'Cosine'}
+            }, timeout=10)
+            results[col] = 'reset' if r.status_code in (200, 201) else f'err:{r.status_code}'
+        except Exception as e:
+            results[col] = f'error: {e}'
+
+    logger.info(f'memory: flushed all Qdrant collections: {results}')
+    return jsonify({'success': True, 'results': results, 'vec_dim': vec_dim})
 
 
 @app.route('/manual')

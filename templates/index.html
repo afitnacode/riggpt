@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.31</span>
+    <span class="sb-label">v2.13.32</span>
   </div>
 </div>
 
@@ -2952,8 +2952,33 @@ hr.div  {
         <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
           <button class="btn sm" onclick="qdrantTest()" style="flex:1;font-size:8px">🔌 TEST</button>
           <button class="btn sm" onclick="qdrantQuery()" style="flex:1;font-size:8px">🔍 QUERY</button>
+          <button class="btn sm danger" onclick="qdrantFlush()" style="flex:1;font-size:8px">🗑 FLUSH</button>
         </div>
         <div id="qdrant-collections" style="font-size:8px;font-family:var(--mono);color:var(--text3);line-height:1.6;display:none"></div>
+        <div id="qdrant-stats-bars" style="display:none;margin-bottom:var(--s2)">
+          <div style="display:grid;grid-template-columns:65px 1fr 30px;gap:2px;font-size:7px;font-family:var(--mono)">
+            <span style="color:var(--text3)">messages</span>
+            <div style="height:8px;background:var(--bg3);border-radius:2px;overflow:hidden">
+              <div id="qdrant-bar-messages" style="height:100%;width:0%;background:#8844ff;transition:width .3s"></div>
+            </div>
+            <span id="qdrant-cnt-messages" style="color:var(--cyan);text-align:right">0</span>
+            <span style="color:var(--text3)">profiles</span>
+            <div style="height:8px;background:var(--bg3);border-radius:2px;overflow:hidden">
+              <div id="qdrant-bar-profiles" style="height:100%;width:0%;background:#44aaff;transition:width .3s"></div>
+            </div>
+            <span id="qdrant-cnt-profiles" style="color:var(--cyan);text-align:right">0</span>
+            <span style="color:var(--text3)">threads</span>
+            <div style="height:8px;background:var(--bg3);border-radius:2px;overflow:hidden">
+              <div id="qdrant-bar-threads" style="height:100%;width:0%;background:#33cc33;transition:width .3s"></div>
+            </div>
+            <span id="qdrant-cnt-threads" style="color:var(--cyan);text-align:right">0</span>
+            <span style="color:var(--text3)">themes</span>
+            <div style="height:8px;background:var(--bg3);border-radius:2px;overflow:hidden">
+              <div id="qdrant-bar-themes" style="height:100%;width:0%;background:#ff6b35;transition:width .3s"></div>
+            </div>
+            <span id="qdrant-cnt-themes" style="color:var(--cyan);text-align:right">0</span>
+          </div>
+        </div>
         <div class="form-row" id="qdrant-query-row" style="display:none;margin-top:var(--s2)">
           <input type="text" id="qdrant-query-input" placeholder="semantic search test..." style="flex:1;font-size:9px">
           <button class="btn sm" onclick="qdrantSearch()" style="font-size:8px">GO</button>
@@ -9109,6 +9134,7 @@ async function qdrantTest() {
   const dot = document.getElementById('qdrant-status-dot');
   const txt = document.getElementById('qdrant-status-text');
   const col = document.getElementById('qdrant-collections');
+  const bars = document.getElementById('qdrant-stats-bars');
   if (txt) txt.textContent = 'testing...';
   if (dot) dot.style.background = 'var(--amber)';
   try {
@@ -9116,25 +9142,54 @@ async function qdrantTest() {
     if (r.available) {
       if (dot) dot.style.background = '#33cc33';
       if (txt) { txt.textContent = 'CONNECTED'; txt.style.color = '#33cc33'; }
+      // Fill stat bars
+      if (bars) bars.style.display = '';
+      const maxPts = Math.max(1, r.discord_messages || 0, r.user_profiles || 0, r.conversation_threads || 0, r.channel_themes || 0);
+      const _bar = (id, cnt) => {
+        const n = cnt || 0;
+        const el = document.getElementById('qdrant-bar-' + id);
+        const ce = document.getElementById('qdrant-cnt-' + id);
+        if (el) el.style.width = Math.max(2, n / maxPts * 100) + '%';
+        if (ce) ce.textContent = n;
+      };
+      _bar('messages', r.discord_messages);
+      _bar('profiles', r.user_profiles);
+      _bar('threads', r.conversation_threads);
+      _bar('themes', r.channel_themes);
+      const total = (r.discord_messages || 0) + (r.user_profiles || 0) + (r.conversation_threads || 0) + (r.channel_themes || 0);
       if (col) {
         col.style.display = 'block';
-        col.innerHTML = [
-          `messages: <span style="color:var(--cyan)">${r.discord_messages ?? 0}</span>`,
-          `profiles: <span style="color:var(--cyan)">${r.user_profiles ?? 0}</span>`,
-          `themes: <span style="color:var(--cyan)">${r.channel_themes ?? 0}</span>`,
-          r.primary_topics?.length ? `topics: ${r.primary_topics.join(', ')}` : '',
-        ].filter(Boolean).join('<br>');
+        let info = `total: <span style="color:var(--cyan)">${total}</span> vectors`;
+        if (r.primary_topics?.length) info += `<br>topics: ${r.primary_topics.join(', ')}`;
+        if (r.themes_generated_at) info += `<br>themes updated: ${r.themes_generated_at}`;
+        col.innerHTML = info;
       }
-      showAlert('qdrant-alert', `Qdrant OK — ${r.discord_messages ?? 0} messages indexed`, 'ok');
+      showAlert('qdrant-alert', `Qdrant OK — ${total} vectors across 4 collections`, 'ok');
     } else {
       if (dot) dot.style.background = '#ff3333';
       if (txt) { txt.textContent = 'OFFLINE'; txt.style.color = '#ff3333'; }
+      if (bars) bars.style.display = 'none';
       showAlert('qdrant-alert', r.message || 'Qdrant not available', 'err');
     }
   } catch(e) {
     if (dot) dot.style.background = '#ff3333';
     if (txt) { txt.textContent = 'ERROR'; txt.style.color = '#ff3333'; }
     showAlert('qdrant-alert', e.message, 'err');
+  }
+}
+
+async function qdrantFlush() {
+  if (!confirm('⚠ FLUSH ALL QDRANT DATA?\n\nThis permanently deletes ALL community memory:\n- Discord messages\n- User profiles\n- Conversation threads\n- Channel themes\n\nThe database will be empty. New data must be ingested.\n\nContinue?')) return;
+  try {
+    const r = await api('POST', '/api/memory/flush');
+    if (r.success) {
+      showAlert('qdrant-alert', `Flushed! All collections reset (dim=${r.vec_dim})`, 'ok');
+      qdrantTest(); // refresh stats
+    } else {
+      showAlert('qdrant-alert', r.message || 'Flush failed', 'err');
+    }
+  } catch(e) {
+    showAlert('qdrant-alert', 'Flush error: ' + e.message, 'err');
   }
 }
 
