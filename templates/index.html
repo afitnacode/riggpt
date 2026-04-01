@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.34</span>
+    <span class="sb-label">v2.13.35</span>
   </div>
 </div>
 
@@ -4040,6 +4040,25 @@ hr.div  {
               onchange="dbotSaveCfg()"> QDRANT MEMORY
           </label>
           <span id="dbot-memory-status" style="font-size:8px;color:var(--text3)">off</span>
+        </div>
+        <div style="border-top:var(--b1);padding-top:var(--s2);margin-top:var(--s1)">
+          <div style="font-size:8px;color:var(--text3);letter-spacing:.08em;margin-bottom:2px">TTS ENGINE (for "say" command)</div>
+          <div class="form-row" style="margin-bottom:2px">
+            <select id="dbot-tts-engine" style="font-size:8px;flex:1" onchange="dbotSaveCfg()">
+              <option value="">(auto — FastKoko → Piper → Edge)</option>
+              <option value="fastkoko">FastKoko</option>
+              <option value="piper">Piper</option>
+              <option value="edge">Edge TTS</option>
+              <option value="elevenlabs">ElevenLabs</option>
+              <option value="speechify">Speechify</option>
+              <option value="espeak">eSpeak</option>
+              <option value="gtts">Google TTS</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <input type="text" id="dbot-tts-voice" placeholder="voice (blank=default)"
+              style="font-size:8px;flex:1" onchange="dbotSaveCfg()">
+          </div>
         </div>
       </div>
 
@@ -13166,6 +13185,8 @@ function dbotSaveCfg() {
     canon_file:     document.getElementById('dbot-canon')?.value || '',
     tx_enabled:     document.getElementById('dbot-tx-enabled')?.checked ? 'true' : 'false',
     memory_enabled: document.getElementById('dbot-memory-enabled')?.checked ? 'true' : 'false',
+    tts_engine:     document.getElementById('dbot-tts-engine')?.value || '',
+    tts_voice:      document.getElementById('dbot-tts-voice')?.value || '',
   }).catch(() => {});
   _dbotUpdateCanonDesc();
 }
@@ -13304,6 +13325,10 @@ async function dbotPollStatus() {
       memStatus.textContent = s.memory_enabled ? 'active' : 'off';
       memStatus.style.color = s.memory_enabled ? '#33cc33' : 'var(--text3)';
     }
+    // Restore TTS engine/voice
+    _set('dbot-tts-engine', s.tts_engine || '');
+    const ttsVoice = document.getElementById('dbot-tts-voice');
+    if (ttsVoice && document.activeElement !== ttsVoice) ttsVoice.value = s.tts_voice || '';
 
     // Update engine status
     const dot = document.getElementById('dbot-status-dot');
@@ -13363,7 +13388,7 @@ async function dbotPollStatus() {
     const logEl = document.getElementById('dbot-log');
     if (logEl && logData.log && logData.log.length) {
       const colorMap = {
-        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff', REPLY:'#ff44ff', CMD:'#ff9500', MEMORY:'#33cc33', VOICE:'#43b581',
+        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff', REPLY:'#ff44ff', CMD:'#ff9500', MEMORY:'#33cc33', VOICE:'#43b581', TX:'var(--tx)',
         HOT:'#ff6b35', ENGAGE:'#33cc33', LURK:'var(--text3)',
         SENT:'#5865F2', ERROR:'var(--tx)', STARTER:'var(--cyan)'
       };

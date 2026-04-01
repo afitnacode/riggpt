@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.34
+RigGPT v2.13.35
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.34'
+VERSION        = 'v2.13.35'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7010,6 +7010,8 @@ _dbot_state = {
     'canon_file':     '',       # personality/canon file from /home/riggpt/canon/
     'tx_enabled':     False,    # whether bot is allowed to transmit over the air
     'memory_enabled': False,    # inject Qdrant community memory into prompts
+    'tts_engine':     '',       # TTS engine for say command (empty = auto-detect best)
+    'tts_voice':      '',       # TTS voice override
 }
 
 _dbot_log_buffer = []  # ring buffer for debug log
@@ -7364,11 +7366,25 @@ def _dbot_handle_command(content: str, raw_content: str, author: str) -> str | N
         mode = mode_match.group(1).upper()
         return _dbot_set_mode(mode, author)
 
-    # ── TX COMMAND ── (disabled unless tx_enabled)
-    if _re.search(r'\b(transmit|tx|key up|ptt)\b', text) and _re.search(r'\b(say|speak|transmit|send)\b', text):
+    # ── SAY / TRANSMIT COMMAND ──
+    # "dick say hello everyone" / "dick transmit check check" / "dick speak testing 123"
+    say_match = _re.search(r'\b(?:say|speak|transmit|announce)\s+(.+)', text)
+    if say_match:
         if not _dbot_state.get('tx_enabled', False):
-            return "TX is disabled by the operator. i can't transmit right now."
-        return "TX control isn't wired up yet... but the operator has it enabled so maybe soon."
+            return "TX is disabled by the operator. I can't transmit right now."
+        if not orchestrator._connected:
+            return "radio isn't connected — can't transmit"
+        # Extract ORIGINAL case text (not lowered) for TTS
+        orig_match = _re.search(r'(?i)\b(?:say|speak|transmit|announce)\s+(.+)', content)
+        speech_text = orig_match.group(1).strip() if orig_match else say_match.group(1).strip()
+        if len(speech_text) < 2:
+            return "say what? give me something to work with."
+        if len(speech_text) > 500:
+            speech_text = speech_text[:500]
+        # Fire TTS+PTT in a background thread so the engine doesn't block
+        _dbot_log('TX', f'📡 TX from {author}: {speech_text[:60]}')
+        threading.Thread(target=_dbot_transmit, args=(speech_text, author), daemon=True).start()
+        return f"transmitting: \"{speech_text[:80]}{'...' if len(speech_text)>80 else ''}\""
 
     # ── HELP COMMAND ──
     if _re.search(r'\bhelp\b', text):
@@ -7424,6 +7440,50 @@ def _dbot_set_mode(mode: str, author: str) -> str:
         return f"mode change failed: {e}"
 
 
+def _dbot_resolve_tts_engine() -> str:
+    """Resolve which TTS engine to use. Priority: dbot setting → fastkoko → piper → edge."""
+    engine = _dbot_state.get('tts_engine', '').strip()
+    if engine:
+        return engine
+    # Auto-detect: prefer FastKoko if configured
+    if FastKokoTTSAgent._get_url():
+        return 'fastkoko'
+    # Fall back to piper if voices exist, else edge
+    try:
+        voices = PiperTTSAgent.list_voices()
+        if voices:
+            return 'piper'
+    except Exception:
+        pass
+    return 'edge'
+
+
+def _dbot_transmit(speech_text: str, author: str):
+    """Background thread: TTS + PTT transmit from Discord command."""
+    engine = _dbot_resolve_tts_engine()
+    voice = _dbot_state.get('tts_voice', '').strip() or None
+    try:
+        _dbot_log('TX', f'📡 TTS engine={engine} voice={voice or "default"} text={speech_text[:40]}...')
+        result = orchestrator.execute(
+            speech_text,
+            engine=engine,
+            voice=voice,
+            preset='normal',
+            roger_beep=True,
+        )
+        if result.get('success'):
+            dur = result.get('duration', 0)
+            _dbot_log('TX', f'✓ Transmitted {dur:.1f}s (from {author})')
+            _dbot_post_message(f"transmitted ({dur:.1f}s)")
+        else:
+            err = result.get('message', 'unknown error')
+            _dbot_log('ERROR', f'TX failed: {err}')
+            _dbot_post_message(f"TX failed: {err}")
+    except Exception as e:
+        _dbot_log('ERROR', f'TX exception: {e}')
+        _dbot_post_message(f"TX error: {e}")
+
+
 def _dbot_help_text() -> str:
     """Return a help manual for Discord channel interaction."""
     bot_name = _discord_state.get('bot_name', 'Dick').strip()
@@ -7444,6 +7504,11 @@ def _dbot_help_text() -> str:
   {bot_name.lower()} qsy 28.400
   {bot_name.lower()} mode USB          Change mode
   {bot_name.lower()} mode LSB
+
+  TRANSMIT (requires TX ENABLED)
+  {bot_name.lower()} say hello world   TTS + transmit over the air
+  {bot_name.lower()} speak CQ CQ CQ
+  {bot_name.lower()} announce testing
 
   INFORMATION
   {bot_name.lower()} status            System health report
@@ -7941,6 +8006,8 @@ def api_dbot_status():
         'canon_file':   _dbot_state.get('canon_file', ''),
         'tx_enabled':   _dbot_state.get('tx_enabled', False),
         'memory_enabled': _dbot_state.get('memory_enabled', False),
+        'tts_engine':   _dbot_state.get('tts_engine', ''),
+        'tts_voice':    _dbot_state.get('tts_voice', ''),
         'bot_user_id':  _dbot_state.get('bot_user_id', ''),
     })
 
@@ -7981,6 +8048,10 @@ def api_dbot_config():
         _dbot_state['tx_enabled'] = str(data['tx_enabled']).lower() in ('true', '1', 'yes')
     if 'memory_enabled' in data:
         _dbot_state['memory_enabled'] = str(data['memory_enabled']).lower() in ('true', '1', 'yes')
+    if 'tts_engine' in data:
+        _dbot_state['tts_engine'] = str(data['tts_engine']).strip()[:50]
+    if 'tts_voice' in data:
+        _dbot_state['tts_voice'] = str(data['tts_voice']).strip()[:100]
     return jsonify({'success': True, 'state': _dbot_state})
 
 
