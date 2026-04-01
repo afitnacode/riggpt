@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.33
+RigGPT v2.13.34
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.33'
+VERSION        = 'v2.13.34'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1203,7 +1203,8 @@ class IcomSerialAgent:
                 except Exception as e:
                     logger.warning(f"  Baud {baud} error: {e}")
             if 'detected_baud' not in result:
-                self.serial_conn.baudrate = self.baudrate
+                if self.serial_conn:
+                    self.serial_conn.baudrate = self.baudrate
                 result['error'] = (
                     'No response at any baud rate. Check: '
                     '(1) CI-V Address in radio menu matches app config, '
@@ -2633,6 +2634,26 @@ def _radio_poller():
                 _err_count = 0  # reset backoff on successful poll
             else:
                 state['error'] = 'Radio not connected'
+                # ── Auto-reconnect: try to re-establish CI-V serial ──
+                _err_count += 1
+                if _err_count % 5 == 1:  # try every ~10s (5 * 2s poll)
+                    port = _app_settings.get('serial_port', SERIAL_PORT) or SERIAL_PORT
+                    baud = int(_app_settings.get('baud_rate', BAUD_RATE) or BAUD_RATE)
+                    try:
+                        import os as _os_reconnect
+                        # Only try if the device node exists
+                        if _os_reconnect.path.exists(port):
+                            logger.info(f'Radio poller: auto-reconnect attempt → {port} @ {baud}')
+                            ok = orchestrator.connect(port, baud)
+                            if ok:
+                                logger.info(f'Radio poller: auto-reconnect SUCCESS — {port}')
+                                _err_count = 0
+                            else:
+                                logger.debug(f'Radio poller: auto-reconnect failed (no CI-V response)')
+                        else:
+                            logger.debug(f'Radio poller: {port} not present, skipping reconnect')
+                    except Exception as _re_err:
+                        logger.debug(f'Radio poller: auto-reconnect error: {_re_err}')
         except Exception as e:
             state['error'] = str(e)
             _err_count += 1
