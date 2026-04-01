@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.32
+RigGPT v2.13.33
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.32'
+VERSION        = 'v2.13.33'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7082,6 +7082,16 @@ def _dbot_build_system_prompt(trigger_text: str = '') -> str:
     if radio_info:
         parts.append(f'LIVE RADIO STATUS (you are connected to this ham radio and can reference it):\n{radio_info}')
 
+    # Inject solar/propagation conditions (cached 15 min)
+    solar = _dbot_solar_context()
+    if solar:
+        parts.append(f'CURRENT PROPAGATION CONDITIONS: {solar}')
+
+    # Inject Revere Beach weather (cached 15 min)
+    weather = _dbot_weather_context()
+    if weather:
+        parts.append(f'WEATHER AT REVERE BEACH RIGHT NOW: {weather}')
+
     topic = _dbot_state.get('topic', '').strip()
     if topic:
         parts.append(f'IMPORTANT: You are currently obsessed with this topic and should '
@@ -7337,8 +7347,24 @@ def _dbot_handle_command(content: str, raw_content: str, author: str) -> str | N
     if _re.search(r'\b(transmit|tx|key up|ptt)\b', text) and _re.search(r'\b(say|speak|transmit|send)\b', text):
         if not _dbot_state.get('tx_enabled', False):
             return "TX is disabled by the operator. i can't transmit right now."
-        # Future: extract text and transmit
         return "TX control isn't wired up yet... but the operator has it enabled so maybe soon."
+
+    # ── HELP COMMAND ──
+    if _re.search(r'\bhelp\b', text):
+        return _dbot_help_text()
+
+    # ── CALLSIGN LOOKUP ──
+    call_match = _re.search(r'\b(?:lookup|call|callsign|who is|whois)\s+([A-Za-z0-9]{3,10})\b', text)
+    if call_match:
+        return _dbot_lookup_callsign(call_match.group(1).upper())
+
+    # ── SOLAR / PROPAGATION ──
+    if _re.search(r'\b(solar|propagation|bands|conditions|sunspot|sfi|k-index|k index)\b', text):
+        return _dbot_get_solar()
+
+    # ── WEATHER ──
+    if _re.search(r'\b(weather|temp|temperature|forecast|rain|wind)\b', text):
+        return _dbot_get_weather()
 
     return None
 
@@ -7375,6 +7401,218 @@ def _dbot_set_mode(mode: str, author: str) -> str:
             return f"tried to set {mode} but the radio didn't acknowledge"
     except Exception as e:
         return f"mode change failed: {e}"
+
+
+def _dbot_help_text() -> str:
+    """Return a help manual for Discord channel interaction."""
+    bot_name = _discord_state.get('bot_name', 'Dick').strip()
+    return f"""```
+╔══════════════════════════════════════════╗
+║  {bot_name.upper():^40s}  ║
+║         COMMAND REFERENCE                ║
+╚══════════════════════════════════════════╝
+
+  TALK TO ME
+  Just say my name in a message and I'll respond.
+  "{bot_name.lower()} what do you think about antennas?"
+  I also respond to replies to my messages.
+
+  RADIO CONTROL
+  {bot_name.lower()} tune to 14.225    Change frequency
+  {bot_name.lower()} frequency 7200 khz
+  {bot_name.lower()} qsy 28.400
+  {bot_name.lower()} mode USB          Change mode
+  {bot_name.lower()} mode LSB
+
+  INFORMATION
+  {bot_name.lower()} status            System health report
+  {bot_name.lower()} solar             Band conditions & propagation
+  {bot_name.lower()} weather           Weather at Revere Beach
+  {bot_name.lower()} lookup W1AW       Callsign lookup
+  {bot_name.lower()} help              This help text
+
+  I know what frequency the radio is on, what mode
+  it's in, and the current signal strength. Ask me!
+```"""
+
+
+# ── Cached external data (avoid hammering APIs every response) ──
+_solar_cache = {'data': None, 'ts': 0}
+_weather_cache = {'data': None, 'ts': 0}
+
+
+def _dbot_lookup_callsign(callsign: str) -> str:
+    """Look up a ham radio callsign via callook.info API."""
+    try:
+        import requests as _req
+        r = _req.get(f'https://callook.info/{callsign}/json', timeout=8)
+        if r.status_code != 200:
+            return f"couldn't look up {callsign} — callook.info returned {r.status_code}"
+        data = r.json()
+        if data.get('status') == 'INVALID':
+            return f"{callsign}? that's not a valid callsign. check your copy."
+        if data.get('status') != 'VALID':
+            return f"{callsign} not found in the FCC database."
+        name = data.get('name', '?')
+        addr = data.get('address', {})
+        city = addr.get('line2', '')
+        cls = data.get('current', {}).get('operClass', '?')
+        grant = data.get('otherInfo', {}).get('grantDate', '')
+        expire = data.get('otherInfo', {}).get('expiryDate', '')
+        _dbot_log('CMD', f'📡 Callsign lookup: {callsign} → {name}')
+        lines = [f'```', f'  {callsign}', f'  Name:    {name}']
+        if city: lines.append(f'  QTH:     {city}')
+        lines.append(f'  Class:   {cls}')
+        if grant: lines.append(f'  Grant:   {grant}')
+        if expire: lines.append(f'  Expires: {expire}')
+        lines.append('```')
+        return '\n'.join(lines)
+    except Exception as e:
+        return f"callsign lookup failed: {e}"
+
+
+def _dbot_get_solar() -> str:
+    """Fetch solar/propagation data from hamqsl.com — cached 15 min."""
+    global _solar_cache
+    now = time_module.time()
+    if _solar_cache['data'] and (now - _solar_cache['ts']) < 900:
+        return _solar_cache['data']
+    try:
+        import requests as _req
+        import xml.etree.ElementTree as ET
+        r = _req.get('https://www.hamqsl.com/solarxml.php', timeout=10)
+        if r.status_code != 200:
+            return "couldn't fetch solar data right now"
+        root = ET.fromstring(r.text)
+        sd = root.find('.//solardata')
+        if sd is None:
+            return "solar data feed is broken"
+        sfi = sd.findtext('solarflux', '?')
+        a_idx = sd.findtext('aindex', '?')
+        k_idx = sd.findtext('kindex', '?')
+        spots = sd.findtext('sunspots', '?')
+        sig = sd.findtext('signalnoise', '?')
+        # Band conditions
+        bands = []
+        for b in sd.findall('.//calculatedconditions/band'):
+            name = b.get('name', '')
+            time_of_day = b.get('time', '')
+            cond = b.text or '?'
+            if time_of_day == 'day':
+                bands.append(f'  {name:12s} {cond}')
+        lines = ['```']
+        lines.append('  ☀ SOLAR / PROPAGATION')
+        lines.append(f'  SFI: {sfi}  A: {a_idx}  K: {k_idx}  Sunspots: {spots}')
+        if sig and sig != '?': lines.append(f'  Signal Noise: {sig}')
+        if bands:
+            lines.append('')
+            lines.append('  BAND CONDITIONS (day)')
+            lines.extend(bands)
+        lines.append('```')
+        result = '\n'.join(lines)
+        _solar_cache = {'data': result, 'ts': now}
+        _dbot_log('CMD', f'☀ Solar data fetched: SFI={sfi} K={k_idx}')
+        return result
+    except Exception as e:
+        return f"solar data fetch failed: {e}"
+
+
+def _dbot_get_weather() -> str:
+    """Fetch current weather at Revere Beach via Open-Meteo — cached 15 min."""
+    global _weather_cache
+    now = time_module.time()
+    if _weather_cache['data'] and (now - _weather_cache['ts']) < 900:
+        return _weather_cache['data']
+    try:
+        import requests as _req
+        # Revere Beach, MA: 42.4072, -70.9927
+        r = _req.get('https://api.open-meteo.com/v1/forecast', params={
+            'latitude': 42.4072, 'longitude': -70.9927,
+            'current_weather': True,
+            'temperature_unit': 'fahrenheit',
+            'windspeed_unit': 'mph',
+        }, timeout=10)
+        if r.status_code != 200:
+            return "couldn't get weather right now"
+        cw = r.json().get('current_weather', {})
+        temp = cw.get('temperature', '?')
+        wind = cw.get('windspeed', '?')
+        wdir = cw.get('winddirection', 0)
+        code = cw.get('weathercode', 0)
+        # WMO weather codes → descriptions
+        wmo = {0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast',
+               45: 'Fog', 48: 'Rime fog', 51: 'Light drizzle', 53: 'Drizzle',
+               55: 'Heavy drizzle', 61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+               71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 80: 'Rain showers',
+               81: 'Heavy rain showers', 82: 'Violent rain showers',
+               95: 'Thunderstorm', 96: 'Thunderstorm w/ hail'}
+        desc = wmo.get(code, f'Code {code}')
+        # Wind direction compass
+        dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW']
+        compass = dirs[int((wdir + 11.25) / 22.5) % 16]
+        lines = ['```']
+        lines.append('  🌊 REVERE BEACH WEATHER')
+        lines.append(f'  {desc}  {temp}°F')
+        lines.append(f'  Wind: {wind} mph {compass}')
+        lines.append('```')
+        result = '\n'.join(lines)
+        _weather_cache = {'data': result, 'ts': now}
+        _dbot_log('CMD', f'🌊 Weather: {desc} {temp}°F wind {wind}mph {compass}')
+        return result
+    except Exception as e:
+        return f"weather fetch failed: {e}"
+
+
+def _dbot_solar_context() -> str | None:
+    """Build a brief solar/propagation summary for the system prompt. Cached 15 min."""
+    global _solar_cache
+    now = time_module.time()
+    # Use cached data if fresh, or fetch
+    if not _solar_cache['data'] or (now - _solar_cache['ts']) > 900:
+        try:
+            import requests as _req
+            import xml.etree.ElementTree as ET
+            r = _req.get('https://www.hamqsl.com/solarxml.php', timeout=8)
+            if r.status_code == 200:
+                root = ET.fromstring(r.text)
+                sd = root.find('.//solardata')
+                if sd is not None:
+                    sfi = sd.findtext('solarflux', '?')
+                    k_idx = sd.findtext('kindex', '?')
+                    bands_info = []
+                    for b in sd.findall('.//calculatedconditions/band'):
+                        if b.get('time') == 'day':
+                            bands_info.append(f'{b.get("name","")}: {b.text or "?"}')
+                    _solar_cache['prompt'] = f'SFI={sfi} K={k_idx}. Bands: {", ".join(bands_info)}'
+                    _solar_cache['ts'] = now
+        except Exception:
+            pass
+    return _solar_cache.get('prompt')
+
+
+def _dbot_weather_context() -> str | None:
+    """Build a brief weather summary for the system prompt. Cached 15 min."""
+    global _weather_cache
+    now = time_module.time()
+    if not _weather_cache.get('prompt') or (now - _weather_cache['ts']) > 900:
+        try:
+            import requests as _req
+            r = _req.get('https://api.open-meteo.com/v1/forecast', params={
+                'latitude': 42.4072, 'longitude': -70.9927,
+                'current_weather': True, 'temperature_unit': 'fahrenheit',
+                'windspeed_unit': 'mph',
+            }, timeout=8)
+            if r.status_code == 200:
+                cw = r.json().get('current_weather', {})
+                wmo = {0:'Clear',1:'Mostly clear',2:'Partly cloudy',3:'Overcast',
+                       45:'Fog',51:'Drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',
+                       71:'Snow',73:'Snow',75:'Heavy snow',95:'Thunderstorm'}
+                desc = wmo.get(cw.get('weathercode',0), 'Unknown')
+                _weather_cache['prompt'] = f'{desc}, {cw.get("temperature","?")}°F, wind {cw.get("windspeed","?")}mph'
+                _weather_cache['ts'] = now
+        except Exception:
+            pass
+    return _weather_cache.get('prompt')
 
 
 def _dbot_build_status_report() -> str:
@@ -7462,6 +7700,22 @@ def _dbot_build_status_report() -> str:
     if topic:
         lines.append(f'\x1b[1;36m│\x1b[0m  Topic: \x1b[1;33m{topic[:40]}\x1b[0m')
     lines.append('\x1b[1;36m└────────────────────────────────────────┘\x1b[0m')
+
+    # ── Propagation ──
+    solar = _dbot_solar_context()
+    if solar:
+        lines.append('')
+        lines.append('\x1b[1;33m┌─── ☀ PROPAGATION ──────────────────────┐\x1b[0m')
+        lines.append(f'\x1b[1;33m│\x1b[0m  {solar}')
+        lines.append('\x1b[1;33m└────────────────────────────────────────┘\x1b[0m')
+
+    # ── Weather ──
+    weather = _dbot_weather_context()
+    if weather:
+        lines.append('')
+        lines.append('\x1b[1;34m┌─── 🌊 REVERE BEACH ───────────────────┐\x1b[0m')
+        lines.append(f'\x1b[1;34m│\x1b[0m  {weather}')
+        lines.append('\x1b[1;34m└────────────────────────────────────────┘\x1b[0m')
 
     lines.append('```')
     return '\n'.join(lines)
