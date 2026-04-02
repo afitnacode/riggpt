@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.35
+RigGPT v2.13.36
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.35'
+VERSION        = 'v2.13.36'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -7807,6 +7807,129 @@ def _dbot_build_status_report() -> str:
     return '\n'.join(lines)
 
 
+# ── Conversation Summary Engine ──────────────────────────────────────────
+_summary_state = {
+    'last_ts':     0,       # timestamp of last summary
+    'msg_count':   0,       # messages since last summary
+    'last_text':   '',      # last generated summary
+    'total':       0,       # total summaries generated
+}
+_SUMMARY_INTERVAL  = 900   # seconds between summaries (15 min)
+_SUMMARY_MSG_THRESH = 20   # minimum messages before triggering
+
+
+def _dbot_maybe_summarize(msgs: list):
+    """Check if it's time to generate a conversation summary."""
+    now = time_module.time()
+    _summary_state['msg_count'] = len(msgs)
+
+    # Skip if memory not enabled or not enough messages
+    if not _dbot_state.get('memory_enabled'):
+        return
+    if len(msgs) < _SUMMARY_MSG_THRESH:
+        return
+    if (now - _summary_state['last_ts']) < _SUMMARY_INTERVAL:
+        return
+
+    # Count messages since last summary timestamp
+    new_msgs = [m for m in msgs if m.get('author_id') != _dbot_state.get('bot_user_id', '')]
+    if len(new_msgs) < 10:
+        return
+
+    # Fire summary in background thread
+    threading.Thread(target=_dbot_generate_summary, args=(list(msgs),), daemon=True).start()
+
+
+def _dbot_generate_summary(msgs: list):
+    """Generate a conversation summary via LLM and store in Qdrant."""
+    global _summary_state
+    _summary_state['last_ts'] = time_module.time()  # prevent re-trigger
+
+    try:
+        # Collect recent messages (skip bot messages, last 30)
+        bot_uid = _dbot_state.get('bot_user_id', '')
+        recent = [m for m in msgs[-30:] if m.get('author_id') != bot_uid]
+        if len(recent) < 5:
+            return
+
+        participants = list({m.get('author', '?') for m in recent})
+        conversation = '\n'.join(
+            f"{m.get('author', '?')}: {m.get('content', '')[:200]}" for m in recent
+        )
+
+        # Generate summary via LLM
+        ollama_url = _app_settings.get('ollama_url', 'http://192.168.40.15:11434')
+        model = (_dbot_state.get('model', '') or
+                 _app_settings.get('ollama_model', '') or 'qwen3:14b')
+
+        import requests as _req
+        r = _req.post(f'{ollama_url}/api/chat', json={
+            'model': model,
+            'messages': [
+                {'role': 'system', 'content':
+                    'You are a conversation analyst. Summarize the following Discord chat in 2-3 sentences. '
+                    'Note the key topics discussed, who participated, the general mood, and any notable '
+                    'arguments or conclusions. Be factual and concise. Do NOT use markdown.'},
+                {'role': 'user', 'content': f'Summarize this conversation:\n\n{conversation}'}
+            ],
+            'stream': False,
+            'think': False,
+            'options': {'temperature': 0.3, 'num_predict': 200},
+        }, timeout=30)
+
+        if r.status_code != 200:
+            _dbot_log('ERROR', f'Summary LLM failed: HTTP {r.status_code}')
+            return
+
+        raw = r.json().get('message', {}).get('content', '')
+        import re as _re_sum
+        summary = _re_sum.sub(r'<think>.*?</think>', '', raw, flags=_re_sum.DOTALL)
+        summary = summary.replace('</think>', '').replace('<think>', '').strip()
+        if not summary:
+            _dbot_log('ERROR', 'Summary LLM returned empty')
+            return
+
+        # Extract topic keywords for search
+        topics = []
+        topic_r = _req.post(f'{ollama_url}/api/chat', json={
+            'model': model,
+            'messages': [
+                {'role': 'system', 'content': 'Extract 3-5 topic keywords from this summary. '
+                    'Return ONLY comma-separated keywords, nothing else.'},
+                {'role': 'user', 'content': summary}
+            ],
+            'stream': False, 'think': False,
+            'options': {'temperature': 0.1, 'num_predict': 50},
+        }, timeout=15)
+        if topic_r.status_code == 200:
+            raw_topics = topic_r.json().get('message', {}).get('content', '')
+            raw_topics = raw_topics.replace('</think>', '').replace('<think>', '')
+            topics = [t.strip() for t in raw_topics.split(',') if t.strip()][:5]
+
+        # Store in Qdrant
+        mem = _get_memory()
+        if mem and mem.is_available():
+            ok = mem.store_summary(
+                summary=summary,
+                participants=participants,
+                topics=topics,
+                message_count=len(recent),
+                channel=_discord_state.get('channel_name', ''),
+            )
+            if ok:
+                _summary_state['last_text'] = summary
+                _summary_state['total'] += 1
+                _dbot_log('SUMMARY', f'📝 Stored summary ({len(summary)} chars, '
+                          f'{len(participants)} participants, topics: {", ".join(topics[:3])})')
+            else:
+                _dbot_log('ERROR', 'Failed to store summary in Qdrant')
+        else:
+            _dbot_log('ERROR', 'Qdrant not available for summary storage')
+
+    except Exception as e:
+        _dbot_log('ERROR', f'Summary generation failed: {e}')
+
+
 def _dbot_engine():
     """Main bot engine loop. Polls Discord, decides engagement, responds."""
     global _dbot_active
@@ -7837,6 +7960,10 @@ def _dbot_engine():
             if _poll_count % 10 == 1:
                 _dbot_log('POLL', f'buffer={len(msgs)} msgs, poller={"OK" if poller_ok else "ERR"}'
                           f'{(": " + poller_err[:60]) if poller_err else ""}')
+
+            # Check if we should generate a conversation summary
+            if _poll_count % 15 == 0:  # check every ~30s
+                _dbot_maybe_summarize(msgs)
 
             if not msgs:
                 if _poll_count % 10 == 1:
@@ -8009,6 +8136,8 @@ def api_dbot_status():
         'tts_engine':   _dbot_state.get('tts_engine', ''),
         'tts_voice':    _dbot_state.get('tts_voice', ''),
         'bot_user_id':  _dbot_state.get('bot_user_id', ''),
+        'summary_total':   _summary_state['total'],
+        'summary_last':    _summary_state['last_text'][:120] if _summary_state['last_text'] else '',
     })
 
 

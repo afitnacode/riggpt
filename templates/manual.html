@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RigGPT User Manual — v2.13.35</title>
+<title>RigGPT User Manual — v2.13.36</title>
 <style>
   :root {
     --bg:      #0a0a0b;
@@ -406,6 +406,7 @@
   <a href="#tab-specops" class="sub">Spec Ops</a>
   <a href="#tab-clips" class="sub">Clips</a>
   <a href="#tab-sentient" class="sub">SENTIENT</a>
+  <a href="#tab-discord" class="sub">Discord Bot</a>
   <a href="#prompt-arch">Prompt Architecture</a>
 
   <div class="toc-section">Acid Trip Deep Dive</div>
@@ -470,7 +471,7 @@
 
 <h1>RigGPT</h1>
 <div class="doc-subtitle">
-  User Manual &amp; API Reference &nbsp;·&nbsp; v2.13.35 &nbsp;·&nbsp; 2026-03-16<br>
+  User Manual &amp; API Reference &nbsp;·&nbsp; v2.13.36 &nbsp;·&nbsp; 2026-03-16<br>
   AI-augmented voice agent for Icom amateur radio transceivers
 </div>
 
@@ -1179,9 +1180,89 @@ pip3 install openai-whisper --break-system-packages   # fallback
 <hr>
 
 <!-- ══════════════════════════════════════════════════════════
+     DISCORD BOT TAB
+══════════════════════════════════════════════════════════ -->
+<h2 id="tab-discord"><span class="h2-icon">17</span> Discord Bot Tab</h2>
+
+<p>A hybrid lurk/engage AI chatbot that lives in your Discord server. It reads the channel, decides when to respond based on probability and addressing, generates in-character responses via Ollama, and can control the radio, transmit TTS, query propagation data, look up callsigns, and stream live radio audio to a voice channel. Keyboard shortcut: <code>&amp;</code>.</p>
+
+<h3>Layout</h3>
+<p>Three-column layout with a bottom bar:</p>
+<pre>
+┌──────────┬─────────────────────┬──────────┐
+│ LEFT     │  LIVE CHANNEL       │  RIGHT   │
+│ Engine   │  (chat messages)    │  Conn    │
+│ Persona  │                     │  Stats   │
+│ Model    │                     │  Memory  │
+│ Canon    │                     │  Debug   │
+│ TX/Mem   │                     │  Log     │
+│ TTS      │                     │          │
+├──────────┴─────────────────────┴──────────┤
+│ MOOD | HOT WORDS | TOPIC/STARTERS | VOICE │
+└───────────────────────────────────────────┘
+</pre>
+
+<h3>Personas</h3>
+<p>Built-in personas: Troll, Expert, Drunk, Philosopher, Conspiracy, Hype Man, Pirate, Noir Detective, Glitching Robot, Dick Bulger, and Custom (free-text system prompt). The persona shapes the bot's tone and personality.</p>
+<p><strong>Dick Bulger</strong> is a fully realized character — a filthy, hilarious Boston-area CB/ham radio loudmouth with anti-fascist instincts, sandwich theology, and a cast of recurring characters (Billygoat, Calvin, Ray Fowler, the Wisconsin Cheese Cutter, Mr. Creamy, 5150).</p>
+
+<h3>Canon / Personality Files</h3>
+<p>Drop <code>.md</code> files in <code>/home/riggpt/canon/a/</code> or <code>/home/riggpt/canon/b/</code> on the radio server. Select one in the dropdown. The file content is injected as <code>PERSONALITY AND BACKGROUND</code> into the system prompt. Persona shapes <em>tone</em>, canon shapes <em>knowledge</em>. Max 4KB per file.</p>
+
+<h3>Engagement Probability</h3>
+<p>The bot doesn't respond to everything — it lurks. The <strong>INTEREST</strong> slider (0-100%) sets the base probability of responding to any message. <strong>HOT WORDS</strong> add a boost (e.g. +40%) when detected. Direct addressing (bot name in message) or replies to bot messages always trigger 100% response with no cooldown.</p>
+
+<h3>Discord Commands</h3>
+<table>
+<tr><th>Command</th><th>Example</th><th>Effect</th></tr>
+<tr><td>say / speak / announce</td><td><code>dick say CQ CQ CQ</code></td><td>TTS + PTT transmit (requires TX ENABLED)</td></tr>
+<tr><td>tune / freq / qsy</td><td><code>dick tune to 14.225</code></td><td>Change radio frequency via CI-V</td></tr>
+<tr><td>mode</td><td><code>dick mode USB</code></td><td>Change radio mode</td></tr>
+<tr><td>status</td><td><code>dick status</code></td><td>Multi-color ANSI system health report</td></tr>
+<tr><td>solar / propagation</td><td><code>dick solar</code></td><td>SFI, K-index, band conditions</td></tr>
+<tr><td>weather</td><td><code>dick weather</code></td><td>Current weather at Revere Beach</td></tr>
+<tr><td>lookup / who is</td><td><code>dick lookup W1AW</code></td><td>FCC callsign lookup via callook.info</td></tr>
+<tr><td>help</td><td><code>dick help</code></td><td>ASCII command reference card</td></tr>
+</table>
+
+<h3>System Prompt Injection</h3>
+<p>Every response is enriched with live data injected into the LLM's system prompt:</p>
+<ul>
+<li><strong>Radio telemetry</strong> — frequency, mode, VFO, S-meter, TX power, AF/RF gain</li>
+<li><strong>Propagation</strong> — SFI, K-index, band conditions from hamqsl.com (cached 15 min)</li>
+<li><strong>Weather</strong> — Revere Beach current conditions from Open-Meteo (cached 15 min)</li>
+<li><strong>Community memory</strong> — Qdrant semantic search results (when QDRANT MEMORY enabled)</li>
+<li><strong>Canon file</strong> — personality/backstory content</li>
+</ul>
+<p>The bot naturally references all of this: <em>"10 meters is dead today, K-index is 4"</em> or <em>"we're sitting on 27.385, signal's about an S3."</em></p>
+
+<h3>Conversation Summaries</h3>
+<p>When QDRANT MEMORY is enabled, the bot automatically generates conversation summaries every 15 minutes (if at least 20 messages have accumulated). Summaries are:</p>
+<ol>
+<li>Generated via LLM (factual, 2-3 sentences)</li>
+<li>Topic keywords extracted</li>
+<li>Embedded and stored in Qdrant's <code>conversation_threads</code> collection</li>
+<li>Automatically found by <code>build_context()</code> in future responses</li>
+</ol>
+<p>Over time, the bot accumulates genuine long-term memory of what the community has discussed.</p>
+
+<h3>Voice Streaming</h3>
+<p>The 🔊 VOICE section streams the radio's live RX audio into a Discord voice channel. Uses discord.py's Gateway client in a dedicated thread with a custom <code>ALSAAudioSource</code> that captures from the IC-7610's USB audio via ffmpeg. A live RMS level meter shows audio flowing.</p>
+<p><strong>Buttons:</strong> JOIN (connect and start streaming), LEAVE (disconnect), TEST (capture 2s from ALSA independently to diagnose issues).</p>
+<p><strong>Note:</strong> The ALSA capture device is shared with SENTIENT. They cannot capture simultaneously unless ALSA dsnoop is configured.</p>
+
+<h3>TX ENABLED Gate</h3>
+<p>The TX ENABLED checkbox (default: OFF) controls whether the bot can transmit over the air. When off, <code>dick say</code> commands are refused with a friendly message. The operator must explicitly enable it.</p>
+
+<h3>TTS Engine Selection</h3>
+<p>The TTS ENGINE dropdown below the toggles controls which engine is used for <code>say</code> commands. Auto-detection order: FastKoko (if configured) → Piper → Edge TTS. Override with the dropdown. The voice field overrides the engine's default voice.</p>
+
+<hr>
+
+<!-- ══════════════════════════════════════════════════════════
      TTS ENGINES
 ══════════════════════════════════════════════════════════ -->
-<h2 id="tts-espeak"><span class="h2-icon">16</span> TTS: eSpeak</h2>
+<h2 id="tts-espeak"><span class="h2-icon">18</span> TTS: eSpeak</h2>
 <p>Offline, zero-latency. Robotic character that works well for non-human personas. No API key required.</p>
 <p>Voices follow eSpeak voice string format: <code>en-us</code>, <code>en-gb</code>, <code>en-us+m3</code>, <code>en-us+f3</code>, etc. The <code>+m</code> and <code>+f</code> suffixes select male/female variants.</p>
 
@@ -1278,10 +1359,22 @@ pip3 install openai-whisper --break-system-packages   # fallback
 <h2 id="keyboard"><span class="h2-icon">28</span> Keyboard Shortcuts</h2>
 <table>
   <tr><th>Shortcut</th><th>Action</th></tr>
-  <tr><td><kbd>1</kbd>–<kbd>8</kbd></td><td>Switch to tab 1–8 (Dashboard through Acid Trip)</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Open command palette</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>.</kbd></td><td>Emergency PTT-OFF — terminate all transmission immediately</td></tr>
+  <tr><td><kbd>1</kbd></td><td>Console tab</td></tr>
+  <tr><td><kbd>2</kbd></td><td>WF Art tab</td></tr>
+  <tr><td><kbd>3</kbd></td><td>SSTV tab</td></tr>
+  <tr><td><kbd>4</kbd></td><td>Schedule tab</td></tr>
+  <tr><td><kbd>5</kbd></td><td>Log tab</td></tr>
+  <tr><td><kbd>6</kbd></td><td>Config tab</td></tr>
+  <tr><td><kbd>7</kbd></td><td>System tab</td></tr>
+  <tr><td><kbd>8</kbd></td><td>API Config tab</td></tr>
+  <tr><td><kbd>9</kbd></td><td>AI tab</td></tr>
+  <tr><td><kbd>!</kbd></td><td>Acid Trip tab</td></tr>
+  <tr><td><kbd>0</kbd></td><td>Clips tab</td></tr>
+  <tr><td><kbd>#</kbd></td><td>Spec Ops tab</td></tr>
+  <tr><td><kbd>@</kbd></td><td>SENTIENT tab</td></tr>
+  <tr><td><kbd>&amp;</kbd></td><td>Discord Bot tab</td></tr>
   <tr><td><kbd>G</kbd></td><td>Gong (Taco Bell chime) from any tab</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>.</kbd></td><td>Emergency PTT-OFF — terminate all transmission immediately</td></tr>
 </table>
 
 <!-- ══════════════════════════════════════════════════════════
@@ -2065,6 +2158,36 @@ systemctl daemon-reload
      CHANGELOG
 ══════════════════════════════════════════════════════════ -->
 <h2 id="changelog"><span class="h2-icon">40</span> Changelog</h2>
+
+<div class="cl-entry">
+  <div class="cl-header">
+    <span class="cl-ver">v2.13.36</span>
+    <span class="cl-date">2026-04-02</span>
+  </div>
+  <div class="cl-body"><ul>
+    <li><span class="cl-tag new">new</span> <strong>Discord Bot tab</strong> &mdash; hybrid lurk/engage AI chatbot. 11 personas (including Dick Bulger). Probability engine with hot words, topic injection, conversation starters.</li>
+    <li><span class="cl-tag new">new</span> <strong>Discord commands</strong> &mdash; tune, mode, status, solar, weather, callsign lookup, help, say/transmit. Full radio control from Discord.</li>
+    <li><span class="cl-tag new">new</span> <strong>Discord-to-Radio TTS</strong> &mdash; <code>dick say CQ CQ</code> renders TTS and transmits over the air with PTT. TX ENABLED gate (default off).</li>
+    <li><span class="cl-tag new">new</span> <strong>Voice streaming</strong> &mdash; pipe IC-7610 RX audio into Discord voice channel. Custom ALSAAudioSource with live RMS level meter. JOIN/LEAVE/TEST controls.</li>
+    <li><span class="cl-tag new">new</span> <strong>Live radio telemetry in LLM context</strong> &mdash; bot knows frequency, mode, S-meter, AF/RF gain. Also injected: solar propagation (hamqsl.com), Revere Beach weather (Open-Meteo).</li>
+    <li><span class="cl-tag new">new</span> <strong>Canon / personality files</strong> &mdash; load .md files from canon directories as bot personality. Persona + canon stacking.</li>
+    <li><span class="cl-tag new">new</span> <strong>Qdrant community memory</strong> &mdash; semantic search of past conversations injected into bot prompts. Toggle on Discord tab.</li>
+    <li><span class="cl-tag new">new</span> <strong>Conversation summaries</strong> &mdash; auto-generated every 15 min, stored in Qdrant. Bot develops long-term memory over time.</li>
+    <li><span class="cl-tag new">new</span> <strong>Qdrant flush + stats bars</strong> &mdash; visual collection stats and FLUSH button on Config tab.</li>
+    <li><span class="cl-tag new">new</span> <strong>Contextual reply detection</strong> &mdash; bot responds to Discord replies and messages immediately following its own messages.</li>
+    <li><span class="cl-tag new">new</span> <strong>Dead-Man Switch</strong> &mdash; browser heartbeat kills all ops if user closes tab. Opt-in on System tab.</li>
+    <li><span class="cl-tag new">new</span> <strong>Clips gong stinger</strong> &mdash; gong auto-plays after clip finishes with PTT still keyed.</li>
+    <li><span class="cl-tag new">new</span> <strong>Auto-reconnect CI-V</strong> &mdash; radio poller auto-reconnects serial after USB disconnect.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>CI-V BCD decode</strong> &mdash; read_level/read_meter decoded BCD bytes as binary (power 234%, inflated S-meter). Fixed all three functions.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Qwen3 empty responses</strong> &mdash; <code>think: false</code> disables thinking mode, fallback to thinking field if content empty.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Unicode question marks</strong> &mdash; smart quotes in LLM output were converted to '?' by _ascii(). New _sanitize_unicode() preserves meaning.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Bot self-riffing</strong> &mdash; context capped to 3 most recent bot messages, truncated to 150 chars. Anti-repetition penalty (1.3).</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Settings persistence</strong> &mdash; Discord tab settings (persona, all sliders) were silently resetting on every poll. Full state restore on each cycle.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>Ollama URL wrong key</strong> &mdash; 5 locations read 'ollama_host' (nonexistent) instead of 'ollama_url'. All fixed.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>USB disconnect tracebacks</strong> &mdash; Errno 5 now cleanly closes port, sets disconnected state. No more traceback walls.</li>
+    <li><span class="cl-tag fix">fix</span> <strong>think tag leakage</strong> &mdash; orphaned &lt;/think&gt; tags stripped from Discord output.</li>
+  </ul></div>
+</div>
 
 <div class="cl-entry">
   <div class="cl-header">

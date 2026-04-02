@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.35</span>
+    <span class="sb-label">v2.13.36</span>
   </div>
 </div>
 
@@ -4112,6 +4112,14 @@ hr.div  {
         </div>
       </div>
       <button class="btn sm" onclick="dbotResetStats()" style="font-size:8px;margin-bottom:var(--s3)">↺ RESET STATS</button>
+
+      <div id="dbot-summary-wrap" style="margin-bottom:var(--s3);display:none">
+        <div class="sec-head" style="color:#8844ff">📝 MEMORY</div>
+        <div style="font-size:7px;font-family:var(--mono);background:var(--bg2);border:var(--b1);padding:var(--s2);line-height:1.5">
+          <div>summaries: <span id="dbot-summary-count" style="color:var(--cyan)">0</span></div>
+          <div id="dbot-summary-text" style="color:var(--text3);margin-top:2px;max-height:40px;overflow:hidden"></div>
+        </div>
+      </div>
 
       <div class="sec-head" style="color:#5865F2;display:flex;align-items:center">
         <span style="flex:1">DEBUG LOG</span>
@@ -13330,6 +13338,16 @@ async function dbotPollStatus() {
     const ttsVoice = document.getElementById('dbot-tts-voice');
     if (ttsVoice && document.activeElement !== ttsVoice) ttsVoice.value = s.tts_voice || '';
 
+    // Update summary indicator
+    const sumWrap = document.getElementById('dbot-summary-wrap');
+    const sumCnt = document.getElementById('dbot-summary-count');
+    const sumText = document.getElementById('dbot-summary-text');
+    if (s.summary_total > 0 && sumWrap) {
+      sumWrap.style.display = '';
+      if (sumCnt) sumCnt.textContent = s.summary_total;
+      if (sumText && s.summary_last) sumText.textContent = '📝 ' + s.summary_last;
+    }
+
     // Update engine status
     const dot = document.getElementById('dbot-status-dot');
     const lbl = document.getElementById('dbot-status-label');
@@ -13388,7 +13406,7 @@ async function dbotPollStatus() {
     const logEl = document.getElementById('dbot-log');
     if (logEl && logData.log && logData.log.length) {
       const colorMap = {
-        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff', REPLY:'#ff44ff', CMD:'#ff9500', MEMORY:'#33cc33', VOICE:'#43b581', TX:'var(--tx)',
+        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff', REPLY:'#ff44ff', CMD:'#ff9500', MEMORY:'#33cc33', VOICE:'#43b581', TX:'var(--tx)', SUMMARY:'#8844ff',
         HOT:'#ff6b35', ENGAGE:'#33cc33', LURK:'var(--text3)',
         SENT:'#5865F2', ERROR:'var(--tx)', STARTER:'var(--cyan)'
       };

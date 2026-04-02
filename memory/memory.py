@@ -385,6 +385,53 @@ class RigGPTMemory:
 
         return result
 
+    # ── write operations ──────────────────────────────────────────────────
+
+    def _qdrant_upsert(self, collection: str, point_id: str,
+                       vector: list, payload: dict) -> bool:
+        """Upsert a single point into a Qdrant collection."""
+        try:
+            r = requests.put(
+                f"{self.qdrant_host}/collections/{collection}/points",
+                json={
+                    "points": [{
+                        "id": point_id,
+                        "vector": vector,
+                        "payload": payload,
+                    }]
+                },
+                timeout=10,
+            )
+            r.raise_for_status()
+            return True
+        except Exception as e:
+            log.warning(f"Qdrant upsert failed ({collection}): {e}")
+            return False
+
+    def store_summary(self, summary: str, participants: list[str],
+                      topics: list[str], message_count: int,
+                      channel: str = '') -> bool:
+        """Store a conversation summary as a vector in conversation_threads."""
+        if not self.is_available():
+            return False
+        vec = self._embed(summary)
+        if vec is None:
+            return False
+        import hashlib, datetime
+        ts = datetime.datetime.utcnow().isoformat() + 'Z'
+        point_id = hashlib.md5(f"{ts}:{summary[:50]}".encode()).hexdigest()
+        payload = {
+            "summary":                summary,
+            "participant_usernames":  participants,
+            "participant_displays":   participants,
+            "primary_topics":         topics,
+            "message_count":          message_count,
+            "channel":                channel,
+            "generated_at":           ts,
+            "source":                 "dbot_auto_summary",
+        }
+        return self._qdrant_upsert(COL_THREADS, point_id, vec, payload)
+
 
 # ── helpers ───────────────────────────────────────────────────────────────
 
