@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.36</span>
+    <span class="sb-label">v2.13.37</span>
   </div>
 </div>
 
@@ -11668,10 +11668,11 @@ async function clipsPlay(name) {
   });
 
   try {
+    const effects = dubGetParams();
     const r = await fetch('/api/clips/play', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({name}),
+      body: JSON.stringify({name, effects}),
     });
     const d = await r.json();
     if (!d.success) {

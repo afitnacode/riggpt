@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.36
+RigGPT v2.13.37
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.36'
+VERSION        = 'v2.13.37'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -9112,13 +9112,47 @@ def _clips_download_s3(clip: dict) -> str | None:
 _clips_proc: 'subprocess.Popen | None' = None
 
 
-def _clips_play(clip: dict):
+def _clips_has_fx(fx: dict) -> bool:
+    """Check if any FX values differ from clean defaults."""
+    if not fx:
+        return False
+    defaults = {
+        'vol': 100, 'compress': 0, 'gate': 0,
+        'lpf': 20000, 'hpf': 0, 'bass': 0, 'mid': 0, 'treble': 0,
+        'pitch': 0, 'speed': 1.0,
+        'overdrive': 0, 'bitcrush': 0, 'stutter': 0, 'width': 0,
+        'chorus': 0, 'flanger': 0, 'phaser': 0, 'tremolo': 0, 'vibrato': 0,
+        'reverb': 0, 'echo': 0, 'echo_fb': 0,
+        'wet': 100,
+    }
+    for k, default_val in defaults.items():
+        val = fx.get(k)
+        if val is None:
+            continue
+        try:
+            if isinstance(default_val, float):
+                if abs(float(val) - default_val) > 0.01:
+                    return True
+            else:
+                if int(val) != default_val:
+                    return True
+        except (ValueError, TypeError):
+            pass
+    if fx.get('reverse'):
+        return True
+    if fx.get('normalize'):
+        return True
+    return False
+
+
+def _clips_play(clip: dict, fx: dict = None):
     """
-    PTT + play a clip.  Runs in a daemon thread.
+    PTT + play a clip with optional FX chain.  Runs in a daemon thread.
     Sets/clears _clips_playing.  Uses ffplay (all formats) with aplay fallback.
     """
     global _clips_playing, _clips_proc
     ext = (clip.get('ext') or '').upper()
+    fx_temp = None  # temp file for FX-processed audio
     try:
         # Resolve playback path
         if clip['source'] == 's3':
@@ -9131,6 +9165,41 @@ def _clips_play(clip: dict):
             return
 
         logger.info(f'clips: playing {os.path.basename(fpath)!r} (ext={ext})')
+
+        # ── Apply FX chain if any non-default effects are set ──
+        if fx and _clips_has_fx(fx):
+            logger.info(f'clips: applying FX chain to {os.path.basename(fpath)}')
+            # Convert to WAV first if not already WAV
+            if ext != 'WAV':
+                _fd, wav_tmp = tempfile.mkstemp(suffix='.wav')
+                os.close(_fd)
+                rc = subprocess.run(
+                    ['ffmpeg', '-y', '-i', fpath, '-ar', '48000', '-ac', '1', wav_tmp],
+                    capture_output=True, timeout=30
+                ).returncode
+                if rc != 0:
+                    logger.warning(f'clips: ffmpeg WAV conversion failed rc={rc}')
+                    try: os.remove(wav_tmp)
+                    except Exception: pass
+                else:
+                    fpath = wav_tmp
+                    fx_temp = wav_tmp
+
+            # Apply effects
+            _fd2, fx_out = tempfile.mkstemp(suffix='.wav')
+            os.close(_fd2)
+            ok = _apply_trenchtown_fx(fpath, fx_out, fx)
+            if ok and os.path.exists(fx_out) and os.path.getsize(fx_out) > 100:
+                fpath = fx_out
+                if fx_temp and fx_temp != fx_out:
+                    try: os.remove(fx_temp)
+                    except Exception: pass
+                fx_temp = fx_out
+                logger.info(f'clips: FX applied → {os.path.getsize(fx_out)} bytes')
+            else:
+                logger.warning('clips: FX processing failed, playing original')
+                try: os.remove(fx_out)
+                except Exception: pass
 
         # PTT on
         try:
@@ -9226,6 +9295,10 @@ def _clips_play(clip: dict):
 
     finally:
         _clips_proc = None
+        # Clean up FX temp files
+        if fx_temp:
+            try: os.remove(fx_temp)
+            except Exception: pass
         # PTT off
         try:
             if orchestrator.icom_agent and orchestrator.icom_agent.serial_conn \
@@ -9303,7 +9376,8 @@ def api_clips_play():
             return jsonify({'success': False, 'message': f'Clip not found: {name}. Click SCAN ALL to refresh.'}), 404
         _clips_playing = True
 
-    threading.Thread(target=_clips_play, args=(clip,),
+    fx = data.get('effects', {})
+    threading.Thread(target=_clips_play, args=(clip, fx),
                      daemon=True, name='clips-play').start()
     return jsonify({'success': True, 'message': f'Playing {name}'})
 
