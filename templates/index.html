@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.37</span>
+    <span class="sb-label">v2.13.38</span>
   </div>
 </div>
 
@@ -4168,6 +4168,31 @@ hr.div  {
             <label style="font-size:7px;width:32px">QT</label>
             <input type="number" id="dbot-quiet" value="120" min="30" max="600" style="width:38px;font-size:8px" onchange="dbotSaveCfg()">
             <span style="font-size:7px;color:var(--text3)">s</span>
+          </div>
+        </div>
+        <div style="font-size:7px;color:#888;letter-spacing:.06em;margin:2px 0 1px">PERSONALITY</div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:2px">
+          <div class="form-row" style="flex:1">
+            <label style="font-size:7px;width:36px" title="% chance of responding to conversational replies">REPLY</label>
+            <input type="number" id="dbot-reply-chance" value="70" min="0" max="100" style="width:32px;font-size:8px" onchange="dbotSaveCfg()">
+            <span style="font-size:7px;color:var(--text3)">%</span>
+          </div>
+          <div class="form-row" style="flex:1">
+            <label style="font-size:7px;width:36px" title="% chance of ignoring even a direct mention">SNUB</label>
+            <input type="number" id="dbot-ignore-chance" value="10" min="0" max="50" style="width:32px;font-size:8px" onchange="dbotSaveCfg()">
+            <span style="font-size:7px;color:var(--text3)">%</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:2px">
+          <div class="form-row" style="flex:1">
+            <label style="font-size:7px;width:36px" title="Seconds between random interjections (0=off)">RANT</label>
+            <input type="number" id="dbot-ramble-interval" value="300" min="0" max="1800" style="width:38px;font-size:8px" onchange="dbotSaveCfg()">
+            <span style="font-size:7px;color:var(--text3)">s</span>
+          </div>
+          <div class="form-row" style="flex:1">
+            <label style="font-size:7px;width:36px" title="% chance of actually ranting when timer fires">ODDS</label>
+            <input type="number" id="dbot-ramble-chance" value="40" min="0" max="100" style="width:32px;font-size:8px" onchange="dbotSaveCfg()">
+            <span style="font-size:7px;color:var(--text3)">%</span>
           </div>
         </div>
       </div>
@@ -13188,6 +13213,10 @@ function dbotSaveCfg() {
     cooldown_sec:   document.getElementById('dbot-cooldown')?.value || 30,
     max_tokens:     document.getElementById('dbot-max-tokens')?.value || 200,
     quiet_sec:      document.getElementById('dbot-quiet')?.value || 120,
+    reply_chance:   document.getElementById('dbot-reply-chance')?.value || 70,
+    ignore_chance:  document.getElementById('dbot-ignore-chance')?.value || 10,
+    ramble_interval: document.getElementById('dbot-ramble-interval')?.value || 300,
+    ramble_chance:  document.getElementById('dbot-ramble-chance')?.value || 40,
     hotword_boost:  document.getElementById('dbot-boost')?.value || 40,
     hot_words:      hotStr,
     model:          document.getElementById('dbot-model')?.value || '',
@@ -13295,6 +13324,10 @@ async function dbotPollStatus() {
     _set('dbot-cooldown', s.cooldown);
     _set('dbot-max-tokens', s.max_tokens);
     _set('dbot-quiet', s.quiet_sec);
+    _set('dbot-reply-chance', s.reply_chance);
+    _set('dbot-ignore-chance', s.ignore_chance);
+    _set('dbot-ramble-interval', s.ramble_interval);
+    _set('dbot-ramble-chance', s.ramble_chance);
     _set('dbot-boost', s.hotword_boost || 40);
     document.getElementById('dbot-boost-v').textContent = '+' + (s.hotword_boost || 40) + '%';
     if (s.hot_words && Array.isArray(s.hot_words)) {
@@ -13407,7 +13440,7 @@ async function dbotPollStatus() {
     const logEl = document.getElementById('dbot-log');
     if (logEl && logData.log && logData.log.length) {
       const colorMap = {
-        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff', REPLY:'#ff44ff', CMD:'#ff9500', MEMORY:'#33cc33', VOICE:'#43b581', TX:'var(--tx)', SUMMARY:'#8844ff',
+        ENGINE:'#5865F2', POLL:'var(--text3)', WAIT:'var(--amber)', LLM:'var(--cyan)', ADDRESSED:'#ff44ff', REPLY:'#ff44ff', SNUB:'#ff3333', CMD:'#ff9500', MEMORY:'#33cc33', VOICE:'#43b581', TX:'var(--tx)', SUMMARY:'#8844ff', RAMBLE:'#ff6b35',
         HOT:'#ff6b35', ENGAGE:'#33cc33', LURK:'var(--text3)',
         SENT:'#5865F2', ERROR:'var(--tx)', STARTER:'var(--cyan)'
       };

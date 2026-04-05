@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.37
+RigGPT v2.13.38
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.37'
+VERSION        = 'v2.13.38'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -6997,6 +6997,10 @@ _dbot_state = {
     'max_context':    15,       # messages of conversation context to send to LLM
     'max_tokens':     200,       # LLM max_tokens
     'temperature':    0.9,      # LLM temperature
+    'reply_chance':   70,       # % chance of responding to conversational replies (not direct mention)
+    'ignore_chance':  10,       # % chance of ignoring even a direct mention (cranky factor)
+    'ramble_interval': 300,    # seconds between random unprompted interjections (0=off)
+    'ramble_chance':  40,       # % chance of actually rambling when timer fires
     'hot_words':      [],       # list of trigger words/phrases
     'topic':          '',       # current injected topic (steers responses)
     'starters':       [],       # queued conversation starters
@@ -7042,9 +7046,12 @@ def _dbot_should_engage(message_text: str, raw_content: str = '') -> tuple[bool,
     if bot_name and len(bot_name) > 1:
         addressed = (bot_name in text_lower) or (bot_name in raw_lower)
 
-    # Addressed by name = always respond, skip cooldown
+    # Addressed by name — usually respond, but sometimes ignore (cranky factor)
     if addressed:
         matched = [w for w in _dbot_state['hot_words'] if w.lower() in text_lower]
+        ignore = _dbot_state.get('ignore_chance', 10)
+        if ignore > 0 and random.randint(1, 100) <= ignore:
+            return False, matched, True  # addressed=True but should=False (intentionally ignoring)
         return True, matched, True
 
     # Cooldown check (only for non-addressed messages)
@@ -7456,6 +7463,52 @@ def _dbot_resolve_tts_engine() -> str:
     except Exception:
         pass
     return 'edge'
+
+
+_RAMBLE_TOPICS = [
+    "that roast beef sandwich you had last week",
+    "why CB radio is dying",
+    "the parking lot at Revere Beach",
+    "somebody who cut you off in traffic today",
+    "a guy you saw at the package store who looked suspicious",
+    "onion rings and whether they've gotten worse over the years",
+    "that time Billygoat tried to fix his antenna with duct tape",
+    "why nobody makes a good sandwich anymore",
+    "the smell inside your car right now",
+    "whether Ray Fowler is ever going to fix that squirrel problem",
+    "a strange noise you heard on the repeater last night",
+    "people who put ketchup on a roast beef sandwich",
+    "the Wisconsin Cheese Cutter and his latest drama",
+    "why your Michelob tastes different lately",
+    "a conspiracy about the local package store changing suppliers",
+    "what happened to all the good diners",
+    "the Pirate in Prescott and his signal that bleeds everywhere",
+    "why young people don't understand radios",
+    "a stain on your shirt that you can't identify",
+    "the concept of loyalty and who has it anymore",
+    "something suspicious about the new neighbors",
+    "whether Mr. Creamy has been avoiding you",
+    "a terrible experience at a gas station recently",
+    "your opinion on people who eat salads",
+    "what Calvin the Number Three Repeater did this time",
+]
+
+
+def _dbot_ramble(msgs: list):
+    """Generate a random unprompted interjection using the current persona."""
+    import random
+    topic = random.choice(_RAMBLE_TOPICS)
+    prompt = f"Say something short, unprompted, and in-character about: {topic}. " \
+             f"1-2 sentences max. Don't explain yourself. Just blurt it out like you " \
+             f"suddenly thought of it. No context needed."
+
+    _dbot_log('RAMBLE', f'🎲 Random interjection about: {topic}')
+    reply = _dbot_generate_response(msgs, prompt)
+    if reply:
+        if _dbot_post_message(reply):
+            _dbot_state['last_response'] = time_module.time()
+            _dbot_state['responded'] += 1
+            _dbot_log('RAMBLE', f'→ {reply[:80]}')
 
 
 def _dbot_transmit(speech_text: str, author: str):
@@ -8007,30 +8060,39 @@ def _dbot_engine():
                 # Contextual reply detection — catch replies directed at the bot
                 # even without the bot's name in the message
                 if not was_addressed:
+                    import random as _rng_reply
                     bot_uid = _dbot_state.get('bot_user_id', '')
+                    reply_pct = _dbot_state.get('reply_chance', 70)
                     # 1. Discord reply feature: user clicked Reply on a bot message
+                    #    Always respond (they explicitly chose to reply)
                     if bot_uid and msg.get('reply_to_id') == bot_uid:
                         was_addressed = True
                         should = True
                         _dbot_log('REPLY', f'↩ Discord reply to bot from {author}: {content[:50]}')
                     # 2. Conversational reply: message right after a bot message
-                    #    (like "Not talking to you you cock tickler" after the bot spoke)
+                    #    Subject to reply_chance — not guaranteed
                     elif bot_uid:
                         msg_id = msg.get('id', '')
                         for idx, m in enumerate(msgs):
                             if m.get('id') == msg_id and idx > 0:
                                 prev = msgs[idx - 1]
                                 if prev.get('author_id') == bot_uid:
-                                    was_addressed = True
-                                    should = True
-                                    _dbot_log('REPLY', f'↩ Conversational reply from {author} (follows bot): {content[:50]}')
+                                    if _rng_reply.randint(1, 100) <= reply_pct:
+                                        was_addressed = True
+                                        should = True
+                                        _dbot_log('REPLY', f'↩ Reply from {author} (follows bot, roll hit): {content[:50]}')
+                                    else:
+                                        _dbot_log('REPLY', f'↩ Reply from {author} ignored (roll={reply_pct}%): {content[:40]}')
                                 break
                 if matched:
                     _dbot_state['hot_hits'] += 1
                     _dbot_log('HOT', f'🔥 "{", ".join(matched)}" in msg from {author}: {content[:50]}')
 
                 if was_addressed:
-                    _dbot_log('ADDRESSED', f'📣 {author}: {content[:60]}')
+                    if should:
+                        _dbot_log('ADDRESSED', f'📣 {author}: {content[:60]}')
+                    else:
+                        _dbot_log('SNUB', f'😤 Ignored {author} (cranky): {content[:50]}')
 
                 if should:
                     _dbot_log('ENGAGE', f'Responding to {author}{" (addressed)" if was_addressed else ""}: {content[:50]}...')
@@ -8064,6 +8126,17 @@ def _dbot_engine():
                 if _dbot_post_message(starter):
                     _dbot_state['last_response'] = time_module.time()
                     _dbot_state['responded'] += 1
+
+            # Random ramble interjection
+            ramble_int = _dbot_state.get('ramble_interval', 300)
+            if ramble_int > 0 and (now - _dbot_state.get('_last_ramble', 0)) > ramble_int:
+                import random as _rng_ramble
+                if _rng_ramble.randint(1, 100) <= _dbot_state.get('ramble_chance', 40):
+                    _dbot_state['_last_ramble'] = now
+                    threading.Thread(target=_dbot_ramble, args=(list(msgs),),
+                                     daemon=True, name='dbot-ramble').start()
+                else:
+                    _dbot_state['_last_ramble'] = now  # reset timer even on miss
 
         except Exception as e:
             _dbot_log('ERROR', f'Engine error: {e}')
@@ -8129,6 +8202,10 @@ def api_dbot_status():
         'temperature':  _dbot_state['temperature'],
         'max_tokens':   _dbot_state['max_tokens'],
         'quiet_sec':    _dbot_state['quiet_sec'],
+        'reply_chance':   _dbot_state.get('reply_chance', 70),
+        'ignore_chance':  _dbot_state.get('ignore_chance', 10),
+        'ramble_interval': _dbot_state.get('ramble_interval', 300),
+        'ramble_chance':  _dbot_state.get('ramble_chance', 40),
         'model':        _dbot_state.get('model', ''),
         'canon_file':   _dbot_state.get('canon_file', ''),
         'tx_enabled':   _dbot_state.get('tx_enabled', False),
@@ -8156,6 +8233,14 @@ def api_dbot_config():
         _dbot_state['cooldown_sec'] = max(5, min(300, int(data['cooldown_sec'])))
     if 'quiet_sec' in data:
         _dbot_state['quiet_sec'] = max(30, min(600, int(data['quiet_sec'])))
+    if 'reply_chance' in data:
+        _dbot_state['reply_chance'] = max(0, min(100, int(data['reply_chance'])))
+    if 'ignore_chance' in data:
+        _dbot_state['ignore_chance'] = max(0, min(50, int(data['ignore_chance'])))
+    if 'ramble_interval' in data:
+        _dbot_state['ramble_interval'] = max(0, min(1800, int(data['ramble_interval'])))
+    if 'ramble_chance' in data:
+        _dbot_state['ramble_chance'] = max(0, min(100, int(data['ramble_chance'])))
     if 'max_context' in data:
         _dbot_state['max_context'] = max(3, min(30, int(data['max_context'])))
     if 'max_tokens' in data:
