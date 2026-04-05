@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.13.38 -- Installer
+# RigGPT v2.13.39 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,7 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.13.38"
+VERSION="2.13.39"
 
 # -- Parse flags ------------------------------------------------
 # -y / --yes  : skip upgrade confirmation prompt (for scripted installs)
@@ -124,6 +124,7 @@ echo "[1/7] Installing system packages..."
 apt-get update -qq
 apt-get install -y -qq \
     python3 python3-pip alsa-utils ffmpeg sox espeak-ng curl libopus0 libffi-dev \
+    psmisc lsof \
     2>/dev/null || echo "  WARNING: some apt packages failed (continuing)"
 
 # -- Service user + persistent home ─────────────────────────────
@@ -156,44 +157,74 @@ done
 systemctl stop "$SERVICE" 2>/dev/null || true
 sleep 1
 
-# Check if port 5000 is still held by a stale process
-_stale_check() {
-    STALE_PID=$(ss -tlnp 'sport = :5000' 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1)
-    if [ -z "$STALE_PID" ]; then
-        STALE_PID=$(lsof -ti :5000 2>/dev/null | head -1)
-    fi
-    echo "$STALE_PID"
+# ── Aggressively free port 5000 ──
+# Multiple strategies to ensure nothing holds the port.
+
+_list_port_pids() {
+    # Collect ALL PIDs holding port 5000 from multiple sources
+    {
+        ss -tlnp 'sport = :5000' 2>/dev/null | grep -oP 'pid=\K[0-9]+' || true
+        lsof -ti :5000 2>/dev/null || true
+        fuser 5000/tcp 2>/dev/null | tr -s ' ' '\n' || true
+    } | sort -u | grep -v '^$'
 }
 
-STALE_PID=$(_stale_check)
-if [ -n "$STALE_PID" ]; then
-    STALE_CMD=$(ps -p "$STALE_PID" -o comm= 2>/dev/null || echo "unknown")
-    echo "  WARNING: Port 5000 still held by PID $STALE_PID ($STALE_CMD)"
-    echo "  Sending SIGTERM to PID $STALE_PID..."
-    kill "$STALE_PID" 2>/dev/null || true
+# Round 1: SIGTERM all holders
+PORT_PIDS=$(_list_port_pids)
+if [ -n "$PORT_PIDS" ]; then
+    echo "  Port 5000 held by PID(s): $(echo $PORT_PIDS | tr '\n' ' ')"
+    for pid in $PORT_PIDS; do
+        cmd=$(ps -p "$pid" -o comm= 2>/dev/null || echo "unknown")
+        echo "  SIGTERM → PID $pid ($cmd)"
+        kill "$pid" 2>/dev/null || true
+    done
     # Wait up to 5s for graceful shutdown
     for _w in $(seq 1 10); do
         sleep 0.5
-        kill -0 "$STALE_PID" 2>/dev/null || break
+        PORT_PIDS=$(_list_port_pids)
+        [ -z "$PORT_PIDS" ] && break
     done
-    # Still alive? Force kill
-    if kill -0 "$STALE_PID" 2>/dev/null; then
-        echo "  Process $STALE_PID did not exit — sending SIGKILL..."
-        kill -9 "$STALE_PID" 2>/dev/null || true
-        sleep 1
-    fi
 fi
 
-# Belt-and-suspenders: kill any stray gunicorn workers
-pkill -f "gunicorn.*app:app" 2>/dev/null || true
+# Round 2: SIGKILL any survivors
+PORT_PIDS=$(_list_port_pids)
+if [ -n "$PORT_PIDS" ]; then
+    echo "  Still held after SIGTERM — escalating to SIGKILL"
+    for pid in $PORT_PIDS; do
+        echo "  SIGKILL → PID $pid"
+        kill -9 "$pid" 2>/dev/null || true
+    done
+    sleep 1
+fi
+
+# Round 3: fuser -k (kernel-level kill, catches everything)
+if command -v fuser &>/dev/null; then
+    fuser -k 5000/tcp 2>/dev/null || true
+    sleep 0.5
+fi
+
+# Round 4: pkill patterns for common holders
+pkill -9 -f "gunicorn.*app:app" 2>/dev/null || true
+pkill -9 -f "gunicorn.*5000" 2>/dev/null || true
+pkill -9 -f "python.*app.py" 2>/dev/null || true
 sleep 0.5
 
-# Final port check
-STALE_PID=$(_stale_check)
-if [ -n "$STALE_PID" ]; then
-    echo "  ERROR: Port 5000 STILL held by PID $STALE_PID after kill attempts"
-    echo "  Run manually: sudo kill -9 $STALE_PID"
-    echo "  Then re-run: bash INSTALL.sh"
+# Final verification
+PORT_PIDS=$(_list_port_pids)
+if [ -n "$PORT_PIDS" ]; then
+    echo ""
+    echo "  ╔═══════════════════════════════════════════════╗"
+    echo "  ║  ERROR: Port 5000 STILL held after all kill   ║"
+    echo "  ║  attempts. Remaining PID(s):                  ║"
+    for pid in $PORT_PIDS; do
+        cmd=$(ps -p "$pid" -o args= 2>/dev/null || echo "unknown")
+        printf "  ║  PID %-6s %s\n" "$pid" "${cmd:0:36}"
+    done
+    echo "  ║                                               ║"
+    echo "  ║  Try: sudo kill -9 $PORT_PIDS                ║"
+    echo "  ║  Then re-run: bash INSTALL.sh                 ║"
+    echo "  ╚═══════════════════════════════════════════════╝"
+    echo ""
     exit 1
 fi
 echo "  Port 5000 is free ✓"
