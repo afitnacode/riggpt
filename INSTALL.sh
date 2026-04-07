@@ -1,5 +1,5 @@
 #!/bin/bash
-# RigGPT v2.13.40 -- Installer
+# RigGPT v2.13.41 -- Installer
 # Tested: Debian 13 (trixie) amd64, Python 3.13, x86_64
 set -e
 
@@ -8,7 +8,7 @@ SERVICE="riggpt"
 SVC_USER="riggpt"
 SVC_HOME="/home/riggpt"          # persistent home; NOT removed on uninstall
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="2.13.40"
+VERSION="2.13.41"
 
 # -- Parse flags ------------------------------------------------
 # -y / --yes  : skip upgrade confirmation prompt (for scripted installs)
@@ -159,14 +159,16 @@ sleep 1
 
 # ── Aggressively free port 5000 ──
 # Multiple strategies to ensure nothing holds the port.
+# All commands wrapped in `timeout` to prevent hangs.
 
 _list_port_pids() {
     # Collect ALL PIDs holding port 5000 from multiple sources
+    # Each command gets a 3-second timeout to prevent hangs
     {
-        ss -tlnp 'sport = :5000' 2>/dev/null | grep -oP 'pid=\K[0-9]+' || true
-        lsof -ti :5000 2>/dev/null || true
-        fuser 5000/tcp 2>/dev/null | tr -s ' ' '\n' || true
-    } | sort -u | grep -v '^$'
+        timeout 3 ss -tlnp 'sport = :5000' 2>/dev/null | grep -oP 'pid=\K[0-9]+' || true
+        timeout 3 lsof -ti :5000 2>/dev/null || true
+        timeout 3 fuser 5000/tcp 2>/dev/null | tr -s ' ' '\n' | grep -oP '[0-9]+' || true
+    } | sort -un | grep -v '^$' || true
 }
 
 # Round 1: SIGTERM all holders
@@ -199,7 +201,7 @@ fi
 
 # Round 3: fuser -k (kernel-level kill, catches everything)
 if command -v fuser &>/dev/null; then
-    fuser -k 5000/tcp 2>/dev/null || true
+    timeout 3 fuser -k 5000/tcp 2>/dev/null || true
     sleep 0.5
 fi
 
