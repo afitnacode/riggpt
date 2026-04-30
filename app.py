@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.42
+RigGPT v2.13.43
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -294,6 +294,7 @@ v2.10.7 fixes:
 
 import os
 import sys
+import math
 import json
 import queue
 import shutil
@@ -393,7 +394,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.42'
+VERSION        = 'v2.13.43'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -10626,6 +10627,543 @@ def _auto_connect():
             logger.info(f"Auto-connect: port opened {port} @ {orchestrator.icom_agent.baudrate} -- radio probe deferred to poller")
             return  # poller thread will do full probe and baud-scan without blocking startup
     logger.warning("Auto-connect: no serial port found -- connect manually via Settings tab")
+
+
+# =============================================================
+# LIVE EFFECTS — Roger beeps, VFO wobble, key-up samples
+# =============================================================
+# Watches CI-V TX state with a fast 200ms poll (only when engine
+# is enabled). Detects PTT release from the front-panel mic and
+# fires effects: re-key PTT, play sample, release PTT.
+# VFO wobble runs concurrently during TX as a separate thread.
+# All effects are gated on a single 'enabled' master toggle.
+
+LIVE_DIR = '/tmp/riggpt_live'  # generated sample cache
+_live_lock   = threading.Lock()
+_live_stop   = threading.Event()
+_live_thread = None
+_live_wobble_thread = None
+
+_live_state = {
+    'enabled':         False,        # master toggle (engine on/off)
+
+    # Roger beep on PTT release
+    'roger_beep':      True,
+    'roger_sample':    'beep_dual',
+    'roger_vol':       80,
+    'roger_tail_ms':   150,          # how long to hold PTT past sample length
+
+    # Key-up jingle (longer clip)
+    'jingle_enabled':  False,
+    'jingle_clip':     '',           # name from /home/riggpt/clips/
+    'jingle_vol':      80,
+
+    # Echo tail (multi-tap of roger sample, decaying)
+    'echo_enabled':    False,
+    'echo_taps':       3,
+    'echo_decay':      50,           # % drop per tap
+    'echo_interval_ms': 150,
+
+    # Robot voice stinger (sample played on key-up)
+    'robot_enabled':   False,
+    'robot_sample':    'robot_warble',
+
+    # VFO wobble during TX
+    'wobble_enabled':  False,
+    'wobble_depth_hz': 10,
+    'wobble_rate_hz':  4,
+
+    # State tracking (read-only via API)
+    'tx_state':        False,
+    'last_event':      '',
+    'self_keying':     False,        # internal: ignore TX edge while we're keying
+    'event_count':     0,
+}
+
+# CB-classic generated samples — built on first use via sox
+_LIVE_PRESETS = {
+    'beep_short':  ('Single short beep, 700Hz 100ms',
+                    'sox -n {out} synth 0.10 sine 700 fade 0.005 0.10 0.005'),
+    'beep_dual':   ('Classic CB roger: two-tone',
+                    'sox -n {out} synth 0.08 sine 800 : synth 0.08 sine 1000 fade 0.005 0.16 0.01'),
+    'beep_long':   ('Long beep, 700Hz 300ms',
+                    'sox -n {out} synth 0.30 sine 700 fade 0.01 0.30 0.02'),
+    'beep_chirp':  ('Frequency sweep 600→1200',
+                    'sox -n {out} synth 0.20 sine 600-1200 fade 0.005 0.20 0.01'),
+    'beep_kerchunk': ('Noise burst then beep',
+                    'sox -n {out} synth 0.05 brownnoise : synth 0.10 sine 800 fade 0.005 0.15 0.02'),
+    'morse_k':     ('Morse code "K" (-.-)',
+                    'sox -n {out} synth 0.12 sine 700 : synth 0.06 sine 0 : synth 0.04 sine 700 : synth 0.06 sine 0 : synth 0.12 sine 700 fade 0.005 0.40 0.005'),
+    'tones_3':     ('Three ascending tones',
+                    'sox -n {out} synth 0.08 sine 600 : synth 0.08 sine 800 : synth 0.08 sine 1000 fade 0.005 0.24 0.01'),
+    'robot_warble':('Robotic warble',
+                    'sox -n {out} synth 0.40 sine 400 tremolo 12 80 fade 0.01 0.40 0.05'),
+    'robot_buzz':  ('Robot buzz 300Hz square',
+                    'sox -n {out} synth 0.30 square 300 fade 0.01 0.30 0.05'),
+    'robot_radio': ('Distorted radio voice',
+                    'sox -n {out} synth 0.50 sine 250-450 tremolo 15 60 overdrive 20 fade 0.01 0.50 0.05'),
+}
+
+
+def _live_log(event: str):
+    """Add an entry to the activity log."""
+    with _live_lock:
+        _live_state['last_event'] = f'{datetime.now().strftime("%H:%M:%S")} {event}'
+        _live_state['event_count'] += 1
+    logger.info(f'live: {event}')
+
+
+def _live_ensure_samples():
+    """Generate built-in sample WAVs if not already cached."""
+    os.makedirs(LIVE_DIR, exist_ok=True)
+    for name, (desc, cmd_template) in _LIVE_PRESETS.items():
+        out_path = os.path.join(LIVE_DIR, f'{name}.wav')
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 100:
+            continue
+        cmd = cmd_template.format(out=out_path).split()
+        try:
+            r = subprocess.run(cmd, capture_output=True, timeout=10)
+            if r.returncode != 0:
+                logger.warning(f'live: failed to generate {name}: {r.stderr.decode()[:200]}')
+        except Exception as e:
+            logger.warning(f'live: sox error for {name}: {e}')
+
+
+def _live_resolve_sample(name: str) -> str | None:
+    """Resolve a sample name to a file path. Tries presets first, then clips dir."""
+    if not name:
+        return None
+    # Built-in preset
+    preset_path = os.path.join(LIVE_DIR, f'{name}.wav')
+    if os.path.exists(preset_path):
+        return preset_path
+    # Clip from /home/riggpt/clips/
+    clips_dir = '/home/riggpt/clips'
+    for ext in ('.wav', '.WAV', '.mp3', '.MP3'):
+        clip_path = os.path.join(clips_dir, f'{name}{ext}')
+        if os.path.exists(clip_path):
+            return clip_path
+    # Direct full path? (might already include extension)
+    if os.path.exists(name):
+        return name
+    return None
+
+
+def _live_play_sample(sample_path: str, volume_pct: int = 80, hold_after_ms: int = 0):
+    """
+    Re-key PTT, play a WAV/MP3 sample, then release PTT.
+    Uses the self_keying flag so the engine doesn't recursively re-trigger.
+    Audio plays through configured AUDIO_DEVICE which routes to radio mic mixer
+    when MOD source is set to MIC,USB on the IC-7610.
+    """
+    if not sample_path or not os.path.exists(sample_path):
+        logger.warning(f'live: sample not found: {sample_path}')
+        return False
+    if not orchestrator._connected:
+        logger.warning('live: cannot play — radio not connected')
+        return False
+
+    agent = orchestrator.icom_agent
+    with _live_lock:
+        _live_state['self_keying'] = True
+    try:
+        # Convert to WAV with adjusted volume if needed
+        play_path = sample_path
+        if volume_pct != 100 or sample_path.lower().endswith('.mp3'):
+            _fd, tmp_wav = tempfile.mkstemp(suffix='.wav', dir=LIVE_DIR)
+            os.close(_fd)
+            vol = max(0, min(200, volume_pct)) / 100.0
+            try:
+                r = subprocess.run(
+                    ['sox', sample_path, '-r', '48000', '-c', '1', tmp_wav, 'vol', str(vol)],
+                    capture_output=True, timeout=10
+                )
+                if r.returncode == 0:
+                    play_path = tmp_wav
+                else:
+                    try: os.remove(tmp_wav)
+                    except Exception: pass
+            except Exception as e:
+                logger.warning(f'live: sox volume adjust failed: {e}')
+                try: os.remove(tmp_wav)
+                except Exception: pass
+
+        # Re-key PTT and play
+        agent.ptt_on()
+        time_module.sleep(0.05)  # let PTT stabilize
+        dev = AUDIO_DEVICE or 'default'
+        try:
+            subprocess.run(['aplay', '-D', dev, '-q', play_path],
+                           timeout=15, capture_output=True)
+        except subprocess.TimeoutExpired:
+            logger.warning('live: aplay timeout')
+        if hold_after_ms > 0:
+            time_module.sleep(hold_after_ms / 1000.0)
+        agent.ptt_off()
+
+        # Cleanup tmp file
+        if play_path != sample_path:
+            try: os.remove(play_path)
+            except Exception: pass
+        return True
+    except Exception as e:
+        logger.error(f'live: play_sample error: {e}')
+        try: agent.ptt_off()
+        except Exception: pass
+        return False
+    finally:
+        time_module.sleep(0.10)  # debounce so TX edge detector doesn't see our keying
+        with _live_lock:
+            _live_state['self_keying'] = False
+
+
+def _live_fire_effects():
+    """Called on TX→RX edge. Fires all enabled effects sequentially."""
+    snap = dict(_live_state)
+    samples_to_play = []  # list of (path, vol, hold_ms)
+
+    # Roger beep (always first if enabled)
+    if snap.get('roger_beep'):
+        path = _live_resolve_sample(snap.get('roger_sample', 'beep_dual'))
+        if path:
+            samples_to_play.append((path, snap.get('roger_vol', 80),
+                                    snap.get('roger_tail_ms', 150)))
+
+    # Echo tail — replay roger sample N times with decay
+    if snap.get('echo_enabled'):
+        path = _live_resolve_sample(snap.get('roger_sample', 'beep_dual'))
+        if path:
+            taps = max(1, min(8, snap.get('echo_taps', 3)))
+            decay = max(0, min(95, snap.get('echo_decay', 50)))
+            interval_ms = max(50, min(500, snap.get('echo_interval_ms', 150)))
+            base_vol = snap.get('roger_vol', 80)
+            for i in range(taps):
+                # Each tap is decay% quieter than the previous
+                tap_vol = int(base_vol * ((100 - decay) / 100.0) ** (i + 1))
+                if tap_vol >= 5:
+                    samples_to_play.append((path, tap_vol, interval_ms))
+
+    # Robot stinger
+    if snap.get('robot_enabled'):
+        path = _live_resolve_sample(snap.get('robot_sample', 'robot_warble'))
+        if path:
+            samples_to_play.append((path, snap.get('roger_vol', 80), 50))
+
+    # Key-up jingle
+    if snap.get('jingle_enabled') and snap.get('jingle_clip'):
+        path = _live_resolve_sample(snap['jingle_clip'])
+        if path:
+            samples_to_play.append((path, snap.get('jingle_vol', 80), 100))
+
+    if not samples_to_play:
+        return
+
+    # Play all samples in one PTT keying sequence (more natural than separate keyings)
+    if not orchestrator._connected:
+        return
+    agent = orchestrator.icom_agent
+    with _live_lock:
+        _live_state['self_keying'] = True
+    try:
+        agent.ptt_on()
+        time_module.sleep(0.05)
+        dev = AUDIO_DEVICE or 'default'
+        for path, vol, hold_ms in samples_to_play:
+            # Adjust volume via sox
+            _fd, tmp_wav = tempfile.mkstemp(suffix='.wav', dir=LIVE_DIR)
+            os.close(_fd)
+            try:
+                v = max(0, min(200, vol)) / 100.0
+                r = subprocess.run(
+                    ['sox', path, '-r', '48000', '-c', '1', tmp_wav, 'vol', str(v)],
+                    capture_output=True, timeout=10
+                )
+                play_path = tmp_wav if r.returncode == 0 else path
+                subprocess.run(['aplay', '-D', dev, '-q', play_path],
+                               timeout=15, capture_output=True)
+            except Exception as e:
+                logger.warning(f'live: tap play error: {e}')
+            finally:
+                try: os.remove(tmp_wav)
+                except Exception: pass
+            if hold_ms > 0:
+                time_module.sleep(hold_ms / 1000.0)
+        agent.ptt_off()
+        _live_log(f'Fired {len(samples_to_play)} effect tap(s)')
+    except Exception as e:
+        logger.error(f'live: fire_effects error: {e}')
+        try: agent.ptt_off()
+        except Exception: pass
+    finally:
+        time_module.sleep(0.10)  # debounce
+        with _live_lock:
+            _live_state['self_keying'] = False
+
+
+def _live_wobble_loop():
+    """
+    Wobble VFO in a sine pattern while TX is active.
+    Captures base frequency at start, restores on exit.
+    Runs as its own thread, exits when TX state goes False.
+    """
+    if not orchestrator._connected:
+        return
+    agent = orchestrator.icom_agent
+    base_freq = agent.read_frequency()
+    if not base_freq:
+        return
+    snap = dict(_live_state)
+    depth = max(1, min(200, snap.get('wobble_depth_hz', 10)))
+    rate = max(1, min(20, snap.get('wobble_rate_hz', 4)))
+    period = 1.0 / rate
+    step = period / 8.0  # 8 updates per cycle
+    _live_log(f'VFO wobble started ({depth}Hz @ {rate}Hz, base {base_freq/1e6:.4f})')
+    t0 = time_module.time()
+    last_offset = 0
+    try:
+        while not _live_stop.is_set():
+            with _live_lock:
+                if not _live_state.get('tx_state'):
+                    break
+                if not _live_state.get('wobble_enabled'):
+                    break
+            t = time_module.time() - t0
+            offset = int(depth * math.sin(2 * math.pi * rate * t))
+            if offset != last_offset:
+                try:
+                    agent.set_frequency(base_freq + offset)
+                except Exception:
+                    pass
+                last_offset = offset
+            time_module.sleep(step)
+    finally:
+        try:
+            agent.set_frequency(base_freq)
+            _live_log(f'VFO wobble ended, restored {base_freq/1e6:.4f}')
+        except Exception:
+            pass
+
+
+def _live_engine():
+    """Main live engine: 200ms TX poll, edge detection, effect firing."""
+    global _live_wobble_thread
+    logger.info('live: engine started')
+    last_tx = False
+    while not _live_stop.is_set():
+        try:
+            with _live_lock:
+                if not _live_state.get('enabled'):
+                    break
+                self_keying = _live_state.get('self_keying', False)
+
+            # Skip CI-V poll if we're currently keying (avoid bus contention)
+            if self_keying:
+                time_module.sleep(0.2)
+                continue
+
+            if not orchestrator._connected:
+                time_module.sleep(0.5)
+                continue
+
+            agent = orchestrator.icom_agent
+            tx = agent.read_tx_state()
+            with _live_lock:
+                _live_state['tx_state'] = bool(tx)
+
+            # Edge detection
+            if tx and not last_tx:
+                # RX → TX edge (front panel keyed)
+                _live_log('TX detected (front panel)')
+                with _live_lock:
+                    wobble_on = _live_state.get('wobble_enabled')
+                if wobble_on and (_live_wobble_thread is None or not _live_wobble_thread.is_alive()):
+                    _live_wobble_thread = threading.Thread(
+                        target=_live_wobble_loop, daemon=True, name='live-wobble')
+                    _live_wobble_thread.start()
+            elif last_tx and not tx:
+                # TX → RX edge (front panel released)
+                _live_log('TX released — firing effects')
+                # Fire effects in a separate thread so we don't block the poll loop
+                threading.Thread(target=_live_fire_effects,
+                                 daemon=True, name='live-effects').start()
+
+            last_tx = tx
+            time_module.sleep(0.2)  # 200ms poll
+        except Exception as e:
+            logger.warning(f'live: engine error: {e}')
+            time_module.sleep(1)
+    logger.info('live: engine stopped')
+    with _live_lock:
+        _live_state['tx_state'] = False
+        _live_state['enabled'] = False
+
+
+def _live_start():
+    """Start the live engine thread."""
+    global _live_thread
+    _live_ensure_samples()
+    _live_stop.clear()
+    with _live_lock:
+        _live_state['enabled'] = True
+    if _live_thread is None or not _live_thread.is_alive():
+        _live_thread = threading.Thread(target=_live_engine, daemon=True, name='live-engine')
+        _live_thread.start()
+    return True
+
+
+def _live_stop_engine():
+    """Stop the live engine thread."""
+    _live_stop.set()
+    with _live_lock:
+        _live_state['enabled'] = False
+
+
+# ── Live API routes ──
+
+@app.route('/api/live/status', methods=['GET'])
+def api_live_status():
+    with _live_lock:
+        snap = {k: v for k, v in _live_state.items() if k != 'self_keying'}
+    snap['presets'] = [{'name': k, 'desc': v[0]} for k, v in _LIVE_PRESETS.items()]
+    # Available clips from /home/riggpt/clips/
+    clips_dir = '/home/riggpt/clips'
+    clips = []
+    try:
+        if os.path.isdir(clips_dir):
+            for f in sorted(os.listdir(clips_dir)):
+                if f.lower().endswith(('.wav', '.mp3')):
+                    clips.append(os.path.splitext(f)[0])
+    except Exception:
+        pass
+    snap['clips'] = clips
+    return jsonify(snap)
+
+
+@app.route('/api/live/config', methods=['POST'])
+def api_live_config():
+    """Update live state from UI."""
+    data = request.json or {}
+    with _live_lock:
+        # Booleans
+        for key in ['roger_beep', 'jingle_enabled', 'echo_enabled',
+                    'robot_enabled', 'wobble_enabled']:
+            if key in data:
+                _live_state[key] = bool(data[key])
+        # Strings
+        for key, maxlen in [('roger_sample', 50), ('jingle_clip', 200),
+                             ('robot_sample', 50)]:
+            if key in data:
+                _live_state[key] = str(data[key]).strip()[:maxlen]
+        # Integer ranges
+        for key, lo, hi in [
+            ('roger_vol', 0, 200), ('jingle_vol', 0, 200),
+            ('roger_tail_ms', 0, 1000),
+            ('echo_taps', 1, 8), ('echo_decay', 0, 95),
+            ('echo_interval_ms', 50, 500),
+            ('wobble_depth_hz', 1, 200), ('wobble_rate_hz', 1, 20),
+        ]:
+            if key in data:
+                try:
+                    _live_state[key] = max(lo, min(hi, int(data[key])))
+                except (ValueError, TypeError):
+                    pass
+    return jsonify({'success': True})
+
+
+@app.route('/api/live/start', methods=['POST'])
+def api_live_start():
+    if not orchestrator._connected:
+        return jsonify({'success': False, 'message': 'Radio not connected'}), 400
+    _live_start()
+    return jsonify({'success': True, 'message': 'Live engine started'})
+
+
+@app.route('/api/live/stop', methods=['POST'])
+def api_live_stop():
+    _live_stop_engine()
+    return jsonify({'success': True, 'message': 'Live engine stopped'})
+
+
+@app.route('/api/live/test/<effect>', methods=['POST'])
+def api_live_test(effect):
+    """Test an individual effect right now (without needing actual TX)."""
+    if not orchestrator._connected:
+        return jsonify({'success': False, 'message': 'Radio not connected'}), 400
+    _live_ensure_samples()
+    if effect == 'roger':
+        path = _live_resolve_sample(_live_state.get('roger_sample', 'beep_dual'))
+        if not path:
+            return jsonify({'success': False, 'message': 'Sample not found'}), 404
+        threading.Thread(
+            target=_live_play_sample,
+            args=(path, _live_state.get('roger_vol', 80),
+                  _live_state.get('roger_tail_ms', 150)),
+            daemon=True
+        ).start()
+        return jsonify({'success': True, 'message': f'Testing roger beep'})
+    elif effect == 'jingle':
+        clip = _live_state.get('jingle_clip')
+        if not clip:
+            return jsonify({'success': False, 'message': 'No jingle clip selected'}), 400
+        path = _live_resolve_sample(clip)
+        if not path:
+            return jsonify({'success': False, 'message': f'Clip not found: {clip}'}), 404
+        threading.Thread(
+            target=_live_play_sample,
+            args=(path, _live_state.get('jingle_vol', 80), 100),
+            daemon=True
+        ).start()
+        return jsonify({'success': True, 'message': f'Testing jingle: {clip}'})
+    elif effect == 'echo':
+        threading.Thread(target=_live_fire_effects, daemon=True).start()
+        return jsonify({'success': True, 'message': 'Testing echo (fires all enabled effects)'})
+    elif effect == 'robot':
+        path = _live_resolve_sample(_live_state.get('robot_sample', 'robot_warble'))
+        if not path:
+            return jsonify({'success': False, 'message': 'Robot sample not found'}), 404
+        threading.Thread(
+            target=_live_play_sample,
+            args=(path, _live_state.get('roger_vol', 80), 100),
+            daemon=True
+        ).start()
+        return jsonify({'success': True, 'message': 'Testing robot stinger'})
+    elif effect == 'wobble':
+        # Test wobble: simulate 3 seconds of wobble without needing real TX
+        if _live_wobble_thread and _live_wobble_thread.is_alive():
+            return jsonify({'success': False, 'message': 'Wobble already running'}), 400
+        def _test_wobble():
+            with _live_lock:
+                _live_state['tx_state'] = True
+                _live_state['wobble_enabled'] = True
+            try:
+                _live_wobble_loop_test()
+            finally:
+                with _live_lock:
+                    _live_state['tx_state'] = False
+        def _live_wobble_loop_test():
+            agent = orchestrator.icom_agent
+            base = agent.read_frequency()
+            if not base: return
+            snap = dict(_live_state)
+            depth = snap.get('wobble_depth_hz', 10)
+            rate = snap.get('wobble_rate_hz', 4)
+            period = 1.0 / rate
+            step = period / 8.0
+            t0 = time_module.time()
+            try:
+                while time_module.time() - t0 < 3.0:
+                    t = time_module.time() - t0
+                    offset = int(depth * math.sin(2 * math.pi * rate * t))
+                    try: agent.set_frequency(base + offset)
+                    except Exception: pass
+                    time_module.sleep(step)
+            finally:
+                try: agent.set_frequency(base)
+                except Exception: pass
+        threading.Thread(target=_test_wobble, daemon=True).start()
+        return jsonify({'success': True, 'message': 'Testing VFO wobble (3 seconds, no TX)'})
+    else:
+        return jsonify({'success': False, 'message': f'Unknown effect: {effect}'}), 400
 
 
 # =============================================================

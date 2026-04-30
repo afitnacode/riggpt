@@ -1688,7 +1688,7 @@ hr.div  {
     <span class="sb-badge" id="sb-alerts"></span>
   </div>
   <div class="sb-seg" style="border-right:none">
-    <span class="sb-label">v2.13.42</span>
+    <span class="sb-label">v2.13.43</span>
   </div>
 </div>
 
@@ -1741,6 +1741,10 @@ hr.div  {
   <button class="tab-btn" onclick="showTab('discord')" data-tab="discord"
     style="color:#5865F2;border-bottom:2px solid #5865F2">
     &#129302; DISCORD
+  </button>
+  <button class="tab-btn" onclick="showTab('live')" data-tab="live"
+    style="color:#ff3366;border-bottom:2px solid #ff3366">
+    &#128227; LIVE
   </button>
 
   <div class="strip-right">
@@ -4270,6 +4274,174 @@ hr.div  {
 </div>
 
 <!-- ══════════════════════
+     PANE: LIVE EFFECTS
+══════════════════════════ -->
+<div id="pane-live" class="pane">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--s3);padding:var(--s3);overflow:auto">
+
+    <!-- ── COL 1: Engine + Effects ─────────────────────── -->
+    <div style="display:flex;flex-direction:column;gap:var(--s3)">
+
+      <!-- Engine control -->
+      <div class="card">
+        <div class="sec-head" style="color:#ff3366">
+          <span style="flex:1">📡 LIVE ENGINE</span>
+          <span id="live-tx-indicator" style="font-size:9px;color:var(--text3)">TX: idle</span>
+        </div>
+        <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2);align-items:center">
+          <button id="live-engine-btn" class="btn" onclick="liveToggleEngine()" style="flex:1">▶ START</button>
+          <span id="live-engine-status" style="font-size:9px;color:var(--text3)">stopped</span>
+        </div>
+        <div style="font-size:8px;color:var(--text3);line-height:1.5">
+          Watches CI-V every 200ms. When you key the front-panel mic, the engine
+          detects PTT release and fires enabled effects (re-keys PTT, plays samples,
+          releases). Requires <strong>MOD source = MIC,USB</strong> on the IC-7610
+          for samples to mix into your TX audio.
+        </div>
+      </div>
+
+      <!-- Roger Beep -->
+      <div class="card">
+        <div class="sec-head" style="color:#43b581">🔔 ROGER BEEP</div>
+        <label class="toggle-row" style="font-size:9px;margin-bottom:var(--s2)">
+          <input type="checkbox" id="live-roger-enable" onchange="liveSaveCfg()"> ENABLED
+        </label>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Sample</label>
+          <select id="live-roger-sample" onchange="liveSaveCfg()" style="flex:1;font-size:9px"></select>
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Volume</label>
+          <input type="range" id="live-roger-vol" min="0" max="200" value="80"
+                 oninput="document.getElementById('live-roger-vol-v').textContent=this.value+'%'"
+                 onchange="liveSaveCfg()" style="flex:1">
+          <span id="live-roger-vol-v" style="font-size:8px;color:var(--cyan);width:36px;text-align:right">80%</span>
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">PTT tail</label>
+          <input type="number" id="live-roger-tail" min="0" max="1000" value="150"
+                 onchange="liveSaveCfg()" style="width:60px;font-size:9px">
+          <span style="font-size:8px;color:var(--text3)">ms</span>
+        </div>
+        <button class="btn sm" onclick="liveTest('roger')" style="width:100%;font-size:9px">🎵 TEST</button>
+      </div>
+
+      <!-- Echo Tail -->
+      <div class="card">
+        <div class="sec-head" style="color:#ffaa00">📻 ECHO TAIL</div>
+        <label class="toggle-row" style="font-size:9px;margin-bottom:var(--s2)">
+          <input type="checkbox" id="live-echo-enable" onchange="liveSaveCfg()"> ENABLED
+        </label>
+        <div style="font-size:8px;color:var(--text3);margin-bottom:var(--s2)">
+          Plays the roger sample N times with decaying volume after PTT release.
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Taps</label>
+          <input type="number" id="live-echo-taps" min="1" max="8" value="3"
+                 onchange="liveSaveCfg()" style="width:50px;font-size:9px">
+          <label style="font-size:8px;margin-left:var(--s2)">Decay</label>
+          <input type="number" id="live-echo-decay" min="0" max="95" value="50"
+                 onchange="liveSaveCfg()" style="width:50px;font-size:9px">
+          <span style="font-size:8px;color:var(--text3)">%</span>
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Interval</label>
+          <input type="number" id="live-echo-interval" min="50" max="500" value="150"
+                 onchange="liveSaveCfg()" style="width:60px;font-size:9px">
+          <span style="font-size:8px;color:var(--text3)">ms between taps</span>
+        </div>
+        <button class="btn sm" onclick="liveTest('echo')" style="width:100%;font-size:9px">🎵 TEST</button>
+      </div>
+
+    </div>
+
+    <!-- ── COL 2: Robot, Jingle, Wobble + Activity ─────── -->
+    <div style="display:flex;flex-direction:column;gap:var(--s3)">
+
+      <!-- Robot Stinger -->
+      <div class="card">
+        <div class="sec-head" style="color:#9966ff">🤖 ROBOT STINGER</div>
+        <label class="toggle-row" style="font-size:9px;margin-bottom:var(--s2)">
+          <input type="checkbox" id="live-robot-enable" onchange="liveSaveCfg()"> ENABLED
+        </label>
+        <div style="font-size:8px;color:var(--text3);margin-bottom:var(--s2)">
+          Plays a synthetic "robot voice" sample on PTT release.
+          (Real-time vocoding the front-panel mic isn't possible — this is a stinger.)
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Sample</label>
+          <select id="live-robot-sample" onchange="liveSaveCfg()" style="flex:1;font-size:9px"></select>
+        </div>
+        <button class="btn sm" onclick="liveTest('robot')" style="width:100%;font-size:9px">🎵 TEST</button>
+      </div>
+
+      <!-- Key-up Jingle -->
+      <div class="card">
+        <div class="sec-head" style="color:#33aaff">🎵 KEY-UP JINGLE</div>
+        <label class="toggle-row" style="font-size:9px;margin-bottom:var(--s2)">
+          <input type="checkbox" id="live-jingle-enable" onchange="liveSaveCfg()"> ENABLED
+        </label>
+        <div style="font-size:8px;color:var(--text3);margin-bottom:var(--s2)">
+          Plays a clip from your <code>/home/riggpt/clips/</code> directory after PTT release.
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Clip</label>
+          <select id="live-jingle-clip" onchange="liveSaveCfg()" style="flex:1;font-size:9px">
+            <option value="">— select clip —</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Volume</label>
+          <input type="range" id="live-jingle-vol" min="0" max="200" value="80"
+                 oninput="document.getElementById('live-jingle-vol-v').textContent=this.value+'%'"
+                 onchange="liveSaveCfg()" style="flex:1">
+          <span id="live-jingle-vol-v" style="font-size:8px;color:var(--cyan);width:36px;text-align:right">80%</span>
+        </div>
+        <button class="btn sm" onclick="liveTest('jingle')" style="width:100%;font-size:9px">🎵 TEST</button>
+      </div>
+
+      <!-- VFO Wobble -->
+      <div class="card">
+        <div class="sec-head" style="color:#ff6b35">🌀 VFO WOBBLE</div>
+        <label class="toggle-row" style="font-size:9px;margin-bottom:var(--s2)">
+          <input type="checkbox" id="live-wobble-enable" onchange="liveSaveCfg()"> ENABLED
+        </label>
+        <div style="font-size:8px;color:var(--amber);margin-bottom:var(--s2);padding:var(--s2);
+                    background:rgba(255,170,0,0.08);border-left:2px solid var(--amber)">
+          ⚠ Modulates frequency during TX. Subtle warble at low depth/rate.
+          Higher values can splatter — keep within band privileges.
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Depth</label>
+          <input type="range" id="live-wobble-depth" min="1" max="100" value="10"
+                 oninput="document.getElementById('live-wobble-depth-v').textContent=this.value+' Hz'"
+                 onchange="liveSaveCfg()" style="flex:1">
+          <span id="live-wobble-depth-v" style="font-size:8px;color:var(--cyan);width:48px;text-align:right">10 Hz</span>
+        </div>
+        <div class="form-row" style="margin-bottom:var(--s2)">
+          <label style="font-size:8px;width:60px">Rate</label>
+          <input type="range" id="live-wobble-rate" min="1" max="20" value="4"
+                 oninput="document.getElementById('live-wobble-rate-v').textContent=this.value+' Hz'"
+                 onchange="liveSaveCfg()" style="flex:1">
+          <span id="live-wobble-rate-v" style="font-size:8px;color:var(--cyan);width:48px;text-align:right">4 Hz</span>
+        </div>
+        <button class="btn sm" onclick="liveTest('wobble')" style="width:100%;font-size:9px">🌀 TEST (3s, no TX)</button>
+      </div>
+
+      <!-- Activity Log -->
+      <div class="card" style="flex:1">
+        <div class="sec-head" style="color:#5865F2">📋 ACTIVITY</div>
+        <div style="font-size:8px;font-family:var(--mono);color:var(--text3);line-height:1.6">
+          <div>Last event: <span id="live-last-event" style="color:var(--cyan)">—</span></div>
+          <div>Total fires: <span id="live-event-count" style="color:var(--cyan)">0</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════
      PANE: AI INTEGRATION
 ══════════════════════════ -->
 <div id="pane-ai" class="pane">
@@ -5551,6 +5723,8 @@ function showTab(name) {
   if (name !== 'sentient'){ _sentPollStop(); }
   if (name === 'discord') { dbotPollStatus(); _dbotStartPolling(); dbotLoadModels(); dbotLoadCanon(); voiceLoadChannels(); voicePollStatus(); }
   if (name !== 'discord' && !_dbot_active_ui) { _dbotStopPolling(); }
+  if (name === 'live')    { livePollStatus(); _liveStartPolling(); }
+  if (name !== 'live')    { _liveStopPolling(); }
   if (name === 'sstv')   loadSSTVModes();
   if (name === 'dash')   { loadDashStats(); loadRadioModel(); _txFeedLoad(); }
   if (name === 'ai')     loadAiConfig();
@@ -13281,6 +13455,169 @@ function _dbotStartPolling() {
 
 function _dbotStopPolling() {
   if (_dbotPollTimer) { clearInterval(_dbotPollTimer); _dbotPollTimer = null; }
+}
+
+// ════════════════════════════════════════════════════════════
+// LIVE EFFECTS TAB
+// ════════════════════════════════════════════════════════════
+let _livePollTimer = null;
+let _liveLoaded = false;
+
+function _liveStartPolling() {
+  if (_livePollTimer) clearInterval(_livePollTimer);
+  _livePollTimer = setInterval(livePollStatus, 1000);  // 1s — TX state needs to be snappy
+  livePollStatus();
+}
+
+function _liveStopPolling() {
+  if (_livePollTimer) { clearInterval(_livePollTimer); _livePollTimer = null; }
+}
+
+async function liveToggleEngine() {
+  const btn = document.getElementById('live-engine-btn');
+  const running = btn && btn.textContent.includes('STOP');
+  try {
+    const r = await api('POST', running ? '/api/live/stop' : '/api/live/start');
+    if (!r.success) {
+      alert(r.message || 'Failed');
+    }
+    setTimeout(livePollStatus, 200);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function liveSaveCfg() {
+  const cfg = {
+    roger_beep:        document.getElementById('live-roger-enable')?.checked || false,
+    roger_sample:      document.getElementById('live-roger-sample')?.value || 'beep_dual',
+    roger_vol:         parseInt(document.getElementById('live-roger-vol')?.value || 80),
+    roger_tail_ms:     parseInt(document.getElementById('live-roger-tail')?.value || 150),
+
+    jingle_enabled:    document.getElementById('live-jingle-enable')?.checked || false,
+    jingle_clip:       document.getElementById('live-jingle-clip')?.value || '',
+    jingle_vol:        parseInt(document.getElementById('live-jingle-vol')?.value || 80),
+
+    echo_enabled:      document.getElementById('live-echo-enable')?.checked || false,
+    echo_taps:         parseInt(document.getElementById('live-echo-taps')?.value || 3),
+    echo_decay:        parseInt(document.getElementById('live-echo-decay')?.value || 50),
+    echo_interval_ms:  parseInt(document.getElementById('live-echo-interval')?.value || 150),
+
+    robot_enabled:     document.getElementById('live-robot-enable')?.checked || false,
+    robot_sample:      document.getElementById('live-robot-sample')?.value || 'robot_warble',
+
+    wobble_enabled:    document.getElementById('live-wobble-enable')?.checked || false,
+    wobble_depth_hz:   parseInt(document.getElementById('live-wobble-depth')?.value || 10),
+    wobble_rate_hz:    parseInt(document.getElementById('live-wobble-rate')?.value || 4),
+  };
+  try {
+    await api('POST', '/api/live/config', cfg);
+  } catch(e) { console.error('live cfg save:', e); }
+}
+
+async function liveTest(effect) {
+  try {
+    const r = await api('POST', `/api/live/test/${effect}`);
+    if (!r.success) {
+      alert(r.message || 'Test failed');
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+function _livePopulateSelect(elId, items, currentVal, addBlank) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const cur = currentVal || el.value;
+  el.innerHTML = '';
+  if (addBlank) {
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = '— select —';
+    el.appendChild(o);
+  }
+  items.forEach(item => {
+    const o = document.createElement('option');
+    if (typeof item === 'string') {
+      o.value = item; o.textContent = item;
+    } else {
+      o.value = item.name; o.textContent = item.name + ' — ' + item.desc;
+    }
+    el.appendChild(o);
+  });
+  if (cur) el.value = cur;
+}
+
+async function livePollStatus() {
+  try {
+    const s = await api('GET', '/api/live/status');
+
+    // Engine status
+    const btn = document.getElementById('live-engine-btn');
+    const status = document.getElementById('live-engine-status');
+    if (btn) {
+      if (s.enabled) {
+        btn.textContent = '⏹ STOP';
+        btn.style.borderColor = '#ff3366';
+        if (status) { status.textContent = 'running'; status.style.color = '#43b581'; }
+      } else {
+        btn.textContent = '▶ START';
+        btn.style.borderColor = '';
+        if (status) { status.textContent = 'stopped'; status.style.color = 'var(--text3)'; }
+      }
+    }
+
+    // TX indicator
+    const txInd = document.getElementById('live-tx-indicator');
+    if (txInd) {
+      if (s.tx_state) {
+        txInd.textContent = '🔴 TX: ACTIVE';
+        txInd.style.color = '#ff3366';
+      } else {
+        txInd.textContent = 'TX: idle';
+        txInd.style.color = 'var(--text3)';
+      }
+    }
+
+    // Populate sample lists (only once)
+    if (!_liveLoaded && s.presets) {
+      const allPresets = s.presets;
+      const beepPresets = allPresets.filter(p => p.name.startsWith('beep') || p.name.startsWith('morse') || p.name.startsWith('tones'));
+      const robotPresets = allPresets.filter(p => p.name.startsWith('robot'));
+      _livePopulateSelect('live-roger-sample', beepPresets, s.roger_sample);
+      _livePopulateSelect('live-robot-sample', robotPresets, s.robot_sample);
+      _livePopulateSelect('live-jingle-clip', s.clips || [], s.jingle_clip, true);
+      _liveLoaded = true;
+    }
+
+    // Restore form values
+    const _set = (id, v) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = v; };
+    const _check = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+    _check('live-roger-enable', s.roger_beep);
+    _set('live-roger-vol', s.roger_vol);
+    document.getElementById('live-roger-vol-v').textContent = (s.roger_vol||80) + '%';
+    _set('live-roger-tail', s.roger_tail_ms);
+    _check('live-jingle-enable', s.jingle_enabled);
+    _set('live-jingle-vol', s.jingle_vol);
+    document.getElementById('live-jingle-vol-v').textContent = (s.jingle_vol||80) + '%';
+    _check('live-echo-enable', s.echo_enabled);
+    _set('live-echo-taps', s.echo_taps);
+    _set('live-echo-decay', s.echo_decay);
+    _set('live-echo-interval', s.echo_interval_ms);
+    _check('live-robot-enable', s.robot_enabled);
+    _check('live-wobble-enable', s.wobble_enabled);
+    _set('live-wobble-depth', s.wobble_depth_hz);
+    document.getElementById('live-wobble-depth-v').textContent = (s.wobble_depth_hz||10) + ' Hz';
+    _set('live-wobble-rate', s.wobble_rate_hz);
+    document.getElementById('live-wobble-rate-v').textContent = (s.wobble_rate_hz||4) + ' Hz';
+
+    // Activity log
+    const lastEv = document.getElementById('live-last-event');
+    if (lastEv) lastEv.textContent = s.last_event || '—';
+    const cnt = document.getElementById('live-event-count');
+    if (cnt) cnt.textContent = s.event_count || 0;
+
+  } catch(e) { /* tab not active or backend issue */ }
 }
 
 async function dbotPollStatus() {
