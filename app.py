@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-RigGPT v2.13.41
+RigGPT v2.13.42
 Features: Multi-TTS * Audio Effects * Voice Presets * SSTV * Scheduling
           Transmission Logging * Live Dashboard (SSE) * Beacon Mode
           Roger Beep * Waterfall Image Transmission * AI Integration Framework
@@ -393,7 +393,7 @@ logger.setLevel(getattr(logging, _log_level, logging.DEBUG))
 # -------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------
-VERSION        = 'v2.13.41'
+VERSION        = 'v2.13.42'
 RADIO_MODEL    = 'IC-7610'
 SERIAL_PORT    = '/dev/ttyIC7610'  # udev persistent symlink (falls back to ttyUSB0/1)
 BAUD_RATE      = 57600             # must match CI-V USB Baud Rate in radio SET menu
@@ -1817,7 +1817,7 @@ class AudioEffectsAgent:
                 _fd2, mp3_tmp = tempfile.mkstemp(suffix='.wav')
                 os.close(_fd2)
                 subprocess.run(['ffmpeg', '-y', '-i', input_path, mp3_tmp],
-                               capture_output=True, check=True)
+                               capture_output=True, check=True, timeout=60)
                 inp = mp3_tmp
 
             with self._AF(inp) as f:
@@ -2019,7 +2019,7 @@ class AudioEffectsAgent:
                 _fd, mp3_wav = tempfile.mkstemp(suffix='.wav')
                 os.close(_fd)
                 subprocess.run(['ffmpeg', '-y', '-i', input_path, mp3_wav],
-                               capture_output=True, check=True)
+                               capture_output=True, check=True, timeout=60)
                 input_path = mp3_wav
 
             sox_cmd = ['sox', input_path, output_path]
@@ -2095,7 +2095,7 @@ class AudioEffectsAgent:
                 import shutil
                 shutil.copy(input_path, output_path)
             else:
-                subprocess.run(sox_cmd, capture_output=True, check=True)
+                subprocess.run(sox_cmd, capture_output=True, check=True, timeout=60)
             return output_path
         except Exception as e:
             logger.warning(f"Sox effects error: {e}")
@@ -4213,7 +4213,7 @@ def api_audio_calibrate():
                 ['sox', '-n', '-r', '44100', '-b', '16', '-c', '1', path,
                  'synth', str(tone_dur), 'sine', str(tone_freq),
                  'gain', str(gain)],
-                check=True, capture_output=True
+                check=True, capture_output=True, timeout=30
             )
         except Exception:
             try: os.remove(path)
@@ -7211,7 +7211,8 @@ def _dbot_load_canon(filename: str) -> str | None:
         path = os.path.join(d, filename)
         if os.path.isfile(path):
             try:
-                content = open(path, 'r', encoding='utf-8').read().strip()
+                with open(path, 'r', encoding='utf-8') as _cf:
+                    content = _cf.read().strip()
                 if content:
                     # Truncate very large files to stay within LLM context
                     return content[:4000]
@@ -7352,7 +7353,8 @@ def _dbot_resolve_bot_id():
                      headers={'Authorization': f'Bot {token}'}, timeout=5)
         if r.status_code == 200:
             data = r.json()
-            _dbot_state['bot_user_id'] = data.get('id', '')
+            with _dbot_lock:
+                _dbot_state['bot_user_id'] = data.get('id', '')
             bot_name = data.get('username', '')
             # Store in _discord_state too so _dbot_should_engage can find it
             with _discord_lock:
@@ -7533,8 +7535,9 @@ def _dbot_ramble(msgs: list):
     reply = _dbot_generate_response(msgs, prompt)
     if reply:
         if _dbot_post_message(reply):
-            _dbot_state['last_response'] = time_module.time()
-            _dbot_state['responded'] += 1
+            with _dbot_lock:
+                _dbot_state['last_response'] = time_module.time()
+                _dbot_state['responded'] += 1
             _dbot_log('RAMBLE', f'→ {reply[:80]}')
 
 
@@ -7602,9 +7605,11 @@ def _dbot_help_text() -> str:
 ```"""
 
 
-# ── Cached external data (avoid hammering APIs every response) ──
-_solar_cache = {'data': None, 'ts': 0}
-_weather_cache = {'data': None, 'ts': 0}
+# ── Cached external data for Discord bot (avoid hammering APIs every response) ──
+# Note: these are Discord-bot-specific. The radio's solar announcement system
+# uses _solar_cache (declared near top of file) with different keys.
+_dbot_solar_cache   = {'data': None, 'ts': 0, 'prompt': None}
+_dbot_weather_cache = {'data': None, 'ts': 0, 'prompt': None}
 
 
 def _dbot_lookup_callsign(callsign: str) -> str:
@@ -7639,14 +7644,13 @@ def _dbot_lookup_callsign(callsign: str) -> str:
 
 def _dbot_get_solar() -> str:
     """Fetch solar/propagation data from hamqsl.com — cached 15 min."""
-    global _solar_cache
+    global _dbot_solar_cache
     now = time_module.time()
-    if _solar_cache['data'] and (now - _solar_cache['ts']) < 900:
-        return _solar_cache['data']
+    if _dbot_solar_cache['data'] and (now - _dbot_solar_cache['ts']) < 900:
+        return _dbot_solar_cache['data']
     try:
-        import requests as _req
         import xml.etree.ElementTree as ET
-        r = _req.get('https://www.hamqsl.com/solarxml.php', timeout=10)
+        r = requests.get('https://www.hamqsl.com/solarxml.php', timeout=10)
         if r.status_code != 200:
             return "couldn't fetch solar data right now"
         root = ET.fromstring(r.text)
@@ -7676,7 +7680,8 @@ def _dbot_get_solar() -> str:
             lines.extend(bands)
         lines.append('```')
         result = '\n'.join(lines)
-        _solar_cache = {'data': result, 'ts': now}
+        _dbot_solar_cache['data'] = result
+        _dbot_solar_cache['ts'] = now
         _dbot_log('CMD', f'☀ Solar data fetched: SFI={sfi} K={k_idx}')
         return result
     except Exception as e:
@@ -7685,14 +7690,13 @@ def _dbot_get_solar() -> str:
 
 def _dbot_get_weather() -> str:
     """Fetch current weather at Revere Beach via Open-Meteo — cached 15 min."""
-    global _weather_cache
+    global _dbot_weather_cache
     now = time_module.time()
-    if _weather_cache['data'] and (now - _weather_cache['ts']) < 900:
-        return _weather_cache['data']
+    if _dbot_weather_cache['data'] and (now - _dbot_weather_cache['ts']) < 900:
+        return _dbot_weather_cache['data']
     try:
-        import requests as _req
         # Revere Beach, MA: 42.4072, -70.9927
-        r = _req.get('https://api.open-meteo.com/v1/forecast', params={
+        r = requests.get('https://api.open-meteo.com/v1/forecast', params={
             'latitude': 42.4072, 'longitude': -70.9927,
             'current_weather': True,
             'temperature_unit': 'fahrenheit',
@@ -7722,7 +7726,8 @@ def _dbot_get_weather() -> str:
         lines.append(f'  Wind: {wind} mph {compass}')
         lines.append('```')
         result = '\n'.join(lines)
-        _weather_cache = {'data': result, 'ts': now}
+        _dbot_weather_cache['data'] = result
+        _dbot_weather_cache['ts'] = now
         _dbot_log('CMD', f'🌊 Weather: {desc} {temp}°F wind {wind}mph {compass}')
         return result
     except Exception as e:
@@ -7731,14 +7736,13 @@ def _dbot_get_weather() -> str:
 
 def _dbot_solar_context() -> str | None:
     """Build a brief solar/propagation summary for the system prompt. Cached 15 min."""
-    global _solar_cache
+    global _dbot_solar_cache
     now = time_module.time()
     # Use cached data if fresh, or fetch
-    if not _solar_cache['data'] or (now - _solar_cache['ts']) > 900:
+    if not _dbot_solar_cache.get('prompt') or (now - _dbot_solar_cache['ts']) > 900:
         try:
-            import requests as _req
             import xml.etree.ElementTree as ET
-            r = _req.get('https://www.hamqsl.com/solarxml.php', timeout=8)
+            r = requests.get('https://www.hamqsl.com/solarxml.php', timeout=8)
             if r.status_code == 200:
                 root = ET.fromstring(r.text)
                 sd = root.find('.//solardata')
@@ -7749,21 +7753,20 @@ def _dbot_solar_context() -> str | None:
                     for b in sd.findall('.//calculatedconditions/band'):
                         if b.get('time') == 'day':
                             bands_info.append(f'{b.get("name","")}: {b.text or "?"}')
-                    _solar_cache['prompt'] = f'SFI={sfi} K={k_idx}. Bands: {", ".join(bands_info)}'
-                    _solar_cache['ts'] = now
+                    _dbot_solar_cache['prompt'] = f'SFI={sfi} K={k_idx}. Bands: {", ".join(bands_info)}'
+                    _dbot_solar_cache['ts'] = now
         except Exception:
             pass
-    return _solar_cache.get('prompt')
+    return _dbot_solar_cache.get('prompt')
 
 
 def _dbot_weather_context() -> str | None:
     """Build a brief weather summary for the system prompt. Cached 15 min."""
-    global _weather_cache
+    global _dbot_weather_cache
     now = time_module.time()
-    if not _weather_cache.get('prompt') or (now - _weather_cache['ts']) > 900:
+    if not _dbot_weather_cache.get('prompt') or (now - _dbot_weather_cache['ts']) > 900:
         try:
-            import requests as _req
-            r = _req.get('https://api.open-meteo.com/v1/forecast', params={
+            r = requests.get('https://api.open-meteo.com/v1/forecast', params={
                 'latitude': 42.4072, 'longitude': -70.9927,
                 'current_weather': True, 'temperature_unit': 'fahrenheit',
                 'windspeed_unit': 'mph',
@@ -7774,11 +7777,11 @@ def _dbot_weather_context() -> str | None:
                        45:'Fog',51:'Drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',
                        71:'Snow',73:'Snow',75:'Heavy snow',95:'Thunderstorm'}
                 desc = wmo.get(cw.get('weathercode',0), 'Unknown')
-                _weather_cache['prompt'] = f'{desc}, {cw.get("temperature","?")}°F, wind {cw.get("windspeed","?")}mph'
-                _weather_cache['ts'] = now
+                _dbot_weather_cache['prompt'] = f'{desc}, {cw.get("temperature","?")}°F, wind {cw.get("windspeed","?")}mph'
+                _dbot_weather_cache['ts'] = now
         except Exception:
             pass
-    return _weather_cache.get('prompt')
+    return _dbot_weather_cache.get('prompt')
 
 
 def _dbot_build_status_report() -> str:
@@ -8019,6 +8022,7 @@ def _dbot_engine():
     _dbot_resolve_bot_id()
     _seen_ids = set()
     _last_quiet_check = time_module.time()
+    _last_ramble_check = time_module.time()  # private to engine — not exposed via API
     _poll_count = 0
     _id_retry = 0  # retry bot_user_id resolution if it failed
 
@@ -8068,7 +8072,7 @@ def _dbot_engine():
                 if author_id == _dbot_state.get('bot_user_id', ''):
                     continue
 
-                _dbot_state['last_msg_seen'] = now
+                _dbot_state['last_msg_seen'] = now  # atomic write, low contention
                 content = msg.get('content', '')
                 raw = msg.get('raw_content', '')
 
@@ -8077,8 +8081,9 @@ def _dbot_engine():
                 if cmd_reply:
                     _dbot_log('CMD', f'Command from {author}: {content[:50]}')
                     if _dbot_post_message(cmd_reply):
-                        _dbot_state['last_response'] = time_module.time()
-                        _dbot_state['responded'] += 1
+                        with _dbot_lock:
+                            _dbot_state['last_response'] = time_module.time()
+                            _dbot_state['responded'] += 1
                         _dbot_log('SENT', f'→ {cmd_reply[:80]}')
                     continue
 
@@ -8112,7 +8117,8 @@ def _dbot_engine():
                                         _dbot_log('REPLY', f'↩ Reply from {author} ignored (roll={reply_pct}%): {content[:40]}')
                                 break
                 if matched:
-                    _dbot_state['hot_hits'] += 1
+                    with _dbot_lock:
+                        _dbot_state['hot_hits'] += 1
                     _dbot_log('HOT', f'🔥 "{", ".join(matched)}" in msg from {author}: {content[:50]}')
 
                 if was_addressed:
@@ -8126,8 +8132,9 @@ def _dbot_engine():
                     reply = _dbot_generate_response(msgs, content)
                     if reply:
                         if _dbot_post_message(reply):
-                            _dbot_state['last_response'] = time_module.time()
-                            _dbot_state['responded'] += 1
+                            with _dbot_lock:
+                                _dbot_state['last_response'] = time_module.time()
+                                _dbot_state['responded'] += 1
                             _dbot_log('SENT', f'→ {reply[:80]}')
                         else:
                             _dbot_log('ERROR', 'Failed to post message to Discord')
@@ -8137,7 +8144,8 @@ def _dbot_engine():
                     if not was_addressed:
                         time_module.sleep(1)
                 else:
-                    _dbot_state['lurked'] += 1
+                    with _dbot_lock:
+                        _dbot_state['lurked'] += 1
                     if matched:
                         _dbot_log('LURK', f'Hot word hit but dice said no — {author}: {content[:40]}')
 
@@ -8148,22 +8156,23 @@ def _dbot_engine():
                     and now - _last_quiet_check > _dbot_state['quiet_sec']
                     and _dbot_state.get('starters')):
                 _last_quiet_check = now
-                starter = _dbot_state['starters'].pop(0)
-                _dbot_log('STARTER', f'Channel quiet {int(quiet_elapsed)}s, dropping: {starter[:50]}')
-                if _dbot_post_message(starter):
-                    _dbot_state['last_response'] = time_module.time()
-                    _dbot_state['responded'] += 1
+                with _dbot_lock:
+                    starter = _dbot_state['starters'].pop(0) if _dbot_state['starters'] else None
+                if starter:
+                    _dbot_log('STARTER', f'Channel quiet {int(quiet_elapsed)}s, dropping: {starter[:50]}')
+                    if _dbot_post_message(starter):
+                        with _dbot_lock:
+                            _dbot_state['last_response'] = time_module.time()
+                            _dbot_state['responded'] += 1
 
             # Random ramble interjection
             ramble_int = _dbot_state.get('ramble_interval', 300)
-            if ramble_int > 0 and (now - _dbot_state.get('_last_ramble', 0)) > ramble_int:
+            if ramble_int > 0 and (now - _last_ramble_check) > ramble_int:
                 import random as _rng_ramble
+                _last_ramble_check = now  # always reset, hit or miss
                 if _rng_ramble.randint(1, 100) <= _dbot_state.get('ramble_chance', 40):
-                    _dbot_state['_last_ramble'] = now
                     threading.Thread(target=_dbot_ramble, args=(list(msgs),),
                                      daemon=True, name='dbot-ramble').start()
-                else:
-                    _dbot_state['_last_ramble'] = now  # reset timer even on miss
 
         except Exception as e:
             _dbot_log('ERROR', f'Engine error: {e}')
@@ -8197,7 +8206,8 @@ def api_dbot_start():
         _discord_state['poll_interval'] = 3
 
     _dbot_stop.clear()
-    _dbot_state['enabled'] = True
+    with _dbot_lock:
+        _dbot_state['enabled'] = True
     _dbot_thread = threading.Thread(target=_dbot_engine, daemon=True, name='dbot-engine')
     _dbot_thread.start()
     logger.info(f'dbot: engine started (channel={channel_id}, persona={_dbot_state["persona"]}, '
@@ -8208,92 +8218,98 @@ def api_dbot_start():
 @app.route('/api/dbot/stop', methods=['POST'])
 def api_dbot_stop():
     _dbot_stop.set()
-    _dbot_state['enabled'] = False
+    with _dbot_lock:
+        _dbot_state['enabled'] = False
     return jsonify({'success': True, 'message': 'Bot engine stopping'})
 
 
 @app.route('/api/dbot/status', methods=['GET'])
 def api_dbot_status():
-    return jsonify({
-        'active':       _dbot_active,
-        'persona':      _dbot_state['persona'],
-        'engagement':   _dbot_state['engagement'],
-        'cooldown':     _dbot_state['cooldown_sec'],
-        'hot_words':    _dbot_state['hot_words'],
-        'hotword_boost': _dbot_state['hotword_boost'],
-        'topic':        _dbot_state['topic'],
-        'starters':     _dbot_state['starters'],
-        'responded':    _dbot_state['responded'],
-        'lurked':       _dbot_state['lurked'],
-        'hot_hits':     _dbot_state['hot_hits'],
-        'temperature':  _dbot_state['temperature'],
-        'max_tokens':   _dbot_state['max_tokens'],
-        'quiet_sec':    _dbot_state['quiet_sec'],
-        'reply_chance':   _dbot_state.get('reply_chance', 70),
-        'ignore_chance':  _dbot_state.get('ignore_chance', 10),
-        'ramble_interval': _dbot_state.get('ramble_interval', 300),
-        'ramble_chance':  _dbot_state.get('ramble_chance', 40),
-        'model':        _dbot_state.get('model', ''),
-        'canon_file':   _dbot_state.get('canon_file', ''),
-        'tx_enabled':   _dbot_state.get('tx_enabled', False),
-        'memory_enabled': _dbot_state.get('memory_enabled', False),
-        'tts_engine':   _dbot_state.get('tts_engine', ''),
-        'tts_voice':    _dbot_state.get('tts_voice', ''),
-        'bot_user_id':  _dbot_state.get('bot_user_id', ''),
-        'summary_total':   _summary_state['total'],
-        'summary_last':    _summary_state['last_text'][:120] if _summary_state['last_text'] else '',
-    })
+    with _dbot_lock:
+        snapshot = {
+            'active':       _dbot_active,
+            'persona':      _dbot_state['persona'],
+            'engagement':   _dbot_state['engagement'],
+            'cooldown':     _dbot_state['cooldown_sec'],
+            'hot_words':    list(_dbot_state['hot_words']),
+            'hotword_boost': _dbot_state['hotword_boost'],
+            'topic':        _dbot_state['topic'],
+            'starters':     list(_dbot_state['starters']),
+            'responded':    _dbot_state['responded'],
+            'lurked':       _dbot_state['lurked'],
+            'hot_hits':     _dbot_state['hot_hits'],
+            'temperature':  _dbot_state['temperature'],
+            'max_tokens':   _dbot_state['max_tokens'],
+            'quiet_sec':    _dbot_state['quiet_sec'],
+            'reply_chance':   _dbot_state.get('reply_chance', 70),
+            'ignore_chance':  _dbot_state.get('ignore_chance', 10),
+            'ramble_interval': _dbot_state.get('ramble_interval', 300),
+            'ramble_chance':  _dbot_state.get('ramble_chance', 40),
+            'model':        _dbot_state.get('model', ''),
+            'canon_file':   _dbot_state.get('canon_file', ''),
+            'tx_enabled':   _dbot_state.get('tx_enabled', False),
+            'memory_enabled': _dbot_state.get('memory_enabled', False),
+            'tts_engine':   _dbot_state.get('tts_engine', ''),
+            'tts_voice':    _dbot_state.get('tts_voice', ''),
+            'bot_user_id':  _dbot_state.get('bot_user_id', ''),
+            'summary_total':   _summary_state['total'],
+            'summary_last':    _summary_state['last_text'][:120] if _summary_state['last_text'] else '',
+        }
+    return jsonify(snapshot)
 
 
 @app.route('/api/dbot/config', methods=['POST'])
 def api_dbot_config():
     data = request.json or {}
-    if 'persona' in data and data['persona'] in _DBOT_PERSONAS:
-        _dbot_state['persona'] = data['persona']
-    if 'custom_prompt' in data:
-        _dbot_state['custom_prompt'] = str(data['custom_prompt'])[:2000]
-    if 'engagement' in data:
-        _dbot_state['engagement'] = max(0, min(100, int(data['engagement'])))
-    if 'hotword_boost' in data:
-        _dbot_state['hotword_boost'] = max(0, min(80, int(data['hotword_boost'])))
-    if 'cooldown_sec' in data:
-        _dbot_state['cooldown_sec'] = max(5, min(300, int(data['cooldown_sec'])))
-    if 'quiet_sec' in data:
-        _dbot_state['quiet_sec'] = max(30, min(600, int(data['quiet_sec'])))
-    if 'reply_chance' in data:
-        _dbot_state['reply_chance'] = max(0, min(100, int(data['reply_chance'])))
-    if 'ignore_chance' in data:
-        _dbot_state['ignore_chance'] = max(0, min(50, int(data['ignore_chance'])))
-    if 'ramble_interval' in data:
-        _dbot_state['ramble_interval'] = max(0, min(1800, int(data['ramble_interval'])))
-    if 'ramble_chance' in data:
-        _dbot_state['ramble_chance'] = max(0, min(100, int(data['ramble_chance'])))
-    if 'max_context' in data:
-        _dbot_state['max_context'] = max(3, min(30, int(data['max_context'])))
-    if 'max_tokens' in data:
-        _dbot_state['max_tokens'] = max(50, min(500, int(data['max_tokens'])))
-    if 'temperature' in data:
-        _dbot_state['temperature'] = max(0.1, min(2.0, float(data['temperature'])))
-    if 'hot_words' in data:
-        words = data['hot_words']
-        if isinstance(words, str):
-            words = [w.strip() for w in words.split(',') if w.strip()]
-        _dbot_state['hot_words'] = words[:30]
-    if 'topic' in data:
-        _dbot_state['topic'] = str(data['topic'])[:500]
-    if 'model' in data:
-        _dbot_state['model'] = str(data['model']).strip()[:100]
-    if 'canon_file' in data:
-        _dbot_state['canon_file'] = str(data['canon_file']).strip()[:200]
-    if 'tx_enabled' in data:
-        _dbot_state['tx_enabled'] = str(data['tx_enabled']).lower() in ('true', '1', 'yes')
-    if 'memory_enabled' in data:
-        _dbot_state['memory_enabled'] = str(data['memory_enabled']).lower() in ('true', '1', 'yes')
-    if 'tts_engine' in data:
-        _dbot_state['tts_engine'] = str(data['tts_engine']).strip()[:50]
-    if 'tts_voice' in data:
-        _dbot_state['tts_voice'] = str(data['tts_voice']).strip()[:100]
-    return jsonify({'success': True, 'state': _dbot_state})
+    with _dbot_lock:
+        if 'persona' in data and data['persona'] in _DBOT_PERSONAS:
+            _dbot_state['persona'] = data['persona']
+        if 'custom_prompt' in data:
+            _dbot_state['custom_prompt'] = str(data['custom_prompt'])[:2000]
+        if 'engagement' in data:
+            _dbot_state['engagement'] = max(0, min(100, int(data['engagement'])))
+        if 'hotword_boost' in data:
+            _dbot_state['hotword_boost'] = max(0, min(80, int(data['hotword_boost'])))
+        if 'cooldown_sec' in data:
+            _dbot_state['cooldown_sec'] = max(5, min(300, int(data['cooldown_sec'])))
+        if 'quiet_sec' in data:
+            _dbot_state['quiet_sec'] = max(30, min(600, int(data['quiet_sec'])))
+        if 'reply_chance' in data:
+            _dbot_state['reply_chance'] = max(0, min(100, int(data['reply_chance'])))
+        if 'ignore_chance' in data:
+            _dbot_state['ignore_chance'] = max(0, min(50, int(data['ignore_chance'])))
+        if 'ramble_interval' in data:
+            _dbot_state['ramble_interval'] = max(0, min(1800, int(data['ramble_interval'])))
+        if 'ramble_chance' in data:
+            _dbot_state['ramble_chance'] = max(0, min(100, int(data['ramble_chance'])))
+        if 'max_context' in data:
+            _dbot_state['max_context'] = max(3, min(30, int(data['max_context'])))
+        if 'max_tokens' in data:
+            _dbot_state['max_tokens'] = max(50, min(500, int(data['max_tokens'])))
+        if 'temperature' in data:
+            _dbot_state['temperature'] = max(0.1, min(2.0, float(data['temperature'])))
+        if 'hot_words' in data:
+            words = data['hot_words']
+            if isinstance(words, str):
+                words = [w.strip() for w in words.split(',') if w.strip()]
+            _dbot_state['hot_words'] = words[:30]
+        if 'topic' in data:
+            _dbot_state['topic'] = str(data['topic'])[:500]
+        if 'model' in data:
+            _dbot_state['model'] = str(data['model']).strip()[:100]
+        if 'canon_file' in data:
+            _dbot_state['canon_file'] = str(data['canon_file']).strip()[:200]
+        if 'tx_enabled' in data:
+            _dbot_state['tx_enabled'] = str(data['tx_enabled']).lower() in ('true', '1', 'yes')
+        if 'memory_enabled' in data:
+            _dbot_state['memory_enabled'] = str(data['memory_enabled']).lower() in ('true', '1', 'yes')
+        if 'tts_engine' in data:
+            _dbot_state['tts_engine'] = str(data['tts_engine']).strip()[:50]
+        if 'tts_voice' in data:
+            _dbot_state['tts_voice'] = str(data['tts_voice']).strip()[:100]
+        # Snapshot inside the lock so the response is consistent
+        snapshot = dict(_dbot_state)
+    return jsonify({'success': True, 'state': snapshot})
 
 
 @app.route('/api/dbot/inject', methods=['POST'])
@@ -8301,7 +8317,8 @@ def api_dbot_inject():
     """Inject a topic — bot will steer conversation toward it."""
     data = request.json or {}
     topic = str(data.get('topic', '')).strip()[:500]
-    _dbot_state['topic'] = topic
+    with _dbot_lock:
+        _dbot_state['topic'] = topic
     logger.info(f'dbot: topic injected: {topic[:60]}')
     return jsonify({'success': True, 'topic': topic})
 
@@ -8313,22 +8330,26 @@ def api_dbot_starter():
     starter = str(data.get('text', '')).strip()[:500]
     if not starter:
         return jsonify({'success': False, 'message': 'text required'}), 400
-    _dbot_state['starters'].append(starter)
-    logger.info(f'dbot: starter queued ({len(_dbot_state["starters"])} total): {starter[:50]}')
-    return jsonify({'success': True, 'queued': len(_dbot_state['starters'])})
+    with _dbot_lock:
+        _dbot_state['starters'].append(starter)
+        queued = len(_dbot_state['starters'])
+    logger.info(f'dbot: starter queued ({queued} total): {starter[:50]}')
+    return jsonify({'success': True, 'queued': queued})
 
 
 @app.route('/api/dbot/starters/clear', methods=['POST'])
 def api_dbot_starters_clear():
-    _dbot_state['starters'].clear()
+    with _dbot_lock:
+        _dbot_state['starters'].clear()
     return jsonify({'success': True})
 
 
 @app.route('/api/dbot/stats/reset', methods=['POST'])
 def api_dbot_stats_reset():
-    _dbot_state['responded'] = 0
-    _dbot_state['lurked'] = 0
-    _dbot_state['hot_hits'] = 0
+    with _dbot_lock:
+        _dbot_state['responded'] = 0
+        _dbot_state['lurked'] = 0
+        _dbot_state['hot_hits'] = 0
     return jsonify({'success': True})
 
 
@@ -8424,7 +8445,8 @@ def api_dbot_canon():
                     seen.add(f)
                     # Read first line as description
                     try:
-                        first_line = open(os.path.join(d, f), 'r').readline().strip()
+                        with open(os.path.join(d, f), 'r') as _rd:
+                            first_line = _rd.readline().strip()
                         first_line = first_line.lstrip('#').strip()[:80]
                     except Exception:
                         first_line = ''
@@ -9508,7 +9530,7 @@ def api_clips_stop():
         except Exception: pass
     # Belt-and-suspenders: pkill any stragglers
     for player in ('ffplay', 'aplay'):
-        try: subprocess.run(['pkill', '-f', player], capture_output=True)
+        try: subprocess.run(['pkill', '-f', player], capture_output=True, timeout=5)
         except Exception: pass
     try:
         orchestrator.icom_agent.ptt_off()
@@ -10430,7 +10452,8 @@ def api_canon_file():
     if not os.path.isfile(path):
         return jsonify({'success': False, 'message': 'file not found'}), 404
     try:
-        text = open(path, 'r', encoding='utf-8').read()
+        with open(path, 'r', encoding='utf-8') as _f:
+            text = _f.read()
         return jsonify({'success': True, 'content': text, 'name': name})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
